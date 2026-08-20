@@ -104,41 +104,40 @@ def get_market_chart(coin_id, days="1"):
     return r.json()
 
 def analyze_candles(ohlc_data):
-    """Returns a quality score from -2 (very weak) to +2 (very strong)"""
+    """Returns a milder quality adjustment from -1.5 to +1.5"""
     if not isinstance(ohlc_data, list) or len(ohlc_data) < 3:
         return 0
 
-    df = pd.DataFrame(ohlc_data[-6:], columns=["timestamp", "open", "high", "low", "close"])  # last ~6 candles
+    df = pd.DataFrame(ohlc_data[-5:], columns=["timestamp", "open", "high", "low", "close"])
     quality = 0
 
-    for i, row in df.iterrows():
+    for _, row in df.iterrows():
         body = abs(row["close"] - row["open"])
         upper_wick = row["high"] - max(row["open"], row["close"])
-        lower_wick = min(row["open"], row["close"]) - row["low"]
         full_range = row["high"] - row["low"]
 
         if full_range == 0:
             continue
 
-        # Penalize large upper wicks (rejection)
-        if upper_wick > body * 1.4 and upper_wick / full_range > 0.4:
-            quality -= 1.1
+        # Milder penalty for upper wicks
+        if upper_wick > body * 1.6 and upper_wick / full_range > 0.45:
+            quality -= 0.7
 
-        # Reward strong closes near the high
+        # Reward clean strong closes
         close_position = (row["close"] - row["low"]) / full_range
-        if close_position > 0.75 and row["close"] > row["open"]:
-            quality += 0.7
-        elif close_position < 0.35:
-            quality -= 0.6
+        if close_position > 0.78 and row["close"] > row["open"]:
+            quality += 0.6
+        elif close_position < 0.30:
+            quality -= 0.4
 
-    # Check for higher lows (structure)
+    # Higher lows bonus
     lows = df["low"].values
     if len(lows) >= 3 and lows[-1] > lows[-2] > lows[-3]:
-        quality += 1.2
+        quality += 0.8
     elif len(lows) >= 2 and lows[-1] < lows[-2]:
-        quality -= 0.8
+        quality -= 0.5
 
-    return max(min(quality, 2.5), -2.5)
+    return max(min(quality, 1.5), -1.5)
 
 def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change=None, candle_quality=0):
     if high != low:
@@ -146,55 +145,55 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
     else:
         range_pos = 50
 
-    # Base confirmation scoring
+    # Base scoring (confirmation focused)
     if (range_pos > 85 and change_1h > 1.0 and change_24h > 3 and 
         (fg_value is None or fg_value >= 45) and (btc_change is None or btc_change > -1)):
-        score = 86
+        score = 87
         meme = "🔥 Strong multi-timeframe alignment."
     elif range_pos > 78 and change_1h > 0.6 and change_24h > 1.5:
-        score = 76
+        score = 77
         meme = "🚀 Higher highs forming + good momentum."
     elif range_pos > 68 and change_1h > 0.2:
-        score = 66
+        score = 67
         meme = "📈 Reclaiming structure / defending higher."
     elif range_pos > 55 and change_1h > -0.4:
-        score = 56
+        score = 57
         meme = "📊 Holding mid-range. Waiting for confirmation."
     elif range_pos > 42:
-        score = 46
+        score = 47
         meme = "😐 Neutral zone. No clear edge yet."
     elif range_pos > 28 and change_1h < 0:
-        score = 34
+        score = 35
         meme = "⚠️ Losing short-term structure."
     elif range_pos > 15:
-        score = 23
+        score = 24
         meme = "🐻 Below key short-term levels."
     else:
-        score = 12
+        score = 13
         meme = "💀 Weak. Sitting on the lows."
 
-    # === CANDLE QUALITY ADJUSTMENT (False positive filter) ===
-    score += candle_quality * 4.5   # Each point of quality moves score meaningfully
+    # Milder candle quality impact
+    score += candle_quality * 3.2
 
-    # Extra penalties
+    # Penalties
     if change_1h < -1.8:
-        score -= 8
+        score -= 7
     if change_24h < -4:
-        score -= 9
+        score -= 8
     if fg_value is not None and fg_value < 30:
-        score -= 5
+        score -= 4
 
     score = max(min(int(score), 95), 8)
 
-    # Update meme based on final score
+    # Final meme adjustment
     if score >= 82:
-        meme = "🔥 High conviction – candles + momentum aligned."
+        meme = "🔥 High conviction – momentum + candles aligned."
     elif score >= 70:
         meme = "🚀 Structure improving with decent candle quality."
     elif score >= 58:
-        meme = "📈 Holding structure but needs stronger confirmation."
+        meme = "📈 Holding structure, needs a bit more confirmation."
     elif score <= 25:
-        meme = "💀 Weak candles + poor location."
+        meme = "💀 Weak location + soft candles."
 
     return score, meme, range_pos
 
@@ -258,7 +257,6 @@ for i, (name, cid, tick) in enumerate(COIN_ORDER):
             low = c["low_24h"]
             ch1 = c.get("price_change_percentage_1h_in_currency") or 0
             ch24 = c.get("price_change_percentage_24h") or 0
-            # For overview we skip deep candle analysis to save API calls
             score, meme, _ = calc_vibe(price, high, low, ch1, ch24, fg_value, btc_change, candle_quality=0)
             
             st.markdown(f"**{tick}**")
@@ -295,7 +293,6 @@ if c:
     volume = c["total_volume"]
     market_cap = c["market_cap"]
 
-    # Get recent candles for quality analysis
     ohlc_1d = get_ohlc(coin_id, "1")
     candle_quality = analyze_candles(ohlc_1d)
 
