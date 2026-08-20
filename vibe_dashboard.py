@@ -5,10 +5,9 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-# Try to import autorefresh, but don't crash if it fails
 try:
     from streamlit_autorefresh import st_autorefresh
-    st_autorefresh(interval=45 * 1000, key="datarefresh")
+    st_autorefresh(interval=60 * 1000, key="datarefresh")  # slower refresh to reduce rate limits
 except:
     pass
 
@@ -50,8 +49,14 @@ coin_id = COINS[selected]
 
 try:
     url = f"https://api.coingecko.com/api/v3/coins/{coin_id}"
-    res = requests.get(url, timeout=12)
+    res = requests.get(url, timeout=10)
     data = res.json()
+
+    # Check if we actually got valid data
+    if "market_data" not in data:
+        st.warning("CoinGecko is rate-limiting us right now. Please wait 30–60 seconds and refresh.")
+        st.stop()
+
     market = data["market_data"]
 
     price = market["current_price"]["usd"]
@@ -115,7 +120,7 @@ try:
     if timeframe == "Last 1 Day (~5 min)":
         chart_url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart"
         params = {"vs_currency": "usd", "days": "1"}
-        chart_res = requests.get(chart_url, params=params, timeout=12)
+        chart_res = requests.get(chart_url, params=params, timeout=10)
         chart_data = chart_res.json()
 
         if "prices" in chart_data and "total_volumes" in chart_data:
@@ -128,25 +133,40 @@ try:
             padding = (price_max - price_min) * 0.12
 
             fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.02, row_heights=[0.75, 0.25])
-            fig.add_trace(go.Scatter(x=df["time"], y=df["price"], mode="lines", line=dict(color="#00ff9f", width=2.2), fill="tozeroy", fillcolor="rgba(0,255,159,0.08)"), row=1, col=1)
-            fig.add_trace(go.Bar(x=df["time"], y=df["volume"], marker_color="rgba(88, 166, 255, 0.5)"), row=2, col=1)
-            fig.update_layout(height=560, template="plotly_dark", paper_bgcolor="#0b0e11", plot_bgcolor="#0b0e11", margin=dict(l=0, r=0, t=10, b=0), showlegend=False, hovermode="x unified")
+            fig.add_trace(go.Scatter(x=df["time"], y=df["price"], mode="lines",
+                                     line=dict(color="#00ff9f", width=2.2),
+                                     fill="tozeroy", fillcolor="rgba(0,255,159,0.08)"), row=1, col=1)
+            fig.add_trace(go.Bar(x=df["time"], y=df["volume"],
+                                 marker_color="rgba(88, 166, 255, 0.5)"), row=2, col=1)
+            fig.update_layout(height=560, template="plotly_dark",
+                              paper_bgcolor="#0b0e11", plot_bgcolor="#0b0e11",
+                              margin=dict(l=0, r=0, t=10, b=0), showlegend=False, hovermode="x unified")
             fig.update_yaxes(range=[price_min - padding, price_max + padding], row=1, col=1)
             st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("Chart temporarily unavailable (rate limit).")
     else:
         days = "7" if "7" in timeframe else "30"
         ohlc_url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/ohlc"
         params = {"vs_currency": "usd", "days": days}
-        ohlc_res = requests.get(ohlc_url, params=params, timeout=12)
+        ohlc_res = requests.get(ohlc_url, params=params, timeout=10)
         ohlc_data = ohlc_res.json()
 
         if isinstance(ohlc_data, list) and len(ohlc_data) > 0:
             df = pd.DataFrame(ohlc_data, columns=["timestamp", "open", "high", "low", "close"])
             df["time"] = pd.to_datetime(df["timestamp"], unit="ms")
-            fig = go.Figure(data=[go.Candlestick(x=df["time"], open=df["open"], high=df["high"], low=df["low"], close=df["close"], increasing_line_color="#26a69a", decreasing_line_color="#ef5350")])
-            fig.update_layout(height=520, template="plotly_dark", paper_bgcolor="#0b0e11", plot_bgcolor="#0b0e11", margin=dict(l=0, r=0, t=10, b=0), xaxis_rangeslider_visible=False)
+            fig = go.Figure(data=[go.Candlestick(
+                x=df["time"], open=df["open"], high=df["high"],
+                low=df["low"], close=df["close"],
+                increasing_line_color="#26a69a", decreasing_line_color="#ef5350"
+            )])
+            fig.update_layout(height=520, template="plotly_dark",
+                              paper_bgcolor="#0b0e11", plot_bgcolor="#0b0e11",
+                              margin=dict(l=0, r=0, t=10, b=0),
+                              xaxis_rangeslider_visible=False)
             st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("Chart temporarily unavailable (rate limit).")
 
 except Exception as e:
-    st.error("Temporary issue loading data. The app will retry shortly.")
-    st.write(str(e))
+    st.warning("CoinGecko is currently rate-limiting requests. Please wait 30–60 seconds and refresh the page.")
