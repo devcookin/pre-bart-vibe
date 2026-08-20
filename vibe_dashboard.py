@@ -54,23 +54,18 @@ st.markdown("""
         background: linear-gradient(90deg, #00ff9f, #00d4ff);
     }
     
-    /* Clean card buttons */
     div.stButton > button {
         width: 100%;
-        height: 110px;
-        background: rgba(22, 26, 30, 0.7);
-        border: 1px solid rgba(255,255,255,0.08);
-        border-radius: 14px;
-        color: white;
-        text-align: center;
-        padding: 12px 8px;
-        font-size: 14px;
-        line-height: 1.4;
-        white-space: pre-line;
+        background: rgba(0, 255, 159, 0.08);
+        border: 1px solid rgba(0, 255, 159, 0.25);
+        border-radius: 10px;
+        color: #00ff9f;
+        font-weight: 600;
+        padding: 6px 0;
     }
     div.stButton > button:hover {
+        background: rgba(0, 255, 159, 0.18);
         border-color: #00ff9f;
-        background: rgba(0, 255, 159, 0.08);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -125,33 +120,26 @@ def get_market_chart(coin_id, days="1"):
 def analyze_candles(ohlc_data):
     if not isinstance(ohlc_data, list) or len(ohlc_data) < 3:
         return 0
-
     df = pd.DataFrame(ohlc_data[-5:], columns=["timestamp", "open", "high", "low", "close"])
     quality = 0
-
     for _, row in df.iterrows():
         body = abs(row["close"] - row["open"])
         upper_wick = row["high"] - max(row["open"], row["close"])
         full_range = row["high"] - row["low"]
-
         if full_range == 0:
             continue
-
         if upper_wick > body * 1.6 and upper_wick / full_range > 0.45:
             quality -= 0.7
-
         close_position = (row["close"] - row["low"]) / full_range
         if close_position > 0.78 and row["close"] > row["open"]:
             quality += 0.6
         elif close_position < 0.30:
             quality -= 0.4
-
     lows = df["low"].values
     if len(lows) >= 3 and lows[-1] > lows[-2] > lows[-3]:
         quality += 0.8
     elif len(lows) >= 2 and lows[-1] < lows[-2]:
         quality -= 0.5
-
     return max(min(quality, 1.5), -1.5)
 
 def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change=None, candle_quality=0):
@@ -263,7 +251,7 @@ st.divider()
 
 # ========== MULTI-COIN VIBE OVERVIEW ==========
 st.subheader("🌐 Multi-Coin Vibe Overview")
-st.caption("Click any coin to open detailed view")
+st.caption("Click “View” on any coin to open the detailed view")
 
 markets = get_markets()
 coin_map = {c["id"]: c for c in markets} if markets else {}
@@ -281,6 +269,7 @@ COIN_ORDER = [
 ]
 
 cols = st.columns(5)
+
 for i, (name, cid, tick) in enumerate(COIN_ORDER):
     with cols[i]:
         c = coin_map.get(cid)
@@ -290,19 +279,24 @@ for i, (name, cid, tick) in enumerate(COIN_ORDER):
             low = c["low_24h"]
             ch1 = c.get("price_change_percentage_1h_in_currency") or 0
             ch24 = c.get("price_change_percentage_24h") or 0
+            image_url = c.get("image", "")
             score, meme, _, _ = calc_vibe(price, high, low, ch1, ch24, fg_value, btc_change, 0)
 
-            price_str = f"${price:,.2f}" if price >= 10 else f"${price:.4f}"
-            delta_str = f"{ch24:+.2f}%"
-
-            button_label = f"{tick}\n{price_str}\n{delta_str}\nVibe {score}"
-
-            if st.button(button_label, key=f"btn_{cid}"):
-                st.session_state.selected_coin = name
-                st.rerun()
-
+            # Clean card layout
+            if image_url:
+                st.image(image_url, width=32)
+            st.markdown(f"**{tick}**")
+            
+            price_str = f"${price:,.2f}" if price >= 1 else f"${price:.4f}"
+            st.markdown(f"### {price_str}")
+            st.caption(f"{ch24:+.2f}% • Vibe {score}")
+            
             st.progress(score / 100)
             st.caption(meme)
+            
+            if st.button("View", key=f"btn_{cid}", use_container_width=True):
+                st.session_state.selected_coin = name
+                st.rerun()
         else:
             st.info(f"{tick}\nLoading...")
 
