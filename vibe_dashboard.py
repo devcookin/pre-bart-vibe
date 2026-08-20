@@ -54,14 +54,6 @@ st.markdown("""
     .stProgress > div > div > div > div {
         background: linear-gradient(90deg, #00ff9f, #00d4ff);
     }
-    
-    .vibe-card {
-        background: rgba(22, 26, 30, 0.8);
-        border: 1px solid rgba(255,255,255,0.06);
-        border-radius: 14px;
-        padding: 14px;
-        text-align: center;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -118,29 +110,33 @@ def calc_vibe(price, high, low, change_1h, change_24h):
     else:
         range_pos = 50
 
-    if range_pos > 85 and change_1h > 0.8:
-        score, meme = 95, "🔥 PRE-BART!"
-    elif range_pos > 75 and change_1h > 0.3:
-        score, meme = 85, "🚀 Strong highs"
-    elif range_pos > 65 and change_1h > -0.3:
-        score, meme = 75, "📈 Constructive"
-    elif range_pos > 55:
-        score, meme = 65, "📊 Mild bullish"
-    elif range_pos > 40 and change_1h > -0.5:
-        score, meme = 50, "😐 Mid-range"
-    elif range_pos > 30:
-        score, meme = 40, "⚠️ Weakening"
-    elif range_pos > 15 and change_1h < 0:
-        score, meme = 28, "🐻 Near lows"
-    elif range_pos <= 15:
-        score, meme = 15, "💀 Dump zone"
+    # Stricter thresholds
+    if range_pos > 90 and change_1h > 1.2:
+        score, meme = 95, "🔥 PRE-BART INCOMING! Extreme strength."
+    elif range_pos > 82 and change_1h > 0.7:
+        score, meme = 85, "🚀 Very strong. Holding near highs."
+    elif range_pos > 72 and change_1h > 0.2:
+        score, meme = 72, "📈 Solid position, still constructive."
+    elif range_pos > 60 and change_1h > -0.3:
+        score, meme = 58, "📊 Above mid-range but momentum cooling."
+    elif range_pos > 45:
+        score, meme = 48, "😐 Mid-range chop. No clear edge."
+    elif range_pos > 32 and change_1h < 0:
+        score, meme = 35, "⚠️ Losing the mid. Short-term weakness."
+    elif range_pos > 18:
+        score, meme = 25, "🐻 Sliding toward the lows."
+    elif range_pos <= 18:
+        score, meme = 12, "💀 Sitting on the lows. Bearish pressure."
     else:
-        score, meme = 45, "😐 Mixed"
+        score, meme = 42, "😐 Mixed signals."
 
-    if change_24h > 6 and score < 90:
-        score = min(score + 5, 95)
-    elif change_24h < -4 and score > 20:
-        score = max(score - 8, 10)
+    # Smaller bullish boost + stronger bearish penalty
+    if change_24h > 8 and score >= 70:
+        score = min(score + 3, 95)
+    elif change_24h < -3:
+        score = max(score - 10, 8)
+    elif change_1h < -1.5:
+        score = max(score - 7, 10)
 
     return score, meme, range_pos
 
@@ -309,7 +305,7 @@ if c:
             name="Price"
         ), row=1, col=1)
 
-        # Key Levels (24h High / Low)
+        # Key Levels
         fig.add_hline(y=high, line_dash="dot", line_color="rgba(0,255,159,0.6)", 
                       annotation_text="24h High", annotation_position="top left", row=1, col=1)
         fig.add_hline(y=low, line_dash="dot", line_color="rgba(255,77,109,0.6)", 
