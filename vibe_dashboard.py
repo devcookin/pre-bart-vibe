@@ -54,13 +54,19 @@ st.markdown("""
         background: linear-gradient(90deg, #00ff9f, #00d4ff);
     }
     
+    /* Clean card buttons */
     div.stButton > button {
         width: 100%;
+        height: 110px;
         background: rgba(22, 26, 30, 0.7);
         border: 1px solid rgba(255,255,255,0.08);
         border-radius: 14px;
-        padding: 12px 8px;
+        color: white;
         text-align: center;
+        padding: 12px 8px;
+        font-size: 14px;
+        line-height: 1.4;
+        white-space: pre-line;
     }
     div.stButton > button:hover {
         border-color: #00ff9f;
@@ -190,7 +196,6 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
         meme = "💀 Weak. Sitting on the lows."
         reasons.append("Price is near the daily lows")
 
-    # Candle quality
     score += candle_quality * 3.2
     if candle_quality > 0.5:
         reasons.append("Recent candles show clean strength / higher lows")
@@ -258,7 +263,7 @@ st.divider()
 
 # ========== MULTI-COIN VIBE OVERVIEW ==========
 st.subheader("🌐 Multi-Coin Vibe Overview")
-st.caption("Click any coin to view details")
+st.caption("Click any coin to open detailed view")
 
 markets = get_markets()
 coin_map = {c["id"]: c for c in markets} if markets else {}
@@ -287,8 +292,12 @@ for i, (name, cid, tick) in enumerate(COIN_ORDER):
             ch24 = c.get("price_change_percentage_24h") or 0
             score, meme, _, _ = calc_vibe(price, high, low, ch1, ch24, fg_value, btc_change, 0)
 
-            # Clickable card
-            if st.button(f"**{tick}**\n\n${price:,.4f}" if price < 10 else f"**{tick}**\n\n${price:,.2f}\n{ch24:+.2f}%\nVibe {score}", key=f"btn_{cid}"):
+            price_str = f"${price:,.2f}" if price >= 10 else f"${price:.4f}"
+            delta_str = f"{ch24:+.2f}%"
+
+            button_label = f"{tick}\n{price_str}\n{delta_str}\nVibe {score}"
+
+            if st.button(button_label, key=f"btn_{cid}"):
                 st.session_state.selected_coin = name
                 st.rerun()
 
@@ -306,7 +315,6 @@ selected = st.session_state.selected_coin
 
 col_a, col_b = st.columns([2, 1])
 with col_a:
-    # Keep a selectbox as backup
     selected = st.selectbox("Select Coin", [x[0] for x in COIN_ORDER], 
                             index=[x[0] for x in COIN_ORDER].index(selected))
     st.session_state.selected_coin = selected
@@ -351,7 +359,6 @@ if c:
     else:
         st.info(meme)
 
-    # Why this score?
     with st.expander("🤔 Why this score?"):
         if reasons:
             for r in reasons:
