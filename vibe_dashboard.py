@@ -4,12 +4,16 @@ from datetime import datetime
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from urllib.parse import quote
 
 try:
     from streamlit_autorefresh import st_autorefresh
-    st_autorefresh(interval=60 * 1000, key="datarefresh")  # slower refresh to reduce rate limits
+    st_autorefresh(interval=45 * 1000, key="datarefresh")
 except:
     pass
+
+API_KEY = "CG-h61Dg6UoB2gVfCSUJQDj4dLa"
+HEADERS = {"x-cg-demo-api-key": API_KEY}
 
 st.set_page_config(
     page_title="Pre-Bart Vibe Dashboard",
@@ -22,6 +26,16 @@ st.markdown("""
 <style>
     .stApp { background-color: #0b0e11; }
     .stMetric { background-color: #161a1e; padding: 12px; border-radius: 10px; }
+    .x-button {
+        background-color: #1da1f2;
+        color: white;
+        padding: 8px 16px;
+        border-radius: 20px;
+        text-decoration: none;
+        font-weight: 600;
+        display: inline-block;
+        margin: 4px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -39,6 +53,14 @@ COINS = {
     "Dogecoin": "dogecoin",
 }
 
+TICKERS = {
+    "Bitcoin": "BTC",
+    "Ethereum": "ETH",
+    "Solana": "SOL",
+    "Avalanche": "AVAX",
+    "Dogecoin": "DOGE",
+}
+
 col_a, col_b = st.columns([2, 1])
 with col_a:
     selected = st.selectbox("Select Coin", list(COINS.keys()), index=3)
@@ -46,15 +68,33 @@ with col_b:
     timeframe = st.selectbox("Timeframe", ["Last 1 Day (~5 min)", "Last 7 Days", "Last 30 Days"])
 
 coin_id = COINS[selected]
+ticker = TICKERS[selected]
+
+@st.cache_data(ttl=30)
+def get_coin_data(coin_id):
+    url = f"https://api.coingecko.com/api/v3/coins/{coin_id}"
+    res = requests.get(url, headers=HEADERS, timeout=10)
+    return res.json()
+
+@st.cache_data(ttl=60)
+def get_market_chart(coin_id, days="1"):
+    url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart"
+    params = {"vs_currency": "usd", "days": days}
+    res = requests.get(url, headers=HEADERS, params=params, timeout=10)
+    return res.json()
+
+@st.cache_data(ttl=60)
+def get_ohlc(coin_id, days="7"):
+    url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/ohlc"
+    params = {"vs_currency": "usd", "days": days}
+    res = requests.get(url, headers=HEADERS, params=params, timeout=10)
+    return res.json()
 
 try:
-    url = f"https://api.coingecko.com/api/v3/coins/{coin_id}"
-    res = requests.get(url, timeout=10)
-    data = res.json()
+    data = get_coin_data(coin_id)
 
-    # Check if we actually got valid data
     if "market_data" not in data:
-        st.warning("CoinGecko is rate-limiting us right now. Please wait 30–60 seconds and refresh.")
+        st.warning("Temporary issue with data. Retrying shortly...")
         st.stop()
 
     market = data["market_data"]
@@ -114,14 +154,31 @@ try:
     else:
         st.info(meme)
 
+    # ========== LATEST ON X SECTION ==========
+    st.divider()
+    st.subheader(f"🐦 Latest on X • ${ticker}")
+
+    st.markdown(f"""
+    <div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom: 15px;">
+        <a href="https://x.com/search?q=%24{ticker}&src=typed_query&f=live" target="_blank" style="background:#1da1f2; color:white; padding:8px 16px; border-radius:20px; text-decoration:none; font-weight:600;">
+            ${ticker} Live
+        </a>
+        <a href="https://x.com/search?q={quote(selected + ' crypto')}&src=typed_query&f=live" target="_blank" style="background:#1da1f2; color:white; padding:8px 16px; border-radius:20px; text-decoration:none; font-weight:600;">
+            {selected} Crypto
+        </a>
+        <a href="https://x.com/search?q=%24{ticker}%20OR%20{selected}&src=typed_query&f=live" target="_blank" style="background:#1da1f2; color:white; padding:8px 16px; border-radius:20px; text-decoration:none; font-weight:600;">
+            ${ticker} + {selected}
+        </a>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.caption("Click any button to open live posts on X in a new tab")
+
     st.divider()
     st.subheader(f"{selected} • {timeframe}")
 
     if timeframe == "Last 1 Day (~5 min)":
-        chart_url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart"
-        params = {"vs_currency": "usd", "days": "1"}
-        chart_res = requests.get(chart_url, params=params, timeout=10)
-        chart_data = chart_res.json()
+        chart_data = get_market_chart(coin_id, "1")
 
         if "prices" in chart_data and "total_volumes" in chart_data:
             df = pd.DataFrame(chart_data["prices"], columns=["timestamp", "price"])
@@ -144,13 +201,10 @@ try:
             fig.update_yaxes(range=[price_min - padding, price_max + padding], row=1, col=1)
             st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info("Chart temporarily unavailable (rate limit).")
+            st.info("Chart temporarily unavailable.")
     else:
         days = "7" if "7" in timeframe else "30"
-        ohlc_url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/ohlc"
-        params = {"vs_currency": "usd", "days": days}
-        ohlc_res = requests.get(ohlc_url, params=params, timeout=10)
-        ohlc_data = ohlc_res.json()
+        ohlc_data = get_ohlc(coin_id, days)
 
         if isinstance(ohlc_data, list) and len(ohlc_data) > 0:
             df = pd.DataFrame(ohlc_data, columns=["timestamp", "open", "high", "low", "close"])
@@ -166,7 +220,7 @@ try:
                               xaxis_rangeslider_visible=False)
             st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info("Chart temporarily unavailable (rate limit).")
+            st.info("Chart temporarily unavailable.")
 
 except Exception as e:
-    st.warning("CoinGecko is currently rate-limiting requests. Please wait 30–60 seconds and refresh the page.")
+    st.warning("Temporary issue. The app will retry shortly.")
