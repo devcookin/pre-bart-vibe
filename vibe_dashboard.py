@@ -5,6 +5,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from urllib.parse import quote
+import time
 
 try:
     from streamlit_autorefresh import st_autorefresh
@@ -22,55 +23,27 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Theme-aware CSS
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-    
-    html, body, [class*="css"] {
-        font-family: 'Inter', sans-serif;
-    }
-    
-    /* Dark mode styles */
-    [data-theme="dark"] h1,
-    .stApp[data-theme="dark"] h1 {
-        background: linear-gradient(90deg, #00ff9f, #00d4ff);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        font-weight: 700 !important;
-    }
-    
-    /* Light mode title */
-    h1 {
-        font-weight: 700 !important;
-    }
-    
-    .stMetric {
-        border-radius: 14px;
-        padding: 12px 16px;
-    }
-    
-    div[data-testid="stMetricValue"] {
-        font-size: 1.45rem !important;
-        font-weight: 600;
-    }
-    
-    .stProgress > div > div > div > div {
-        background: linear-gradient(90deg, #00c853, #00b0ff);
-    }
-    
-    div.stButton > button {
-        width: 100%;
-        border-radius: 10px;
-        font-weight: 600;
-        padding: 6px 0;
-    }
+    html, body, [class*="css"]  { font-family: 'Inter', sans-serif; }
+    h1 { font-weight: 700 !important; }
+    .stMetric { border-radius: 14px; padding: 12px 16px; }
+    div[data-testid="stMetricValue"] { font-size: 1.45rem !important; font-weight: 600; }
+    .stProgress > div > div > div > div { background: linear-gradient(90deg, #00c853, #00b0ff); }
+    div.stButton > button { width: 100%; border-radius: 10px; font-weight: 600; }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🚀 Pre-Bart Vibe Dashboard")
-st.markdown("##### Live crypto vibes + meme feedback")
-st.caption(f"Last refresh: {datetime.now().strftime('%H:%M:%S')}")
+# ========== SESSION STATE ==========
+if "selected_coin" not in st.session_state:
+    st.session_state.selected_coin = "Avalanche"
+if "vibe_history" not in st.session_state:
+    st.session_state.vibe_history = []
+if "last_score" not in st.session_state:
+    st.session_state.last_score = None
+if "last_refresh" not in st.session_state:
+    st.session_state.last_refresh = datetime.now()
 
 # ========== HELPERS ==========
 @st.cache_data(ttl=45)
@@ -124,8 +97,7 @@ def analyze_candles(ohlc_data):
         body = abs(row["close"] - row["open"])
         upper_wick = row["high"] - max(row["open"], row["close"])
         full_range = row["high"] - row["low"]
-        if full_range == 0:
-            continue
+        if full_range == 0: continue
         if upper_wick > body * 1.6 and upper_wick / full_range > 0.45:
             quality -= 0.7
         close_position = (row["close"] - row["low"]) / full_range
@@ -211,9 +183,19 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
 
     return score, meme, range_pos, reasons
 
-# ========== INIT SESSION STATE ==========
-if "selected_coin" not in st.session_state:
-    st.session_state.selected_coin = "Avalanche"
+# ========== HEADER ==========
+col_title, col_refresh = st.columns([5, 1])
+with col_title:
+    st.title("🚀 Pre-Bart Vibe Dashboard")
+    st.markdown("##### Live crypto vibes + meme feedback")
+with col_refresh:
+    st.write("")
+    if st.button("🔄 Refresh Now", use_container_width=True):
+        st.cache_data.clear()
+        st.session_state.last_refresh = datetime.now()
+        st.rerun()
+
+st.caption(f"Last refresh: {st.session_state.last_refresh.strftime('%H:%M:%S')}")
 
 # ========== MARKET CONTEXT ==========
 fg_value, fg_label = get_fear_greed()
@@ -247,7 +229,7 @@ with ctx4:
 
 st.divider()
 
-# ========== MULTI-COIN VIBE OVERVIEW ==========
+# ========== MULTI-COIN OVERVIEW ==========
 st.subheader("🌐 Multi-Coin Vibe Overview")
 st.caption("Click “View” on any coin to open the detailed view")
 
@@ -267,7 +249,6 @@ COIN_ORDER = [
 ]
 
 cols = st.columns(5)
-
 for i, (name, cid, tick) in enumerate(COIN_ORDER):
     with cols[i]:
         c = coin_map.get(cid)
@@ -283,14 +264,11 @@ for i, (name, cid, tick) in enumerate(COIN_ORDER):
             if image_url:
                 st.image(image_url, width=32)
             st.markdown(f"**{tick}**")
-            
             price_str = f"${price:,.2f}" if price >= 1 else f"${price:.4f}"
             st.markdown(f"### {price_str}")
             st.caption(f"{ch24:+.2f}% • Vibe {score}")
-            
             st.progress(score / 100)
             st.caption(meme)
-            
             if st.button("View", key=f"btn_{cid}", use_container_width=True):
                 st.session_state.selected_coin = name
                 st.rerun()
@@ -332,14 +310,31 @@ if c:
 
     score, meme, range_pos, reasons = calc_vibe(price, high, low, change_1h, change_24h, fg_value, btc_change, candle_quality)
 
+    # --- Alerts ---
+    if st.session_state.last_score is not None:
+        if score >= 70 and st.session_state.last_score < 70:
+            st.toast(f"🚀 {ticker} Vibe crossed 70!", icon="🚀")
+        elif score <= 30 and st.session_state.last_score > 30:
+            st.toast(f"🐻 {ticker} Vibe dropped below 30", icon="🐻")
+    st.session_state.last_score = score
+
+    # --- Vibe History ---
+    st.session_state.vibe_history.append(score)
+    if len(st.session_state.vibe_history) > 12:
+        st.session_state.vibe_history = st.session_state.vibe_history[-12:]
+
+    # Relative strength vs BTC
+    vs_btc = change_24h - (btc_change or 0)
+
     price_text = f"${price:,.4f}" if price < 10 else f"${price:,.2f}"
     st.metric(f"{selected}", price_text, f"{change_24h:+.2f}% (24h)  |  {change_1h:+.2f}% (1h)")
 
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("24h Volume", f"${volume/1_000_000:,.1f}M")
     c2.metric("Market Cap", f"${market_cap/1_000_000_000:,.2f}B")
     c3.metric("Range Position", f"{range_pos:.0f}%")
     c4.metric("Candle Quality", f"{candle_quality:+.1f}")
+    c5.metric("vs BTC (24h)", f"{vs_btc:+.2f}%")
 
     st.progress(score / 100, text=f"Vibe Score: {score}/100")
 
@@ -350,12 +345,18 @@ if c:
     else:
         st.info(meme)
 
+    # Vibe History Sparkline
+    if len(st.session_state.vibe_history) > 1:
+        hist_df = pd.DataFrame({"Vibe": st.session_state.vibe_history})
+        st.line_chart(hist_df, height=120)
+
     with st.expander("🤔 Why this score?"):
-        if reasons:
-            for r in reasons:
-                st.write(f"• {r}")
-        else:
-            st.write("• Mixed signals across factors")
+        for r in reasons:
+            st.write(f"• {r}")
+
+    # Share button
+    share_text = f"{ticker} Vibe Score: {score}/100 – {meme}\nhttps://prebartvibes.streamlit.app/"
+    st.text_area("📋 Share this vibe (copy the text below)", share_text, height=80)
 
     st.markdown(f"""
     <div style="display:flex; flex-wrap:wrap; gap:10px; margin: 12px 0;">
@@ -396,7 +397,6 @@ if c:
             df = pd.merge_asof(df, vol_df, on="time", direction="nearest")
             has_volume = True
 
-        # Use a theme-friendly Plotly template
         fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
                             vertical_spacing=0.03, row_heights=[0.72, 0.28])
 
@@ -425,7 +425,7 @@ if c:
 
         fig.update_layout(
             height=580,
-            template="plotly_white",          # works better in both modes
+            template="plotly_white",
             margin=dict(l=0, r=0, t=20, b=0),
             xaxis_rangeslider_visible=False,
             showlegend=False,
