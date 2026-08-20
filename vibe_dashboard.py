@@ -117,7 +117,6 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
 
     reasons = []
 
-    # More balanced thresholds
     if (range_pos > 83 and change_1h > 0.8 and change_24h > 2.5 and 
         (fg_value is None or fg_value >= 40) and (btc_change is None or btc_change > -1.5)):
         score = 86
@@ -152,14 +151,12 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
         meme = "💀 Weak. Sitting on the lows."
         reasons.append("Price is near the daily lows")
 
-    # Milder candle quality impact
     score += candle_quality * 2.8
     if candle_quality > 0.4:
         reasons.append("Recent candles show clean strength / higher lows")
     elif candle_quality < -0.4:
         reasons.append("Recent candles show some rejection")
 
-    # Milder penalties
     if change_1h < -2.0:
         score -= 6
         reasons.append("Sharp negative 1h momentum")
@@ -343,8 +340,9 @@ if c:
         for r in reasons:
             st.write(f"• {r}")
 
+    # Share section (read-only)
     share_text = f"{ticker} Vibe Score: {score}/100 – {meme}\nhttps://prebartvibes.streamlit.app/"
-    st.text_area("📋 Share this vibe (copy the text below)", share_text, height=80)
+    st.text_area("📋 Share this vibe (select + copy)", share_text, height=80, disabled=True)
 
     st.markdown(f"""
     <div style="display:flex; flex-wrap:wrap; gap:10px; margin: 12px 0;">
