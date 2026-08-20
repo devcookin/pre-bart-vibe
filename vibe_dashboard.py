@@ -96,18 +96,18 @@ def analyze_candles(ohlc_data):
         full_range = row["high"] - row["low"]
         if full_range == 0: continue
         if upper_wick > body * 1.6 and upper_wick / full_range > 0.45:
-            quality -= 0.7
+            quality -= 0.6
         close_position = (row["close"] - row["low"]) / full_range
         if close_position > 0.78 and row["close"] > row["open"]:
-            quality += 0.6
+            quality += 0.5
         elif close_position < 0.30:
-            quality -= 0.4
+            quality -= 0.3
     lows = df["low"].values
     if len(lows) >= 3 and lows[-1] > lows[-2] > lows[-3]:
-        quality += 0.8
+        quality += 0.7
     elif len(lows) >= 2 and lows[-1] < lows[-2]:
-        quality -= 0.5
-    return max(min(quality, 1.5), -1.5)
+        quality -= 0.4
+    return max(min(quality, 1.4), -1.4)
 
 def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change=None, candle_quality=0):
     if high != low:
@@ -117,57 +117,60 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
 
     reasons = []
 
-    if (range_pos > 85 and change_1h > 1.0 and change_24h > 3 and 
-        (fg_value is None or fg_value >= 45) and (btc_change is None or btc_change > -1)):
-        score = 87
+    # More balanced thresholds
+    if (range_pos > 83 and change_1h > 0.8 and change_24h > 2.5 and 
+        (fg_value is None or fg_value >= 40) and (btc_change is None or btc_change > -1.5)):
+        score = 86
         meme = "🔥 Strong multi-timeframe alignment."
-        reasons.append("Price near top of range + strong 1h & 24h momentum")
-    elif range_pos > 78 and change_1h > 0.6 and change_24h > 1.5:
-        score = 77
+        reasons.append("Price near top of range + strong momentum")
+    elif range_pos > 75 and change_1h > 0.4 and change_24h > 1.0:
+        score = 76
         meme = "🚀 Higher highs forming + good momentum."
         reasons.append("Holding high in the range with positive momentum")
-    elif range_pos > 68 and change_1h > 0.2:
-        score = 67
+    elif range_pos > 65 and change_1h > 0.0:
+        score = 68
         meme = "📈 Reclaiming structure / defending higher."
-        reasons.append("Above mid-range and short-term momentum is positive")
-    elif range_pos > 55 and change_1h > -0.4:
-        score = 57
+        reasons.append("Above mid-range with positive short-term momentum")
+    elif range_pos > 52 and change_1h > -0.6:
+        score = 58
         meme = "📊 Holding mid-range. Waiting for confirmation."
-        reasons.append("Price is in the middle of the daily range")
-    elif range_pos > 42:
-        score = 47
+        reasons.append("Price is holding the middle of the daily range")
+    elif range_pos > 40:
+        score = 49
         meme = "😐 Neutral zone. No clear edge yet."
         reasons.append("Price is in no-man's land")
-    elif range_pos > 28 and change_1h < 0:
-        score = 35
+    elif range_pos > 25 and change_1h < 0:
+        score = 37
         meme = "⚠️ Losing short-term structure."
-        reasons.append("Sliding lower in the range with negative short-term momentum")
-    elif range_pos > 15:
-        score = 24
+        reasons.append("Sliding lower in the range")
+    elif range_pos > 12:
+        score = 26
         meme = "🐻 Below key short-term levels."
         reasons.append("Price is in the lower part of the daily range")
     else:
-        score = 13
+        score = 14
         meme = "💀 Weak. Sitting on the lows."
         reasons.append("Price is near the daily lows")
 
-    score += candle_quality * 3.2
-    if candle_quality > 0.5:
+    # Milder candle quality impact
+    score += candle_quality * 2.8
+    if candle_quality > 0.4:
         reasons.append("Recent candles show clean strength / higher lows")
-    elif candle_quality < -0.5:
-        reasons.append("Recent candles show rejection or weak closes")
+    elif candle_quality < -0.4:
+        reasons.append("Recent candles show some rejection")
 
-    if change_1h < -1.8:
-        score -= 7
+    # Milder penalties
+    if change_1h < -2.0:
+        score -= 6
         reasons.append("Sharp negative 1h momentum")
-    if change_24h < -4:
-        score -= 8
+    if change_24h < -5:
+        score -= 7
         reasons.append("Significant 24h weakness")
-    if fg_value is not None and fg_value < 30:
+    if fg_value is not None and fg_value < 25:
         score -= 4
         reasons.append("Market is in Extreme Fear")
 
-    score = max(min(int(score), 95), 8)
+    score = max(min(int(score), 94), 10)
 
     if score >= 82:
         meme = "🔥 High conviction – momentum + candles aligned."
@@ -175,7 +178,7 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
         meme = "🚀 Structure improving with decent candle quality."
     elif score >= 58:
         meme = "📈 Holding structure, needs a bit more confirmation."
-    elif score <= 25:
+    elif score <= 28:
         meme = "💀 Weak location + soft candles."
 
     return score, meme, range_pos, reasons
@@ -340,7 +343,6 @@ if c:
         for r in reasons:
             st.write(f"• {r}")
 
-    # Share
     share_text = f"{ticker} Vibe Score: {score}/100 – {meme}\nhttps://prebartvibes.streamlit.app/"
     st.text_area("📋 Share this vibe (copy the text below)", share_text, height=80)
 
