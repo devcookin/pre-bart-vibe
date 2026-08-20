@@ -260,17 +260,26 @@ for i, (name, cid, tick) in enumerate(COIN_ORDER):
             image_url = c.get("image", "")
             score, meme, _, _ = calc_vibe(price, high, low, ch1, ch24, fg_value, btc_change, 0)
 
-            if image_url:
-                st.image(image_url, width=32)
-            st.markdown(f"**{tick}**")
-            price_str = f"${price:,.2f}" if price >= 1 else f"${price:.4f}"
-            st.markdown(f"### {price_str}")
-            st.caption(f"{ch24:+.2f}% • Vibe {score}")
-            st.progress(score / 100)
-            st.caption(meme)
-            if st.button("View", key=f"btn_{cid}", use_container_width=True):
-                st.session_state.selected_coin = name
-                st.rerun()
+            with st.container(border=True):
+                if image_url:
+                    st.image(image_url, width=28)
+                st.markdown(f"**{tick}**")
+                
+                price_str = f"${price:,.2f}" if price >= 1 else f"${price:.4f}"
+                st.markdown(f"### {price_str}")
+                st.caption(f"{ch24:+.2f}% • Vibe {score}")
+                
+                st.progress(score / 100)
+                
+                # Fixed height so all buttons align
+                st.markdown(
+                    f"<div style='height: 42px; font-size: 13px; color: #888; line-height: 1.3;'>{meme}</div>",
+                    unsafe_allow_html=True
+                )
+                
+                if st.button("View", key=f"btn_{cid}", use_container_width=True):
+                    st.session_state.selected_coin = name
+                    st.rerun()
         else:
             st.info(f"{tick}\nLoading...")
 
