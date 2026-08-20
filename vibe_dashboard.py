@@ -31,6 +31,11 @@ st.markdown("""
     div[data-testid="stMetricValue"] { font-size: 1.45rem !important; font-weight: 600; }
     .stProgress > div > div > div > div { background: linear-gradient(90deg, #00c853, #00b0ff); }
     div.stButton > button { width: 100%; border-radius: 10px; font-weight: 600; }
+    
+    /* Force consistent card heights */
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        height: 100%;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -93,7 +98,6 @@ def analyze_candles(ohlc_data):
     df = pd.DataFrame(ohlc_data[-8:], columns=["timestamp", "open", "high", "low", "close"])
     quality = 0.0
 
-    # 1. Body / wick quality on recent candles
     for _, row in df.iterrows():
         body = abs(row["close"] - row["open"])
         upper_wick = row["high"] - max(row["open"], row["close"])
@@ -102,26 +106,21 @@ def analyze_candles(ohlc_data):
         if full_range == 0:
             continue
 
-        # Strong bullish close (close in upper 70% + green)
         close_pos = (row["close"] - row["low"]) / full_range
         if close_pos > 0.70 and row["close"] > row["open"]:
             quality += 0.35
         elif close_pos < 0.30:
             quality -= 0.25
 
-        # Heavy upper rejection
         if upper_wick > body * 1.5 and upper_wick / full_range > 0.40:
             quality -= 0.40
-        # Nice lower wick (buying pressure)
         if lower_wick > body * 1.2 and lower_wick / full_range > 0.30:
             quality += 0.25
 
-    # 2. Higher-lows / higher-highs structure
     lows = df["low"].values
     highs = df["high"].values
     closes = df["close"].values
 
-    # Higher lows streak
     if len(lows) >= 4:
         if lows[-1] > lows[-2] > lows[-3]:
             quality += 0.70
@@ -130,11 +129,9 @@ def analyze_candles(ohlc_data):
         elif lows[-1] < lows[-2] < lows[-3]:
             quality -= 0.45
 
-    # Higher highs
     if len(highs) >= 3 and highs[-1] > highs[-2] > highs[-3]:
         quality += 0.40
 
-    # Close momentum (last 3 closes rising)
     if len(closes) >= 3 and closes[-1] > closes[-2] > closes[-3]:
         quality += 0.45
     elif len(closes) >= 2 and closes[-1] < closes[-2]:
@@ -144,13 +141,6 @@ def analyze_candles(ohlc_data):
 
 
 def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change=None, candle_quality=0):
-    """
-    Softened & balanced formula:
-    - Structure still primary
-    - Higher neutral base (55)
-    - Softer negative penalties
-    - Slightly more generous positive 1h
-    """
     if high != low:
         range_pos = ((price - low) / (high - low)) * 100
     else:
@@ -159,7 +149,6 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
     reasons = []
     base = 55
 
-    # ---------- 1. Structure first ----------
     structure_boost = candle_quality * 11
     base += structure_boost
 
@@ -172,7 +161,6 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
     elif candle_quality < -0.2:
         reasons.append("Mixed / weak recent candle structure")
 
-    # ---------- 2. Range position (softened bottom penalties) ----------
     if range_pos > 85:
         base += 6
         reasons.append("Price near the top of the daily range")
@@ -193,7 +181,6 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
             base -= 3
             reasons.append("Lower half of the range")
 
-    # ---------- 3. 1h momentum (more generous on the positive side) ----------
     if change_1h > 1.3:
         base += 13
         reasons.append("Strong positive 1h momentum")
@@ -212,7 +199,6 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
         base -= 10
         reasons.append("Strong negative 1h momentum")
 
-    # ---------- 4. 24h context + relative strength ----------
     if change_24h > 5:
         base += 4
     elif change_24h > 2:
@@ -231,7 +217,6 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
             base -= 3
             reasons.append("Lagging BTC on the day")
 
-    # ---------- 5. Fear & Greed light touch ----------
     if fg_value is not None:
         if fg_value < 25:
             base -= 2
@@ -240,19 +225,19 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
 
     score = max(min(int(round(base)), 92), 14)
 
-    # Meme labels
+    # Shorter, more consistent length memes so cards stay the same height
     if score >= 80:
         meme = "🔥 Strong structure + momentum"
     elif score >= 68:
-        meme = "🚀 Constructive multi-timeframe structure"
+        meme = "🚀 Constructive structure"
     elif score >= 55:
-        meme = "📈 Structure still okay, short-term mixed"
+        meme = "📈 Structure okay, mixed short-term"
     elif score >= 42:
-        meme = "😐 Mixed signals across timeframes"
+        meme = "😐 Mixed signals"
     elif score >= 28:
-        meme = "⚠️ Short-term weakness / structure fading"
+        meme = "⚠️ Short-term weakness"
     else:
-        meme = "💀 Weak structure across timeframes"
+        meme = "💀 Weak structure"
 
     return score, meme, range_pos, reasons
 
@@ -333,40 +318,48 @@ for i, (name, cid, tick) in enumerate(COIN_ORDER):
             ch24 = c.get("price_change_percentage_24h") or 0
             image_url = c.get("image", "")
 
-            # Fetch structure so cards match detailed view
             ohlc = get_ohlc(cid, "1")
             candle_quality = analyze_candles(ohlc)
 
             score, meme, _, _ = calc_vibe(price, high, low, ch1, ch24, fg_value, btc_change, candle_quality)
 
             with st.container(border=True):
-                # Always reserve space for the image (even if missing)
+                # Fixed image space
                 if image_url:
                     st.image(image_url, width=28)
                 else:
-                    st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
+                    st.markdown("<div style='height:28px; margin-bottom:4px;'></div>", unsafe_allow_html=True)
 
                 st.markdown(f"**{tick}**")
                 
-                price_str = f"${price:,.2f}" if price >= 1 else f"${price:.4f}"
-                st.markdown(f"### {price_str}")
+                # Compact price that never wraps differently
+                if price >= 1000:
+                    price_str = f"${price:,.0f}"
+                elif price >= 1:
+                    price_str = f"${price:,.2f}"
+                else:
+                    price_str = f"${price:.4f}"
+                
+                st.markdown(
+                    f"<div style='font-size:1.35rem; font-weight:600; height:32px; line-height:32px; overflow:hidden;'>{price_str}</div>",
+                    unsafe_allow_html=True
+                )
                 st.caption(f"{ch24:+.2f}% • Vibe {score}")
                 
                 st.progress(score / 100)
                 
-                # Fixed height + overflow so all "View" buttons stay perfectly aligned
+                # Strict fixed height for meme text
                 st.markdown(
                     f"""
                     <div style="
-                        height: 48px;
-                        min-height: 48px;
-                        max-height: 48px;
+                        height: 44px;
+                        min-height: 44px;
+                        max-height: 44px;
                         font-size: 13px;
                         color: #888;
-                        line-height: 1.35;
+                        line-height: 1.3;
                         overflow: hidden;
-                        display: flex;
-                        align-items: flex-start;
+                        margin-bottom: 8px;
                     ">{meme}</div>
                     """,
                     unsafe_allow_html=True
@@ -417,7 +410,6 @@ if c:
 
     score, meme, range_pos, reasons = calc_vibe(price, high, low, change_1h, change_24h, fg_value, btc_change, candle_quality)
 
-    # Alerts
     if st.session_state.last_score is not None:
         if score >= 70 and st.session_state.last_score < 70:
             st.toast(f"🚀 {ticker} Vibe crossed 70!", icon="🚀")
@@ -450,7 +442,6 @@ if c:
         for r in reasons:
             st.write(f"• {r}")
 
-    # Share (read-only)
     share_text = f"{ticker} Vibe Score: {score}/100 – {meme}\nhttps://prebartvibes.streamlit.app/"
     st.text_area("📋 Share this vibe (select + copy)", share_text, height=70, disabled=True)
 
