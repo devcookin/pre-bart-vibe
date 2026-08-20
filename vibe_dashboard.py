@@ -107,11 +107,11 @@ def analyze_candles(ohlc_data):
         if close_pos > 0.70 and row["close"] > row["open"]:
             quality += 0.35
         elif close_pos < 0.30:
-            quality -= 0.25   # slightly softer than before
+            quality -= 0.25
 
         # Heavy upper rejection
         if upper_wick > body * 1.5 and upper_wick / full_range > 0.40:
-            quality -= 0.40   # slightly softer
+            quality -= 0.40
         # Nice lower wick (buying pressure)
         if lower_wick > body * 1.2 and lower_wick / full_range > 0.30:
             quality += 0.25
@@ -128,7 +128,7 @@ def analyze_candles(ohlc_data):
         elif lows[-1] > lows[-2]:
             quality += 0.35
         elif lows[-1] < lows[-2] < lows[-3]:
-            quality -= 0.45   # softer penalty
+            quality -= 0.45
 
     # Higher highs
     if len(highs) >= 3 and highs[-1] > highs[-2] > highs[-3]:
@@ -138,7 +138,7 @@ def analyze_candles(ohlc_data):
     if len(closes) >= 3 and closes[-1] > closes[-2] > closes[-3]:
         quality += 0.45
     elif len(closes) >= 2 and closes[-1] < closes[-2]:
-        quality -= 0.20   # softer
+        quality -= 0.20
 
     return max(min(quality, 1.8), -1.5)
 
@@ -157,10 +157,10 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
         range_pos = 50.0
 
     reasons = []
-    base = 55  # raised from 50 for less overall bearishness
+    base = 55
 
     # ---------- 1. Structure first ----------
-    structure_boost = candle_quality * 11   # still strong, slightly dialed
+    structure_boost = candle_quality * 11
     base += structure_boost
 
     if candle_quality > 0.8:
@@ -184,13 +184,13 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
             base += 4
             reasons.append("Building from the bottom of the range (accumulation feel)")
         else:
-            base -= 5   # softer than -7
+            base -= 5
             reasons.append("Sitting near the bottom of the range")
     elif range_pos < 35:
         if candle_quality > 0.1:
             base += 2
         else:
-            base -= 3   # softer
+            base -= 3
             reasons.append("Lower half of the range")
 
     # ---------- 3. 1h momentum (more generous on the positive side) ----------
@@ -332,7 +332,12 @@ for i, (name, cid, tick) in enumerate(COIN_ORDER):
             ch1 = c.get("price_change_percentage_1h_in_currency") or 0
             ch24 = c.get("price_change_percentage_24h") or 0
             image_url = c.get("image", "")
-            score, meme, _, _ = calc_vibe(price, high, low, ch1, ch24, fg_value, btc_change, 0)
+
+            # Now also fetch structure so cards match detailed view
+            ohlc = get_ohlc(cid, "1")
+            candle_quality = analyze_candles(ohlc)
+
+            score, meme, _, _ = calc_vibe(price, high, low, ch1, ch24, fg_value, btc_change, candle_quality)
 
             with st.container(border=True):
                 if image_url:
