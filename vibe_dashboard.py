@@ -29,13 +29,7 @@ st.markdown("""
     h1 { font-weight: 700 !important; }
     .stMetric { border-radius: 14px; padding: 12px 16px; }
     div[data-testid="stMetricValue"] { font-size: 1.45rem !important; font-weight: 600; }
-    .stProgress > div > div > div > div { background: linear-gradient(90deg, #00c853, #00b0ff); }
     div.stButton > button { width: 100%; border-radius: 10px; font-weight: 600; }
-    
-    /* Force consistent card heights */
-    div[data-testid="stVerticalBlockBorderWrapper"] {
-        height: 100%;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -91,7 +85,6 @@ def get_market_chart(coin_id, days="1"):
     return r.json()
 
 def analyze_candles(ohlc_data):
-    """Improved structure + quality score. Returns roughly -1.5 → +1.8"""
     if not isinstance(ohlc_data, list) or len(ohlc_data) < 4:
         return 0.0
 
@@ -225,7 +218,6 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
 
     score = max(min(int(round(base)), 92), 14)
 
-    # Shorter, more consistent length memes so cards stay the same height
     if score >= 80:
         meme = "🔥 Strong structure + momentum"
     elif score >= 68:
@@ -240,6 +232,37 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
         meme = "💀 Weak structure"
 
     return score, meme, range_pos, reasons
+
+
+def colored_progress(score: int, height: int = 12):
+    """Fun colored progress bar based on vibe score"""
+    if score >= 75:
+        color = "linear-gradient(90deg, #00e676, #00c853)"      # strong green
+    elif score >= 60:
+        color = "linear-gradient(90deg, #69f0ae, #00e676)"      # green
+    elif score >= 45:
+        color = "linear-gradient(90deg, #ffd600, #ffab00)"      # yellow / orange
+    else:
+        color = "linear-gradient(90deg, #ff5252, #d50000)"      # red
+
+    return f"""
+    <div style="
+        background: #e0e0e0;
+        border-radius: 10px;
+        height: {height}px;
+        overflow: hidden;
+        margin: 6px 0 10px 0;
+    ">
+        <div style="
+            width: {score}%;
+            height: 100%;
+            background: {color};
+            border-radius: 10px;
+            transition: width 0.5s ease;
+        "></div>
+    </div>
+    """
+
 
 # ========== HEADER ==========
 col_title, col_refresh = st.columns([5, 1])
@@ -324,7 +347,6 @@ for i, (name, cid, tick) in enumerate(COIN_ORDER):
             score, meme, _, _ = calc_vibe(price, high, low, ch1, ch24, fg_value, btc_change, candle_quality)
 
             with st.container(border=True):
-                # Fixed image space
                 if image_url:
                     st.image(image_url, width=28)
                 else:
@@ -332,7 +354,6 @@ for i, (name, cid, tick) in enumerate(COIN_ORDER):
 
                 st.markdown(f"**{tick}**")
                 
-                # Compact price that never wraps differently
                 if price >= 1000:
                     price_str = f"${price:,.0f}"
                 elif price >= 1:
@@ -346,9 +367,9 @@ for i, (name, cid, tick) in enumerate(COIN_ORDER):
                 )
                 st.caption(f"{ch24:+.2f}% • Vibe {score}")
                 
-                st.progress(score / 100)
+                # Fun colored progress bar
+                st.markdown(colored_progress(score, height=10), unsafe_allow_html=True)
                 
-                # Strict fixed height for meme text
                 st.markdown(
                     f"""
                     <div style="
@@ -429,7 +450,9 @@ if c:
     c4.metric("Candle Quality", f"{candle_quality:+.1f}")
     c5.metric("vs BTC (24h)", f"{vs_btc:+.2f}%")
 
-    st.progress(score / 100, text=f"Vibe Score: {score}/100")
+    # Fun colored progress bar + score text
+    st.markdown(f"**Vibe Score: {score}/100**")
+    st.markdown(colored_progress(score, height=14), unsafe_allow_html=True)
 
     if score >= 80:
         st.success(meme)
