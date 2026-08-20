@@ -18,11 +18,11 @@ HEADERS = {"x-cg-demo-api-key": API_KEY}
 st.set_page_config(
     page_title="Pre-Bart Vibe Dashboard",
     page_icon="🚀",
-    layout="centered",
+    layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# ===== FUN + SLEEK CRYPTO AESTHETIC =====
+# ===== AESTHETICS =====
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -40,15 +40,14 @@ st.markdown("""
     }
     
     .stMetric {
-        background: rgba(22, 26, 30, 0.7);
-        border: 1px solid rgba(0, 255, 159, 0.15);
-        border-radius: 16px;
-        padding: 16px;
-        backdrop-filter: blur(10px);
+        background: rgba(22, 26, 30, 0.75);
+        border: 1px solid rgba(0, 255, 159, 0.12);
+        border-radius: 14px;
+        padding: 12px 16px;
     }
     
     div[data-testid="stMetricValue"] {
-        font-size: 1.7rem !important;
+        font-size: 1.45rem !important;
         font-weight: 600;
     }
     
@@ -56,28 +55,12 @@ st.markdown("""
         background: linear-gradient(90deg, #00ff9f, #00d4ff);
     }
     
-    .stSelectbox > div > div {
-        background-color: #161a1e;
-        border: 1px solid #2a2f36;
-        border-radius: 12px;
-    }
-    
-    .stSuccess {
-        background: rgba(0, 255, 159, 0.1);
-        border: 1px solid rgba(0, 255, 159, 0.3);
-        border-radius: 12px;
-    }
-    
-    .stError {
-        background: rgba(239, 83, 80, 0.1);
-        border: 1px solid rgba(239, 83, 80, 0.3);
-        border-radius: 12px;
-    }
-    
-    .stInfo {
-        background: rgba(88, 166, 255, 0.1);
-        border: 1px solid rgba(88, 166, 255, 0.3);
-        border-radius: 12px;
+    .vibe-card {
+        background: rgba(22, 26, 30, 0.8);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 14px;
+        padding: 14px;
+        text-align: center;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -86,99 +69,174 @@ st.title("🚀 Pre-Bart Vibe Dashboard")
 st.markdown("##### Live crypto vibes + meme feedback")
 st.caption(f"Last refresh: {datetime.now().strftime('%H:%M:%S')}")
 
-st.divider()
+# ========== HELPERS ==========
+@st.cache_data(ttl=45)
+def get_fear_greed():
+    try:
+        r = requests.get("https://api.alternative.me/fng/?limit=1", timeout=8)
+        d = r.json()["data"][0]
+        return int(d["value"]), d["value_classification"]
+    except:
+        return None, None
 
-COINS = {
-    "Bitcoin": "bitcoin",
-    "Ethereum": "ethereum",
-    "Solana": "solana",
-    "Avalanche": "avalanche-2",
-    "Dogecoin": "dogecoin",
-}
-
-TICKERS = {
-    "Bitcoin": "BTC",
-    "Ethereum": "ETH",
-    "Solana": "SOL",
-    "Avalanche": "AVAX",
-    "Dogecoin": "DOGE",
-}
-
-col_a, col_b = st.columns([2, 1])
-with col_a:
-    selected = st.selectbox("Select Coin", list(COINS.keys()), index=3)
-with col_b:
-    timeframe = st.selectbox("Timeframe", ["Last 1 Day (30 min)", "Last 7 Days", "Last 30 Days"])
-
-coin_id = COINS[selected]
-ticker = TICKERS[selected]
+@st.cache_data(ttl=45)
+def get_global():
+    try:
+        r = requests.get("https://api.coingecko.com/api/v3/global", headers=HEADERS, timeout=10)
+        return r.json()["data"]
+    except:
+        return None
 
 @st.cache_data(ttl=30)
-def get_coin_data(coin_id):
-    url = f"https://api.coingecko.com/api/v3/coins/{coin_id}"
-    res = requests.get(url, headers=HEADERS, timeout=10)
-    return res.json()
-
-@st.cache_data(ttl=60)
-def get_market_chart(coin_id, days="1"):
-    url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart"
-    params = {"vs_currency": "usd", "days": days}
-    res = requests.get(url, headers=HEADERS, params=params, timeout=10)
-    return res.json()
+def get_markets():
+    url = "https://api.coingecko.com/api/v3/coins/markets"
+    params = {
+        "vs_currency": "usd",
+        "ids": "bitcoin,ethereum,solana,avalanche-2,dogecoin",
+        "price_change_percentage": "1h,24h"
+    }
+    r = requests.get(url, headers=HEADERS, params=params, timeout=12)
+    return r.json()
 
 @st.cache_data(ttl=60)
 def get_ohlc(coin_id, days="1"):
     url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/ohlc"
     params = {"vs_currency": "usd", "days": days}
-    res = requests.get(url, headers=HEADERS, params=params, timeout=10)
-    return res.json()
+    r = requests.get(url, headers=HEADERS, params=params, timeout=10)
+    return r.json()
 
-try:
-    data = get_coin_data(coin_id)
+@st.cache_data(ttl=60)
+def get_market_chart(coin_id, days="1"):
+    url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart"
+    params = {"vs_currency": "usd", "days": days}
+    r = requests.get(url, headers=HEADERS, params=params, timeout=10)
+    return r.json()
 
-    if "market_data" not in data:
-        st.warning("Temporary issue with data. Retrying shortly...")
-        st.stop()
-
-    market = data["market_data"]
-
-    price = market["current_price"]["usd"]
-    change_24h = market.get("price_change_percentage_24h") or 0
-    change_1h = market.get("price_change_percentage_1h_in_currency", {}).get("usd") or 0
-    high = market["high_24h"]["usd"]
-    low = market["low_24h"]["usd"]
-    volume = market["total_volume"]["usd"]
-    market_cap = market["market_cap"]["usd"]
-
+def calc_vibe(price, high, low, change_1h, change_24h):
     if high != low:
-        range_position = ((price - low) / (high - low)) * 100
+        range_pos = ((price - low) / (high - low)) * 100
     else:
-        range_position = 50
+        range_pos = 50
 
-    # Dynamic scoring
-    if range_position > 85 and change_1h > 0.8:
-        score, meme = 95, "🔥 PRE-BART INCOMING! Price pushing highs with strong momentum."
-    elif range_position > 75 and change_1h > 0.3:
-        score, meme = 85, "🚀 Holding near the highs. Continuation looking likely."
-    elif range_position > 65 and change_1h > -0.3:
-        score, meme = 75, "📈 Strong position in the daily range. Still constructive."
-    elif range_position > 55:
-        score, meme = 65, "📊 Above the middle of the range. Mildly bullish."
-    elif range_position > 40 and change_1h > -0.5:
-        score, meme = 50, "😐 Mid-range chop. Waiting for direction."
-    elif range_position > 30:
-        score, meme = 40, "⚠️ Losing strength. Sliding toward support."
-    elif range_position > 15 and change_1h < 0:
-        score, meme = 28, "🐻 Near the lows of the day. Short-term bearish."
-    elif range_position <= 15:
-        score, meme = 15, "💀 Sitting on the lows. Full Bart dump pressure."
+    if range_pos > 85 and change_1h > 0.8:
+        score, meme = 95, "🔥 PRE-BART!"
+    elif range_pos > 75 and change_1h > 0.3:
+        score, meme = 85, "🚀 Strong highs"
+    elif range_pos > 65 and change_1h > -0.3:
+        score, meme = 75, "📈 Constructive"
+    elif range_pos > 55:
+        score, meme = 65, "📊 Mild bullish"
+    elif range_pos > 40 and change_1h > -0.5:
+        score, meme = 50, "😐 Mid-range"
+    elif range_pos > 30:
+        score, meme = 40, "⚠️ Weakening"
+    elif range_pos > 15 and change_1h < 0:
+        score, meme = 28, "🐻 Near lows"
+    elif range_pos <= 15:
+        score, meme = 15, "💀 Dump zone"
     else:
-        score, meme = 45, "😐 Mixed signals right now."
+        score, meme = 45, "😐 Mixed"
 
     if change_24h > 6 and score < 90:
         score = min(score + 5, 95)
     elif change_24h < -4 and score > 20:
         score = max(score - 8, 10)
+
+    return score, meme, range_pos
+
+# ========== MARKET CONTEXT ==========
+fg_value, fg_label = get_fear_greed()
+global_data = get_global()
+
+ctx1, ctx2, ctx3, ctx4 = st.columns(4)
+with ctx1:
+    if fg_value is not None:
+        color = "🟢" if fg_value >= 55 else "🟡" if fg_value >= 40 else "🔴"
+        st.metric("Fear & Greed", f"{fg_value} {color}", fg_label)
+    else:
+        st.metric("Fear & Greed", "—")
+with ctx2:
+    if global_data:
+        btc_dom = global_data["market_cap_percentage"].get("btc", 0)
+        st.metric("BTC Dominance", f"{btc_dom:.1f}%")
+    else:
+        st.metric("BTC Dominance", "—")
+with ctx3:
+    if global_data:
+        mcap = global_data["total_market_cap"]["usd"] / 1e12
+        st.metric("Total Crypto MCap", f"${mcap:.2f}T")
+    else:
+        st.metric("Total Crypto MCap", "—")
+with ctx4:
+    if global_data:
+        chg = global_data.get("market_cap_change_percentage_24h_usd", 0)
+        st.metric("Market 24h", f"{chg:+.2f}%")
+    else:
+        st.metric("Market 24h", "—")
+
+st.divider()
+
+# ========== MULTI-COIN VIBE OVERVIEW ==========
+st.subheader("🌐 Multi-Coin Vibe Overview")
+
+markets = get_markets()
+coin_map = {c["id"]: c for c in markets} if markets else {}
+
+COIN_ORDER = [
+    ("Bitcoin", "bitcoin", "BTC"),
+    ("Ethereum", "ethereum", "ETH"),
+    ("Solana", "solana", "SOL"),
+    ("Avalanche", "avalanche-2", "AVAX"),
+    ("Dogecoin", "dogecoin", "DOGE"),
+]
+
+cols = st.columns(5)
+for i, (name, cid, tick) in enumerate(COIN_ORDER):
+    with cols[i]:
+        c = coin_map.get(cid)
+        if c:
+            price = c["current_price"]
+            high = c["high_24h"]
+            low = c["low_24h"]
+            ch1 = c.get("price_change_percentage_1h_in_currency") or 0
+            ch24 = c.get("price_change_percentage_24h") or 0
+            score, meme, _ = calc_vibe(price, high, low, ch1, ch24)
+            
+            st.markdown(f"**{tick}**")
+            st.metric(label="", value=f"${price:,.4f}" if price < 10 else f"${price:,.2f}",
+                      delta=f"{ch24:+.2f}%")
+            st.progress(score / 100, text=f"Vibe {score}")
+            st.caption(meme)
+        else:
+            st.info(f"{tick}\nLoading...")
+
+st.divider()
+
+# ========== DETAILED VIEW ==========
+st.subheader("🎯 Detailed View")
+
+col_a, col_b = st.columns([2, 1])
+with col_a:
+    selected = st.selectbox("Select Coin", [x[0] for x in COIN_ORDER], index=3)
+with col_b:
+    timeframe = st.selectbox("Timeframe", ["Last 1 Day (30 min)", "Last 7 Days", "Last 30 Days"])
+
+name_to_id = {x[0]: x[1] for x in COIN_ORDER}
+name_to_tick = {x[0]: x[2] for x in COIN_ORDER}
+coin_id = name_to_id[selected]
+ticker = name_to_tick[selected]
+
+c = coin_map.get(coin_id)
+if c:
+    price = c["current_price"]
+    change_24h = c.get("price_change_percentage_24h") or 0
+    change_1h = c.get("price_change_percentage_1h_in_currency") or 0
+    high = c["high_24h"]
+    low = c["low_24h"]
+    volume = c["total_volume"]
+    market_cap = c["market_cap"]
+
+    score, meme, range_pos = calc_vibe(price, high, low, change_1h, change_24h)
 
     price_text = f"${price:,.4f}" if price < 10 else f"${price:,.2f}"
     st.metric(f"{selected}", price_text, f"{change_24h:+.2f}% (24h)  |  {change_1h:+.2f}% (1h)")
@@ -186,7 +244,7 @@ try:
     c1, c2, c3 = st.columns(3)
     c1.metric("24h Volume", f"${volume/1_000_000:,.1f}M")
     c2.metric("Market Cap", f"${market_cap/1_000_000_000:,.2f}B")
-    c3.metric("Range Position", f"{range_position:.0f}% of today's range")
+    c3.metric("Range Position", f"{range_pos:.0f}% of today's range")
 
     st.progress(score / 100, text=f"Vibe Score: {score}/100")
 
@@ -198,17 +256,14 @@ try:
         st.info(meme)
 
     # X Links
-    st.divider()
-    st.subheader(f"🐦 Latest on X • ${ticker}")
-
     st.markdown(f"""
-    <div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom: 12px;">
+    <div style="display:flex; flex-wrap:wrap; gap:10px; margin: 12px 0;">
         <a href="https://x.com/search?q=%24{ticker}&src=typed_query&f=live" target="_blank" 
-           style="background:linear-gradient(90deg, #1da1f2, #0d8ecf); color:white; padding:9px 18px; border-radius:25px; text-decoration:none; font-weight:600; box-shadow: 0 4px 15px rgba(29,161,242,0.3);">
+           style="background:linear-gradient(90deg, #1da1f2, #0d8ecf); color:white; padding:8px 16px; border-radius:20px; text-decoration:none; font-weight:600;">
             ${ticker} Live
         </a>
         <a href="https://x.com/search?q={quote(selected + ' crypto')}&src=typed_query&f=live" target="_blank" 
-           style="background:linear-gradient(90deg, #1da1f2, #0d8ecf); color:white; padding:9px 18px; border-radius:25px; text-decoration:none; font-weight:600; box-shadow: 0 4px 15px rgba(29,161,242,0.3);">
+           style="background:linear-gradient(90deg, #1da1f2, #0d8ecf); color:white; padding:8px 16px; border-radius:20px; text-decoration:none; font-weight:600;">
             {selected} Crypto
         </a>
     </div>
@@ -245,10 +300,8 @@ try:
 
         fig.add_trace(go.Candlestick(
             x=df["time"],
-            open=df["open"],
-            high=df["high"],
-            low=df["low"],
-            close=df["close"],
+            open=df["open"], high=df["high"],
+            low=df["low"], close=df["close"],
             increasing_line_color="#00ff9f",
             decreasing_line_color="#ff4d6d",
             increasing_fillcolor="#00ff9f",
@@ -256,14 +309,17 @@ try:
             name="Price"
         ), row=1, col=1)
 
+        # Key Levels (24h High / Low)
+        fig.add_hline(y=high, line_dash="dot", line_color="rgba(0,255,159,0.6)", 
+                      annotation_text="24h High", annotation_position="top left", row=1, col=1)
+        fig.add_hline(y=low, line_dash="dot", line_color="rgba(255,77,109,0.6)", 
+                      annotation_text="24h Low", annotation_position="bottom left", row=1, col=1)
+
         if has_volume:
             colors = ["#00ff9f" if row["close"] >= row["open"] else "#ff4d6d" for _, row in df.iterrows()]
             fig.add_trace(go.Bar(
-                x=df["time"],
-                y=df["volume"],
-                marker_color=colors,
-                opacity=0.65,
-                name="Volume"
+                x=df["time"], y=df["volume"],
+                marker_color=colors, opacity=0.65, name="Volume"
             ), row=2, col=1)
 
         fig.update_layout(
@@ -271,7 +327,7 @@ try:
             template="plotly_dark",
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
-            margin=dict(l=0, r=0, t=10, b=0),
+            margin=dict(l=0, r=0, t=20, b=0),
             xaxis_rangeslider_visible=False,
             showlegend=False,
             hovermode="x unified"
@@ -280,11 +336,9 @@ try:
         fig.update_yaxes(showgrid=True, gridcolor="rgba(255,255,255,0.05)")
 
         st.plotly_chart(fig, use_container_width=True)
-        
         if days == "1":
-            st.caption("30-minute candlesticks")
+            st.caption("30-minute candlesticks • Dotted lines = 24h High / Low")
     else:
         st.info("Chart temporarily unavailable.")
-
-except Exception as e:
-    st.warning("Temporary issue. The app will retry shortly.")
+else:
+    st.warning("Loading coin data...")
