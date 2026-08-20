@@ -55,7 +55,7 @@ col_a, col_b = st.columns([2, 1])
 with col_a:
     selected = st.selectbox("Select Coin", list(COINS.keys()), index=3)
 with col_b:
-    timeframe = st.selectbox("Timeframe", ["Last 1 Day (~5 min)", "Last 7 Days", "Last 30 Days"])
+    timeframe = st.selectbox("Timeframe", ["Last 1 Day (30 min)", "Last 7 Days", "Last 30 Days"])
 
 coin_id = COINS[selected]
 ticker = TICKERS[selected]
@@ -74,7 +74,7 @@ def get_market_chart(coin_id, days="1"):
     return res.json()
 
 @st.cache_data(ttl=60)
-def get_ohlc(coin_id, days="7"):
+def get_ohlc(coin_id, days="1"):
     url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/ohlc"
     params = {"vs_currency": "usd", "days": days}
     res = requests.get(url, headers=HEADERS, params=params, timeout=10)
@@ -164,96 +164,76 @@ try:
     st.divider()
     st.subheader(f"{selected} • {timeframe}")
 
-    if timeframe == "Last 1 Day (~5 min)":
-        chart_data = get_market_chart(coin_id, "1")
-
-        if "prices" in chart_data and "total_volumes" in chart_data:
-            df = pd.DataFrame(chart_data["prices"], columns=["timestamp", "price"])
-            df["volume"] = [v[1] for v in chart_data["total_volumes"]]
-            df["time"] = pd.to_datetime(df["timestamp"], unit="ms")
-
-            price_min = df["price"].min()
-            price_max = df["price"].max()
-            padding = (price_max - price_min) * 0.12
-
-            fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.02, row_heights=[0.75, 0.25])
-            fig.add_trace(go.Scatter(x=df["time"], y=df["price"], mode="lines",
-                                     line=dict(color="#00ff9f", width=2.2),
-                                     fill="tozeroy", fillcolor="rgba(0,255,159,0.08)"), row=1, col=1)
-            fig.add_trace(go.Bar(x=df["time"], y=df["volume"],
-                                 marker_color="rgba(88, 166, 255, 0.5)"), row=2, col=1)
-            fig.update_layout(height=560, template="plotly_dark",
-                              paper_bgcolor="#0b0e11", plot_bgcolor="#0b0e11",
-                              margin=dict(l=0, r=0, t=10, b=0), showlegend=False, hovermode="x unified")
-            fig.update_yaxes(range=[price_min - padding, price_max + padding], row=1, col=1)
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("Chart temporarily unavailable.")
-
+    # All timeframes now use candlesticks
+    if "1 Day" in timeframe:
+        days = "1"
+    elif "7 Days" in timeframe:
+        days = "7"
     else:
-        # Improved 7D / 30D Candlestick + Volume
-        days = "7" if "7" in timeframe else "30"
-        ohlc_data = get_ohlc(coin_id, days)
-        volume_data = get_market_chart(coin_id, days)
+        days = "30"
 
-        if isinstance(ohlc_data, list) and len(ohlc_data) > 0:
-            df = pd.DataFrame(ohlc_data, columns=["timestamp", "open", "high", "low", "close"])
-            df["time"] = pd.to_datetime(df["timestamp"], unit="ms")
+    ohlc_data = get_ohlc(coin_id, days)
+    volume_data = get_market_chart(coin_id, days)
 
-            # Try to add volume
-            has_volume = False
-            if "total_volumes" in volume_data:
-                vol_df = pd.DataFrame(volume_data["total_volumes"], columns=["timestamp", "volume"])
-                vol_df["time"] = pd.to_datetime(vol_df["timestamp"], unit="ms")
-                # Approximate volume by nearest time
-                df = df.sort_values("time")
-                vol_df = vol_df.sort_values("time")
-                df = pd.merge_asof(df, vol_df, on="time", direction="nearest")
-                has_volume = True
+    if isinstance(ohlc_data, list) and len(ohlc_data) > 0:
+        df = pd.DataFrame(ohlc_data, columns=["timestamp", "open", "high", "low", "close"])
+        df["time"] = pd.to_datetime(df["timestamp"], unit="ms")
 
-            fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
-                                vertical_spacing=0.03, row_heights=[0.72, 0.28])
+        # Add volume if available
+        has_volume = False
+        if "total_volumes" in volume_data:
+            vol_df = pd.DataFrame(volume_data["total_volumes"], columns=["timestamp", "volume"])
+            vol_df["time"] = pd.to_datetime(vol_df["timestamp"], unit="ms")
+            df = df.sort_values("time")
+            vol_df = vol_df.sort_values("time")
+            df = pd.merge_asof(df, vol_df, on="time", direction="nearest")
+            has_volume = True
 
-            fig.add_trace(go.Candlestick(
+        fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
+                            vertical_spacing=0.03, row_heights=[0.72, 0.28])
+
+        fig.add_trace(go.Candlestick(
+            x=df["time"],
+            open=df["open"],
+            high=df["high"],
+            low=df["low"],
+            close=df["close"],
+            increasing_line_color="#26a69a",
+            decreasing_line_color="#ef5350",
+            increasing_fillcolor="#26a69a",
+            decreasing_fillcolor="#ef5350",
+            name="Price"
+        ), row=1, col=1)
+
+        if has_volume:
+            colors = ["#26a69a" if row["close"] >= row["open"] else "#ef5350" for _, row in df.iterrows()]
+            fig.add_trace(go.Bar(
                 x=df["time"],
-                open=df["open"],
-                high=df["high"],
-                low=df["low"],
-                close=df["close"],
-                increasing_line_color="#26a69a",
-                decreasing_line_color="#ef5350",
-                increasing_fillcolor="#26a69a",
-                decreasing_fillcolor="#ef5350",
-                name="Price"
-            ), row=1, col=1)
+                y=df["volume"],
+                marker_color=colors,
+                opacity=0.7,
+                name="Volume"
+            ), row=2, col=1)
 
-            if has_volume:
-                colors = ["#26a69a" if row["close"] >= row["open"] else "#ef5350" 
-                          for _, row in df.iterrows()]
-                fig.add_trace(go.Bar(
-                    x=df["time"],
-                    y=df["volume"],
-                    marker_color=colors,
-                    name="Volume",
-                    opacity=0.7
-                ), row=2, col=1)
+        fig.update_layout(
+            height=580,
+            template="plotly_dark",
+            paper_bgcolor="#0b0e11",
+            plot_bgcolor="#0b0e11",
+            margin=dict(l=0, r=0, t=10, b=0),
+            xaxis_rangeslider_visible=False,
+            showlegend=False,
+            hovermode="x unified"
+        )
+        fig.update_xaxes(showgrid=True, gridcolor="#1c2128")
+        fig.update_yaxes(showgrid=True, gridcolor="#1c2128")
 
-            fig.update_layout(
-                height=580,
-                template="plotly_dark",
-                paper_bgcolor="#0b0e11",
-                plot_bgcolor="#0b0e11",
-                margin=dict(l=0, r=0, t=10, b=0),
-                xaxis_rangeslider_visible=False,
-                showlegend=False,
-                hovermode="x unified"
-            )
-            fig.update_xaxes(showgrid=True, gridcolor="#1c2128")
-            fig.update_yaxes(showgrid=True, gridcolor="#1c2128")
-
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("Chart temporarily unavailable.")
+        st.plotly_chart(fig, use_container_width=True)
+        
+        if days == "1":
+            st.caption("30-minute candlesticks (best available on free API)")
+    else:
+        st.info("Chart temporarily unavailable.")
 
 except Exception as e:
     st.warning("Temporary issue. The app will retry shortly.")
