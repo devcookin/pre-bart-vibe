@@ -86,99 +86,175 @@ def get_market_chart(coin_id, days="1"):
     return r.json()
 
 def analyze_candles(ohlc_data):
-    if not isinstance(ohlc_data, list) or len(ohlc_data) < 3:
-        return 0
-    df = pd.DataFrame(ohlc_data[-5:], columns=["timestamp", "open", "high", "low", "close"])
-    quality = 0
+    """Improved structure + quality score. Returns roughly -1.5 → +1.8"""
+    if not isinstance(ohlc_data, list) or len(ohlc_data) < 4:
+        return 0.0
+
+    df = pd.DataFrame(ohlc_data[-8:], columns=["timestamp", "open", "high", "low", "close"])
+    quality = 0.0
+
+    # 1. Body / wick quality on recent candles
     for _, row in df.iterrows():
         body = abs(row["close"] - row["open"])
         upper_wick = row["high"] - max(row["open"], row["close"])
+        lower_wick = min(row["open"], row["close"]) - row["low"]
         full_range = row["high"] - row["low"]
-        if full_range == 0: continue
-        if upper_wick > body * 1.6 and upper_wick / full_range > 0.45:
-            quality -= 0.5
-        close_position = (row["close"] - row["low"]) / full_range
-        if close_position > 0.75 and row["close"] > row["open"]:
-            quality += 0.4
-        elif close_position < 0.30:
-            quality -= 0.3
+        if full_range == 0:
+            continue
+
+        # Strong bullish close (close in upper 70% + green)
+        close_pos = (row["close"] - row["low"]) / full_range
+        if close_pos > 0.70 and row["close"] > row["open"]:
+            quality += 0.35
+        elif close_pos < 0.30:
+            quality -= 0.30
+
+        # Heavy upper rejection
+        if upper_wick > body * 1.5 and upper_wick / full_range > 0.40:
+            quality -= 0.45
+        # Nice lower wick (buying pressure)
+        if lower_wick > body * 1.2 and lower_wick / full_range > 0.30:
+            quality += 0.25
+
+    # 2. Higher-lows / higher-highs structure (most important for "bullish chart")
     lows = df["low"].values
-    if len(lows) >= 3 and lows[-1] > lows[-2] > lows[-3]:
-        quality += 0.6
-    elif len(lows) >= 2 and lows[-1] < lows[-2]:
-        quality -= 0.3
-    return max(min(quality, 1.2), -1.2)
+    highs = df["high"].values
+    closes = df["close"].values
+
+    # Higher lows streak
+    if len(lows) >= 4:
+        if lows[-1] > lows[-2] > lows[-3]:
+            quality += 0.70
+        elif lows[-1] > lows[-2]:
+            quality += 0.35
+        elif lows[-1] < lows[-2] < lows[-3]:
+            quality -= 0.55
+
+    # Higher highs
+    if len(highs) >= 3 and highs[-1] > highs[-2] > highs[-3]:
+        quality += 0.40
+
+    # Close momentum (last 3 closes rising)
+    if len(closes) >= 3 and closes[-1] > closes[-2] > closes[-3]:
+        quality += 0.45
+    elif len(closes) >= 2 and closes[-1] < closes[-2]:
+        quality -= 0.25
+
+    return max(min(quality, 1.8), -1.5)
+
 
 def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change=None, candle_quality=0):
+    """
+    Tightened formula:
+    - Structure / candle quality now carries real weight
+    - Range position more important (especially bottom-of-range + structure)
+    - 1h still matters but no longer dominates
+    - Mild relative-strength vs BTC
+    """
     if high != low:
         range_pos = ((price - low) / (high - low)) * 100
     else:
-        range_pos = 50
+        range_pos = 50.0
 
     reasons = []
+    base = 50  # neutral starting point instead of pure 1h
 
-    # Primary: 1h trend
-    if change_1h > 1.2:
-        base = 78
+    # ---------- 1. Structure first (the "bullish chart" component) ----------
+    structure_boost = candle_quality * 12   # was only *2.2
+    base += structure_boost
+
+    if candle_quality > 0.8:
+        reasons.append("Clean higher-lows + strong closes (bullish structure)")
+    elif candle_quality > 0.35:
+        reasons.append("Constructive recent candles / structure")
+    elif candle_quality < -0.6:
+        reasons.append("Lower-lows or heavy rejection showing")
+    elif candle_quality < -0.2:
+        reasons.append("Mixed / weak recent candle structure")
+
+    # ---------- 2. Range position (location matters more now) ----------
+    if range_pos > 85:
+        base += 6
+        reasons.append("Price near the top of the daily range")
+    elif range_pos > 70:
+        base += 4
+        reasons.append("Upper half of the range")
+    elif range_pos < 20:
+        # Bottom of range is only bullish if structure is decent
+        if candle_quality > 0.2:
+            base += 5
+            reasons.append("Building from the bottom of the range (accumulation feel)")
+        else:
+            base -= 7
+            reasons.append("Sitting near the bottom of the range")
+    elif range_pos < 35:
+        if candle_quality > 0.1:
+            base += 2
+        else:
+            base -= 4
+            reasons.append("Lower half of the range")
+
+    # ---------- 3. 1h momentum (still relevant, but secondary) ----------
+    if change_1h > 1.5:
+        base += 14
         reasons.append("Strong positive 1h momentum")
-    elif change_1h > 0.5:
-        base = 68
+    elif change_1h > 0.6:
+        base += 9
         reasons.append("Positive 1h momentum")
-    elif change_1h > 0.0:
-        base = 58
+    elif change_1h > 0.15:
+        base += 4
         reasons.append("Slightly positive 1h")
-    elif change_1h > -0.7:
-        base = 48
-        reasons.append("Flat / mild negative 1h")
-    elif change_1h > -1.5:
-        base = 36
-        reasons.append("Negative 1h momentum")
+    elif change_1h > -0.4:
+        base += 0
+        # neutral, no reason
+    elif change_1h > -1.0:
+        base -= 6
+        reasons.append("Mild negative 1h")
     else:
-        base = 22
+        base -= 12
         reasons.append("Strong negative 1h momentum")
 
-    # Secondary: Range position
-    if range_pos > 80:
-        base += 8
-        reasons.append("Price near the top of the daily range")
-    elif range_pos > 65:
-        base += 5
-        reasons.append("Price in the upper half of the range")
-    elif range_pos < 25:
-        base -= 8
-        reasons.append("Price near the bottom of the daily range")
-    elif range_pos < 40:
-        base -= 4
-        reasons.append("Price in the lower half of the range")
+    # ---------- 4. 24h context + relative strength ----------
+    if change_24h > 5:
+        base += 4
+    elif change_24h > 2:
+        base += 2
+    elif change_24h < -5:
+        base -= 5
+    elif change_24h < -2:
+        base -= 2
 
-    # Light candle modifier
-    base += candle_quality * 2.2
-    if candle_quality > 0.4:
-        reasons.append("Recent candles show clean strength")
-    elif candle_quality < -0.4:
-        reasons.append("Recent candles show some rejection (short-term)")
+    if btc_change is not None:
+        vs_btc = change_24h - btc_change
+        if vs_btc > 3:
+            base += 4
+            reasons.append("Outperforming BTC on the day")
+        elif vs_btc < -3:
+            base -= 3
+            reasons.append("Lagging BTC on the day")
 
-    if change_24h > 4:
-        base += 3
-    if change_24h < -4:
-        base -= 4
-    if fg_value is not None and fg_value < 30:
-        base -= 3
+    # ---------- 5. Fear & Greed light touch ----------
+    if fg_value is not None:
+        if fg_value < 25:
+            base -= 3
+        elif fg_value > 70:
+            base += 1
 
-    score = max(min(int(base), 92), 12)
+    score = max(min(int(round(base)), 92), 12)
 
+    # Meme labels (kept similar so UI doesn't break)
     if score >= 80:
-        meme = "🔥 Strong 1h trend + good location"
+        meme = "🔥 Strong structure + momentum"
     elif score >= 68:
         meme = "🚀 Constructive multi-timeframe structure"
     elif score >= 55:
-        meme = "📈 1h still okay, short-term mixed"
+        meme = "📈 Structure still okay, short-term mixed"
     elif score >= 42:
         meme = "😐 Mixed signals across timeframes"
     elif score >= 28:
-        meme = "⚠️ Short-term weakness showing"
+        meme = "⚠️ Short-term weakness / structure fading"
     else:
-        meme = "💀 Weak across timeframes"
+        meme = "💀 Weak structure across timeframes"
 
     return score, meme, range_pos, reasons
 
