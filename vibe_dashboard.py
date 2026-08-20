@@ -333,15 +333,19 @@ for i, (name, cid, tick) in enumerate(COIN_ORDER):
             ch24 = c.get("price_change_percentage_24h") or 0
             image_url = c.get("image", "")
 
-            # Now also fetch structure so cards match detailed view
+            # Fetch structure so cards match detailed view
             ohlc = get_ohlc(cid, "1")
             candle_quality = analyze_candles(ohlc)
 
             score, meme, _, _ = calc_vibe(price, high, low, ch1, ch24, fg_value, btc_change, candle_quality)
 
             with st.container(border=True):
+                # Always reserve space for the image (even if missing)
                 if image_url:
                     st.image(image_url, width=28)
+                else:
+                    st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
+
                 st.markdown(f"**{tick}**")
                 
                 price_str = f"${price:,.2f}" if price >= 1 else f"${price:.4f}"
@@ -350,9 +354,21 @@ for i, (name, cid, tick) in enumerate(COIN_ORDER):
                 
                 st.progress(score / 100)
                 
-                # Fixed height so all buttons align
+                # Fixed height + overflow so all "View" buttons stay perfectly aligned
                 st.markdown(
-                    f"<div style='height: 42px; font-size: 13px; color: #888; line-height: 1.3;'>{meme}</div>",
+                    f"""
+                    <div style="
+                        height: 48px;
+                        min-height: 48px;
+                        max-height: 48px;
+                        font-size: 13px;
+                        color: #888;
+                        line-height: 1.35;
+                        overflow: hidden;
+                        display: flex;
+                        align-items: flex-start;
+                    ">{meme}</div>
+                    """,
                     unsafe_allow_html=True
                 )
                 
