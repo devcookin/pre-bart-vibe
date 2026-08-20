@@ -96,20 +96,26 @@ def analyze_candles(ohlc_data):
         full_range = row["high"] - row["low"]
         if full_range == 0: continue
         if upper_wick > body * 1.6 and upper_wick / full_range > 0.45:
-            quality -= 0.6
+            quality -= 0.5
         close_position = (row["close"] - row["low"]) / full_range
-        if close_position > 0.78 and row["close"] > row["open"]:
-            quality += 0.5
+        if close_position > 0.75 and row["close"] > row["open"]:
+            quality += 0.4
         elif close_position < 0.30:
             quality -= 0.3
     lows = df["low"].values
     if len(lows) >= 3 and lows[-1] > lows[-2] > lows[-3]:
-        quality += 0.7
+        quality += 0.6
     elif len(lows) >= 2 and lows[-1] < lows[-2]:
-        quality -= 0.4
-    return max(min(quality, 1.4), -1.4)
+        quality -= 0.3
+    return max(min(quality, 1.2), -1.2)
 
 def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change=None, candle_quality=0):
+    """
+    Multi-timeframe weighted scoring:
+    - 1h trend is the primary driver
+    - 24h range position is secondary
+    - Short-term candle quality is only a light modifier
+    """
     if high != low:
         range_pos = ((price - low) / (high - low)) * 100
     else:
@@ -117,66 +123,70 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
 
     reasons = []
 
-    if (range_pos > 83 and change_1h > 0.8 and change_24h > 2.5 and 
-        (fg_value is None or fg_value >= 40) and (btc_change is None or btc_change > -1.5)):
-        score = 86
-        meme = "🔥 Strong multi-timeframe alignment."
-        reasons.append("Price near top of range + strong momentum")
-    elif range_pos > 75 and change_1h > 0.4 and change_24h > 1.0:
-        score = 76
-        meme = "🚀 Higher highs forming + good momentum."
-        reasons.append("Holding high in the range with positive momentum")
-    elif range_pos > 65 and change_1h > 0.0:
-        score = 68
-        meme = "📈 Reclaiming structure / defending higher."
-        reasons.append("Above mid-range with positive short-term momentum")
-    elif range_pos > 52 and change_1h > -0.6:
-        score = 58
-        meme = "📊 Holding mid-range. Waiting for confirmation."
-        reasons.append("Price is holding the middle of the daily range")
-    elif range_pos > 40:
-        score = 49
-        meme = "😐 Neutral zone. No clear edge yet."
-        reasons.append("Price is in no-man's land")
-    elif range_pos > 25 and change_1h < 0:
-        score = 37
-        meme = "⚠️ Losing short-term structure."
-        reasons.append("Sliding lower in the range")
-    elif range_pos > 12:
-        score = 26
-        meme = "🐻 Below key short-term levels."
-        reasons.append("Price is in the lower part of the daily range")
+    # ===== Primary: 1h Trend =====
+    if change_1h > 1.2:
+        base = 78
+        reasons.append("Strong positive 1h momentum")
+    elif change_1h > 0.5:
+        base = 68
+        reasons.append("Positive 1h momentum")
+    elif change_1h > 0.0:
+        base = 58
+        reasons.append("Slightly positive 1h")
+    elif change_1h > -0.7:
+        base = 48
+        reasons.append("Flat / mild negative 1h")
+    elif change_1h > -1.5:
+        base = 36
+        reasons.append("Negative 1h momentum")
     else:
-        score = 14
-        meme = "💀 Weak. Sitting on the lows."
-        reasons.append("Price is near the daily lows")
+        base = 22
+        reasons.append("Strong negative 1h momentum")
 
-    score += candle_quality * 2.8
+    # ===== Secondary: Range Position =====
+    if range_pos > 80:
+        base += 8
+        reasons.append("Price near the top of the daily range")
+    elif range_pos > 65:
+        base += 5
+        reasons.append("Price in the upper half of the range")
+    elif range_pos < 25:
+        base -= 8
+        reasons.append("Price near the bottom of the daily range")
+    elif range_pos < 40:
+        base -= 4
+        reasons.append("Price in the lower half of the range")
+
+    # ===== Light modifier: Candle Quality =====
+    base += candle_quality * 2.2
     if candle_quality > 0.4:
-        reasons.append("Recent candles show clean strength / higher lows")
+        reasons.append("Recent candles show clean strength")
     elif candle_quality < -0.4:
-        reasons.append("Recent candles show some rejection")
+        reasons.append("Recent candles show some rejection (short-term)")
 
-    if change_1h < -2.0:
-        score -= 6
-        reasons.append("Sharp negative 1h momentum")
-    if change_24h < -5:
-        score -= 7
-        reasons.append("Significant 24h weakness")
-    if fg_value is not None and fg_value < 25:
-        score -= 4
-        reasons.append("Market is in Extreme Fear")
+    # Mild context adjustments
+    if change_24h > 4:
+        base += 3
+    if change_24h < -4:
+        base -= 4
+    if fg_value is not None and fg_value < 30:
+        base -= 3
 
-    score = max(min(int(score), 94), 10)
+    score = max(min(int(base), 92), 12)
 
-    if score >= 82:
-        meme = "🔥 High conviction – momentum + candles aligned."
-    elif score >= 70:
-        meme = "🚀 Structure improving with decent candle quality."
-    elif score >= 58:
-        meme = "📈 Holding structure, needs a bit more confirmation."
-    elif score <= 28:
-        meme = "💀 Weak location + soft candles."
+    # Final meme
+    if score >= 80:
+        meme = "🔥 Strong 1h trend + good location"
+    elif score >= 68:
+        meme = "🚀 Constructive multi-timeframe structure"
+    elif score >= 55:
+        meme = "📈 1h still okay, short-term mixed"
+    elif score >= 42:
+        meme = "😐 Mixed signals across timeframes"
+    elif score >= 28:
+        meme = "⚠️ Short-term weakness showing"
+    else:
+        meme = "💀 Weak across timeframes"
 
     return score, meme, range_pos, reasons
 
@@ -285,7 +295,11 @@ with col_a:
                             index=[x[0] for x in COIN_ORDER].index(selected))
     st.session_state.selected_coin = selected
 with col_b:
-    timeframe = st.selectbox("Timeframe", ["Last 1 Day (30 min)", "Last 7 Days", "Last 30 Days"])
+    timeframe = st.selectbox("Timeframe", [
+        "Last 1 Day (30 min)", 
+        "Last 7 Days", 
+        "Last 30 Days"
+    ])
 
 name_to_id = {x[0]: x[1] for x in COIN_ORDER}
 name_to_tick = {x[0]: x[2] for x in COIN_ORDER}
@@ -340,9 +354,9 @@ if c:
         for r in reasons:
             st.write(f"• {r}")
 
-    # Share section (read-only)
+    # Share (read-only)
     share_text = f"{ticker} Vibe Score: {score}/100 – {meme}\nhttps://prebartvibes.streamlit.app/"
-    st.text_area("📋 Share this vibe (select + copy)", share_text, height=80, disabled=True)
+    st.text_area("📋 Share this vibe (select + copy)", share_text, height=70, disabled=True)
 
     st.markdown(f"""
     <div style="display:flex; flex-wrap:wrap; gap:10px; margin: 12px 0;">
@@ -420,7 +434,7 @@ if c:
 
         st.plotly_chart(fig, use_container_width=True)
         if days == "1":
-            st.caption("30-minute candlesticks • Dotted lines = 24h High / Low")
+            st.caption("30-minute candles (best available on free API) • Closest to 1h view")
     else:
         st.info("Chart temporarily unavailable.")
 else:
