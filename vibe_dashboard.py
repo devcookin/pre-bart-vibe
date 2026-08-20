@@ -107,16 +107,16 @@ def analyze_candles(ohlc_data):
         if close_pos > 0.70 and row["close"] > row["open"]:
             quality += 0.35
         elif close_pos < 0.30:
-            quality -= 0.30
+            quality -= 0.25   # slightly softer than before
 
         # Heavy upper rejection
         if upper_wick > body * 1.5 and upper_wick / full_range > 0.40:
-            quality -= 0.45
+            quality -= 0.40   # slightly softer
         # Nice lower wick (buying pressure)
         if lower_wick > body * 1.2 and lower_wick / full_range > 0.30:
             quality += 0.25
 
-    # 2. Higher-lows / higher-highs structure (most important for "bullish chart")
+    # 2. Higher-lows / higher-highs structure
     lows = df["low"].values
     highs = df["high"].values
     closes = df["close"].values
@@ -128,7 +128,7 @@ def analyze_candles(ohlc_data):
         elif lows[-1] > lows[-2]:
             quality += 0.35
         elif lows[-1] < lows[-2] < lows[-3]:
-            quality -= 0.55
+            quality -= 0.45   # softer penalty
 
     # Higher highs
     if len(highs) >= 3 and highs[-1] > highs[-2] > highs[-3]:
@@ -138,18 +138,18 @@ def analyze_candles(ohlc_data):
     if len(closes) >= 3 and closes[-1] > closes[-2] > closes[-3]:
         quality += 0.45
     elif len(closes) >= 2 and closes[-1] < closes[-2]:
-        quality -= 0.25
+        quality -= 0.20   # softer
 
     return max(min(quality, 1.8), -1.5)
 
 
 def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change=None, candle_quality=0):
     """
-    Tightened formula:
-    - Structure / candle quality now carries real weight
-    - Range position more important (especially bottom-of-range + structure)
-    - 1h still matters but no longer dominates
-    - Mild relative-strength vs BTC
+    Softened & balanced formula:
+    - Structure still primary
+    - Higher neutral base (55)
+    - Softer negative penalties
+    - Slightly more generous positive 1h
     """
     if high != low:
         range_pos = ((price - low) / (high - low)) * 100
@@ -157,10 +157,10 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
         range_pos = 50.0
 
     reasons = []
-    base = 50  # neutral starting point instead of pure 1h
+    base = 55  # raised from 50 for less overall bearishness
 
-    # ---------- 1. Structure first (the "bullish chart" component) ----------
-    structure_boost = candle_quality * 12   # was only *2.2
+    # ---------- 1. Structure first ----------
+    structure_boost = candle_quality * 11   # still strong, slightly dialed
     base += structure_boost
 
     if candle_quality > 0.8:
@@ -172,7 +172,7 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
     elif candle_quality < -0.2:
         reasons.append("Mixed / weak recent candle structure")
 
-    # ---------- 2. Range position (location matters more now) ----------
+    # ---------- 2. Range position (softened bottom penalties) ----------
     if range_pos > 85:
         base += 6
         reasons.append("Price near the top of the daily range")
@@ -180,38 +180,36 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
         base += 4
         reasons.append("Upper half of the range")
     elif range_pos < 20:
-        # Bottom of range is only bullish if structure is decent
-        if candle_quality > 0.2:
-            base += 5
+        if candle_quality > 0.15:
+            base += 4
             reasons.append("Building from the bottom of the range (accumulation feel)")
         else:
-            base -= 7
+            base -= 5   # softer than -7
             reasons.append("Sitting near the bottom of the range")
     elif range_pos < 35:
         if candle_quality > 0.1:
             base += 2
         else:
-            base -= 4
+            base -= 3   # softer
             reasons.append("Lower half of the range")
 
-    # ---------- 3. 1h momentum (still relevant, but secondary) ----------
-    if change_1h > 1.5:
-        base += 14
+    # ---------- 3. 1h momentum (more generous on the positive side) ----------
+    if change_1h > 1.3:
+        base += 13
         reasons.append("Strong positive 1h momentum")
-    elif change_1h > 0.6:
+    elif change_1h > 0.5:
         base += 9
         reasons.append("Positive 1h momentum")
-    elif change_1h > 0.15:
-        base += 4
+    elif change_1h > 0.1:
+        base += 5
         reasons.append("Slightly positive 1h")
-    elif change_1h > -0.4:
+    elif change_1h > -0.5:
         base += 0
-        # neutral, no reason
-    elif change_1h > -1.0:
-        base -= 6
+    elif change_1h > -1.2:
+        base -= 5
         reasons.append("Mild negative 1h")
     else:
-        base -= 12
+        base -= 10
         reasons.append("Strong negative 1h momentum")
 
     # ---------- 4. 24h context + relative strength ----------
@@ -220,7 +218,7 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
     elif change_24h > 2:
         base += 2
     elif change_24h < -5:
-        base -= 5
+        base -= 4
     elif change_24h < -2:
         base -= 2
 
@@ -236,13 +234,13 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
     # ---------- 5. Fear & Greed light touch ----------
     if fg_value is not None:
         if fg_value < 25:
-            base -= 3
+            base -= 2
         elif fg_value > 70:
             base += 1
 
-    score = max(min(int(round(base)), 92), 12)
+    score = max(min(int(round(base)), 92), 14)
 
-    # Meme labels (kept similar so UI doesn't break)
+    # Meme labels
     if score >= 80:
         meme = "🔥 Strong structure + momentum"
     elif score >= 68:
