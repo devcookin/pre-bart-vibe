@@ -22,7 +22,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ===== AESTHETICS =====
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -104,39 +103,39 @@ def get_market_chart(coin_id, days="1"):
     r = requests.get(url, headers=HEADERS, params=params, timeout=10)
     return r.json()
 
-def calc_vibe(price, high, low, change_1h, change_24h):
+def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change=None):
     if high != low:
         range_pos = ((price - low) / (high - low)) * 100
     else:
         range_pos = 50
 
-    # Stricter thresholds
-    if range_pos > 90 and change_1h > 1.2:
-        score, meme = 95, "🔥 PRE-BART INCOMING! Extreme strength."
-    elif range_pos > 82 and change_1h > 0.7:
-        score, meme = 85, "🚀 Very strong. Holding near highs."
-    elif range_pos > 72 and change_1h > 0.2:
-        score, meme = 72, "📈 Solid position, still constructive."
-    elif range_pos > 60 and change_1h > -0.3:
-        score, meme = 58, "📊 Above mid-range but momentum cooling."
-    elif range_pos > 45:
-        score, meme = 48, "😐 Mid-range chop. No clear edge."
-    elif range_pos > 32 and change_1h < 0:
-        score, meme = 35, "⚠️ Losing the mid. Short-term weakness."
-    elif range_pos > 18:
-        score, meme = 25, "🐻 Sliding toward the lows."
-    elif range_pos <= 18:
-        score, meme = 12, "💀 Sitting on the lows. Bearish pressure."
+    # === CONFIRMATION-BASED SCORING ===
+    # 80+ only with strong multi-factor alignment
+    if (range_pos > 85 and change_1h > 1.0 and change_24h > 3 and 
+        (fg_value is None or fg_value >= 45) and (btc_change is None or btc_change > -1)):
+        score, meme = 88, "🔥 Strong multi-timeframe alignment. High conviction."
+    elif range_pos > 78 and change_1h > 0.6 and change_24h > 1.5:
+        score, meme = 78, "🚀 Higher highs forming + good momentum."
+    elif range_pos > 68 and change_1h > 0.2:
+        score, meme = 68, "📈 Reclaiming structure / defending higher."
+    elif range_pos > 55 and change_1h > -0.4:
+        score, meme = 58, "📊 Holding mid-range. Waiting for confirmation."
+    elif range_pos > 42:
+        score, meme = 48, "😐 Neutral zone. No clear edge yet."
+    elif range_pos > 28 and change_1h < 0:
+        score, meme = 35, "⚠️ Losing short-term structure."
+    elif range_pos > 15:
+        score, meme = 24, "🐻 Below key short-term levels."
     else:
-        score, meme = 42, "😐 Mixed signals."
+        score, meme = 12, "💀 Weak. Sitting on the lows."
 
-    # Smaller bullish boost + stronger bearish penalty
-    if change_24h > 8 and score >= 70:
-        score = min(score + 3, 95)
-    elif change_24h < -3:
-        score = max(score - 10, 8)
-    elif change_1h < -1.5:
-        score = max(score - 7, 10)
+    # Extra penalties / small boosts
+    if change_1h < -1.8:
+        score = max(score - 8, 8)
+    if change_24h < -4:
+        score = max(score - 9, 8)
+    if fg_value is not None and fg_value < 30:
+        score = max(score - 5, 8)
 
     return score, meme, range_pos
 
@@ -178,6 +177,11 @@ st.subheader("🌐 Multi-Coin Vibe Overview")
 markets = get_markets()
 coin_map = {c["id"]: c for c in markets} if markets else {}
 
+# Get BTC 24h change for context
+btc_change = None
+if "bitcoin" in coin_map:
+    btc_change = coin_map["bitcoin"].get("price_change_percentage_24h") or 0
+
 COIN_ORDER = [
     ("Bitcoin", "bitcoin", "BTC"),
     ("Ethereum", "ethereum", "ETH"),
@@ -196,7 +200,7 @@ for i, (name, cid, tick) in enumerate(COIN_ORDER):
             low = c["low_24h"]
             ch1 = c.get("price_change_percentage_1h_in_currency") or 0
             ch24 = c.get("price_change_percentage_24h") or 0
-            score, meme, _ = calc_vibe(price, high, low, ch1, ch24)
+            score, meme, _ = calc_vibe(price, high, low, ch1, ch24, fg_value, btc_change)
             
             st.markdown(f"**{tick}**")
             st.metric(label="", value=f"${price:,.4f}" if price < 10 else f"${price:,.2f}",
@@ -232,7 +236,7 @@ if c:
     volume = c["total_volume"]
     market_cap = c["market_cap"]
 
-    score, meme, range_pos = calc_vibe(price, high, low, change_1h, change_24h)
+    score, meme, range_pos = calc_vibe(price, high, low, change_1h, change_24h, fg_value, btc_change)
 
     price_text = f"${price:,.4f}" if price < 10 else f"${price:,.2f}"
     st.metric(f"{selected}", price_text, f"{change_24h:+.2f}% (24h)  |  {change_1h:+.2f}% (1h)")
