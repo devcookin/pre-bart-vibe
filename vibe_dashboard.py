@@ -41,6 +41,8 @@ if "last_score" not in st.session_state:
     st.session_state.last_score = None
 if "last_refresh" not in st.session_state:
     st.session_state.last_refresh = datetime.now()
+if "score_history" not in st.session_state:
+    st.session_state.score_history = {}
 
 # ========== HELPERS ==========
 @st.cache_data(ttl=45)
@@ -110,12 +112,6 @@ def analyze_candles(ohlc_data):
     return max(min(quality, 1.2), -1.2)
 
 def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change=None, candle_quality=0):
-    """
-    Multi-timeframe weighted scoring:
-    - 1h trend is the primary driver
-    - 24h range position is secondary
-    - Short-term candle quality is only a light modifier
-    """
     if high != low:
         range_pos = ((price - low) / (high - low)) * 100
     else:
@@ -123,7 +119,7 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
 
     reasons = []
 
-    # ===== Primary: 1h Trend =====
+    # Primary: 1h trend
     if change_1h > 1.2:
         base = 78
         reasons.append("Strong positive 1h momentum")
@@ -143,7 +139,7 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
         base = 22
         reasons.append("Strong negative 1h momentum")
 
-    # ===== Secondary: Range Position =====
+    # Secondary: Range position
     if range_pos > 80:
         base += 8
         reasons.append("Price near the top of the daily range")
@@ -157,14 +153,13 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
         base -= 4
         reasons.append("Price in the lower half of the range")
 
-    # ===== Light modifier: Candle Quality =====
+    # Light candle modifier
     base += candle_quality * 2.2
     if candle_quality > 0.4:
         reasons.append("Recent candles show clean strength")
     elif candle_quality < -0.4:
         reasons.append("Recent candles show some rejection (short-term)")
 
-    # Mild context adjustments
     if change_24h > 4:
         base += 3
     if change_24h < -4:
@@ -174,7 +169,6 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
 
     score = max(min(int(base), 92), 12)
 
-    # Final meme
     if score >= 80:
         meme = "🔥 Strong 1h trend + good location"
     elif score >= 68:
@@ -321,6 +315,15 @@ if c:
 
     score, meme, range_pos, reasons = calc_vibe(price, high, low, change_1h, change_24h, fg_value, btc_change, candle_quality)
 
+    # Calculate score change
+    prev_score = st.session_state.score_history.get(ticker)
+    score_delta = None
+    if prev_score is not None:
+        score_delta = score - prev_score
+
+    # Store current score
+    st.session_state.score_history[ticker] = score
+
     # Alerts
     if st.session_state.last_score is not None:
         if score >= 70 and st.session_state.last_score < 70:
@@ -341,7 +344,17 @@ if c:
     c4.metric("Candle Quality", f"{candle_quality:+.1f}")
     c5.metric("vs BTC (24h)", f"{vs_btc:+.2f}%")
 
-    st.progress(score / 100, text=f"Vibe Score: {score}/100")
+    # Vibe Score with change indicator
+    if score_delta is not None:
+        if score_delta > 0:
+            delta_text = f"↑ +{score_delta}"
+        elif score_delta < 0:
+            delta_text = f"↓ {score_delta}"
+        else:
+            delta_text = "→ 0"
+        st.progress(score / 100, text=f"Vibe Score: {score}  {delta_text}")
+    else:
+        st.progress(score / 100, text=f"Vibe Score: {score}")
 
     if score >= 80:
         st.success(meme)
@@ -434,7 +447,7 @@ if c:
 
         st.plotly_chart(fig, use_container_width=True)
         if days == "1":
-            st.caption("30-minute candles (best available on free API) • Closest to 1h view")
+            st.caption("30-minute candles (best available on free API)")
     else:
         st.info("Chart temporarily unavailable.")
 else:
