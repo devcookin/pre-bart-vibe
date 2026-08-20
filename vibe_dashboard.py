@@ -22,25 +22,30 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+# Theme-aware CSS
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
     
-    .stApp {
-        background: linear-gradient(180deg, #0b0e11 0%, #0f1218 100%);
+    html, body, [class*="css"] {
         font-family: 'Inter', sans-serif;
     }
     
-    h1 {
+    /* Dark mode styles */
+    [data-theme="dark"] h1,
+    .stApp[data-theme="dark"] h1 {
         background: linear-gradient(90deg, #00ff9f, #00d4ff);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         font-weight: 700 !important;
     }
     
+    /* Light mode title */
+    h1 {
+        font-weight: 700 !important;
+    }
+    
     .stMetric {
-        background: rgba(22, 26, 30, 0.75);
-        border: 1px solid rgba(0, 255, 159, 0.12);
         border-radius: 14px;
         padding: 12px 16px;
     }
@@ -51,21 +56,14 @@ st.markdown("""
     }
     
     .stProgress > div > div > div > div {
-        background: linear-gradient(90deg, #00ff9f, #00d4ff);
+        background: linear-gradient(90deg, #00c853, #00b0ff);
     }
     
     div.stButton > button {
         width: 100%;
-        background: rgba(0, 255, 159, 0.08);
-        border: 1px solid rgba(0, 255, 159, 0.25);
         border-radius: 10px;
-        color: #00ff9f;
         font-weight: 600;
         padding: 6px 0;
-    }
-    div.stButton > button:hover {
-        background: rgba(0, 255, 159, 0.18);
-        border-color: #00ff9f;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -282,7 +280,6 @@ for i, (name, cid, tick) in enumerate(COIN_ORDER):
             image_url = c.get("image", "")
             score, meme, _, _ = calc_vibe(price, high, low, ch1, ch24, fg_value, btc_change, 0)
 
-            # Clean card layout
             if image_url:
                 st.image(image_url, width=32)
             st.markdown(f"**{tick}**")
@@ -399,6 +396,7 @@ if c:
             df = pd.merge_asof(df, vol_df, on="time", direction="nearest")
             has_volume = True
 
+        # Use a theme-friendly Plotly template
         fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
                             vertical_spacing=0.03, row_heights=[0.72, 0.28])
 
@@ -406,20 +404,20 @@ if c:
             x=df["time"],
             open=df["open"], high=df["high"],
             low=df["low"], close=df["close"],
-            increasing_line_color="#00ff9f",
-            decreasing_line_color="#ff4d6d",
-            increasing_fillcolor="#00ff9f",
-            decreasing_fillcolor="#ff4d6d",
+            increasing_line_color="#00c853",
+            decreasing_line_color="#ff5252",
+            increasing_fillcolor="#00c853",
+            decreasing_fillcolor="#ff5252",
             name="Price"
         ), row=1, col=1)
 
-        fig.add_hline(y=high, line_dash="dot", line_color="rgba(0,255,159,0.6)", 
+        fig.add_hline(y=high, line_dash="dot", line_color="rgba(0,200,83,0.6)", 
                       annotation_text="24h High", annotation_position="top left", row=1, col=1)
-        fig.add_hline(y=low, line_dash="dot", line_color="rgba(255,77,109,0.6)", 
+        fig.add_hline(y=low, line_dash="dot", line_color="rgba(255,82,82,0.6)", 
                       annotation_text="24h Low", annotation_position="bottom left", row=1, col=1)
 
         if has_volume:
-            colors = ["#00ff9f" if row["close"] >= row["open"] else "#ff4d6d" for _, row in df.iterrows()]
+            colors = ["#00c853" if row["close"] >= row["open"] else "#ff5252" for _, row in df.iterrows()]
             fig.add_trace(go.Bar(
                 x=df["time"], y=df["volume"],
                 marker_color=colors, opacity=0.65, name="Volume"
@@ -427,16 +425,12 @@ if c:
 
         fig.update_layout(
             height=580,
-            template="plotly_dark",
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
+            template="plotly_white",          # works better in both modes
             margin=dict(l=0, r=0, t=20, b=0),
             xaxis_rangeslider_visible=False,
             showlegend=False,
             hovermode="x unified"
         )
-        fig.update_xaxes(showgrid=True, gridcolor="rgba(255,255,255,0.05)")
-        fig.update_yaxes(showgrid=True, gridcolor="rgba(255,255,255,0.05)")
 
         st.plotly_chart(fig, use_container_width=True)
         if days == "1":
