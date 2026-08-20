@@ -22,10 +22,63 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+# ===== FUN + SLEEK CRYPTO AESTHETIC =====
 st.markdown("""
 <style>
-    .stApp { background-color: #0b0e11; }
-    .stMetric { background-color: #161a1e; padding: 12px; border-radius: 10px; }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    
+    .stApp {
+        background: linear-gradient(180deg, #0b0e11 0%, #0f1218 100%);
+        font-family: 'Inter', sans-serif;
+    }
+    
+    h1 {
+        background: linear-gradient(90deg, #00ff9f, #00d4ff);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-weight: 700 !important;
+    }
+    
+    .stMetric {
+        background: rgba(22, 26, 30, 0.7);
+        border: 1px solid rgba(0, 255, 159, 0.15);
+        border-radius: 16px;
+        padding: 16px;
+        backdrop-filter: blur(10px);
+    }
+    
+    div[data-testid="stMetricValue"] {
+        font-size: 1.7rem !important;
+        font-weight: 600;
+    }
+    
+    .stProgress > div > div > div > div {
+        background: linear-gradient(90deg, #00ff9f, #00d4ff);
+    }
+    
+    .stSelectbox > div > div {
+        background-color: #161a1e;
+        border: 1px solid #2a2f36;
+        border-radius: 12px;
+    }
+    
+    .stSuccess {
+        background: rgba(0, 255, 159, 0.1);
+        border: 1px solid rgba(0, 255, 159, 0.3);
+        border-radius: 12px;
+    }
+    
+    .stError {
+        background: rgba(239, 83, 80, 0.1);
+        border: 1px solid rgba(239, 83, 80, 0.3);
+        border-radius: 12px;
+    }
+    
+    .stInfo {
+        background: rgba(88, 166, 255, 0.1);
+        border: 1px solid rgba(88, 166, 255, 0.3);
+        border-radius: 12px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -151,11 +204,11 @@ try:
     st.markdown(f"""
     <div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom: 12px;">
         <a href="https://x.com/search?q=%24{ticker}&src=typed_query&f=live" target="_blank" 
-           style="background:#1da1f2; color:white; padding:8px 16px; border-radius:20px; text-decoration:none; font-weight:600;">
+           style="background:linear-gradient(90deg, #1da1f2, #0d8ecf); color:white; padding:9px 18px; border-radius:25px; text-decoration:none; font-weight:600; box-shadow: 0 4px 15px rgba(29,161,242,0.3);">
             ${ticker} Live
         </a>
         <a href="https://x.com/search?q={quote(selected + ' crypto')}&src=typed_query&f=live" target="_blank" 
-           style="background:#1da1f2; color:white; padding:8px 16px; border-radius:20px; text-decoration:none; font-weight:600;">
+           style="background:linear-gradient(90deg, #1da1f2, #0d8ecf); color:white; padding:9px 18px; border-radius:25px; text-decoration:none; font-weight:600; box-shadow: 0 4px 15px rgba(29,161,242,0.3);">
             {selected} Crypto
         </a>
     </div>
@@ -164,7 +217,6 @@ try:
     st.divider()
     st.subheader(f"{selected} • {timeframe}")
 
-    # All timeframes now use candlesticks
     if "1 Day" in timeframe:
         days = "1"
     elif "7 Days" in timeframe:
@@ -179,7 +231,6 @@ try:
         df = pd.DataFrame(ohlc_data, columns=["timestamp", "open", "high", "low", "close"])
         df["time"] = pd.to_datetime(df["timestamp"], unit="ms")
 
-        # Add volume if available
         has_volume = False
         if "total_volumes" in volume_data:
             vol_df = pd.DataFrame(volume_data["total_volumes"], columns=["timestamp", "volume"])
@@ -198,40 +249,40 @@ try:
             high=df["high"],
             low=df["low"],
             close=df["close"],
-            increasing_line_color="#26a69a",
-            decreasing_line_color="#ef5350",
-            increasing_fillcolor="#26a69a",
-            decreasing_fillcolor="#ef5350",
+            increasing_line_color="#00ff9f",
+            decreasing_line_color="#ff4d6d",
+            increasing_fillcolor="#00ff9f",
+            decreasing_fillcolor="#ff4d6d",
             name="Price"
         ), row=1, col=1)
 
         if has_volume:
-            colors = ["#26a69a" if row["close"] >= row["open"] else "#ef5350" for _, row in df.iterrows()]
+            colors = ["#00ff9f" if row["close"] >= row["open"] else "#ff4d6d" for _, row in df.iterrows()]
             fig.add_trace(go.Bar(
                 x=df["time"],
                 y=df["volume"],
                 marker_color=colors,
-                opacity=0.7,
+                opacity=0.65,
                 name="Volume"
             ), row=2, col=1)
 
         fig.update_layout(
             height=580,
             template="plotly_dark",
-            paper_bgcolor="#0b0e11",
-            plot_bgcolor="#0b0e11",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
             margin=dict(l=0, r=0, t=10, b=0),
             xaxis_rangeslider_visible=False,
             showlegend=False,
             hovermode="x unified"
         )
-        fig.update_xaxes(showgrid=True, gridcolor="#1c2128")
-        fig.update_yaxes(showgrid=True, gridcolor="#1c2128")
+        fig.update_xaxes(showgrid=True, gridcolor="rgba(255,255,255,0.05)")
+        fig.update_yaxes(showgrid=True, gridcolor="rgba(255,255,255,0.05)")
 
         st.plotly_chart(fig, use_container_width=True)
         
         if days == "1":
-            st.caption("30-minute candlesticks (best available on free API)")
+            st.caption("30-minute candlesticks")
     else:
         st.info("Chart temporarily unavailable.")
 
