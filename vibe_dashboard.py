@@ -53,6 +53,19 @@ st.markdown("""
     .stProgress > div > div > div > div {
         background: linear-gradient(90deg, #00ff9f, #00d4ff);
     }
+    
+    div.stButton > button {
+        width: 100%;
+        background: rgba(22, 26, 30, 0.7);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 14px;
+        padding: 12px 8px;
+        text-align: center;
+    }
+    div.stButton > button:hover {
+        border-color: #00ff9f;
+        background: rgba(0, 255, 159, 0.08);
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -104,7 +117,6 @@ def get_market_chart(coin_id, days="1"):
     return r.json()
 
 def analyze_candles(ohlc_data):
-    """Returns a milder quality adjustment from -1.5 to +1.5"""
     if not isinstance(ohlc_data, list) or len(ohlc_data) < 3:
         return 0
 
@@ -119,18 +131,15 @@ def analyze_candles(ohlc_data):
         if full_range == 0:
             continue
 
-        # Milder penalty for upper wicks
         if upper_wick > body * 1.6 and upper_wick / full_range > 0.45:
             quality -= 0.7
 
-        # Reward clean strong closes
         close_position = (row["close"] - row["low"]) / full_range
         if close_position > 0.78 and row["close"] > row["open"]:
             quality += 0.6
         elif close_position < 0.30:
             quality -= 0.4
 
-    # Higher lows bonus
     lows = df["low"].values
     if len(lows) >= 3 and lows[-1] > lows[-2] > lows[-3]:
         quality += 0.8
@@ -145,47 +154,61 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
     else:
         range_pos = 50
 
-    # Base scoring (confirmation focused)
+    reasons = []
+
     if (range_pos > 85 and change_1h > 1.0 and change_24h > 3 and 
         (fg_value is None or fg_value >= 45) and (btc_change is None or btc_change > -1)):
         score = 87
         meme = "🔥 Strong multi-timeframe alignment."
+        reasons.append("Price near top of range + strong 1h & 24h momentum")
     elif range_pos > 78 and change_1h > 0.6 and change_24h > 1.5:
         score = 77
         meme = "🚀 Higher highs forming + good momentum."
+        reasons.append("Holding high in the range with positive momentum")
     elif range_pos > 68 and change_1h > 0.2:
         score = 67
         meme = "📈 Reclaiming structure / defending higher."
+        reasons.append("Above mid-range and short-term momentum is positive")
     elif range_pos > 55 and change_1h > -0.4:
         score = 57
         meme = "📊 Holding mid-range. Waiting for confirmation."
+        reasons.append("Price is in the middle of the daily range")
     elif range_pos > 42:
         score = 47
         meme = "😐 Neutral zone. No clear edge yet."
+        reasons.append("Price is in no-man's land")
     elif range_pos > 28 and change_1h < 0:
         score = 35
         meme = "⚠️ Losing short-term structure."
+        reasons.append("Sliding lower in the range with negative short-term momentum")
     elif range_pos > 15:
         score = 24
         meme = "🐻 Below key short-term levels."
+        reasons.append("Price is in the lower part of the daily range")
     else:
         score = 13
         meme = "💀 Weak. Sitting on the lows."
+        reasons.append("Price is near the daily lows")
 
-    # Milder candle quality impact
+    # Candle quality
     score += candle_quality * 3.2
+    if candle_quality > 0.5:
+        reasons.append("Recent candles show clean strength / higher lows")
+    elif candle_quality < -0.5:
+        reasons.append("Recent candles show rejection or weak closes")
 
-    # Penalties
     if change_1h < -1.8:
         score -= 7
+        reasons.append("Sharp negative 1h momentum")
     if change_24h < -4:
         score -= 8
+        reasons.append("Significant 24h weakness")
     if fg_value is not None and fg_value < 30:
         score -= 4
+        reasons.append("Market is in Extreme Fear")
 
     score = max(min(int(score), 95), 8)
 
-    # Final meme adjustment
     if score >= 82:
         meme = "🔥 High conviction – momentum + candles aligned."
     elif score >= 70:
@@ -195,7 +218,11 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
     elif score <= 25:
         meme = "💀 Weak location + soft candles."
 
-    return score, meme, range_pos
+    return score, meme, range_pos, reasons
+
+# ========== INIT SESSION STATE ==========
+if "selected_coin" not in st.session_state:
+    st.session_state.selected_coin = "Avalanche"
 
 # ========== MARKET CONTEXT ==========
 fg_value, fg_label = get_fear_greed()
@@ -231,6 +258,7 @@ st.divider()
 
 # ========== MULTI-COIN VIBE OVERVIEW ==========
 st.subheader("🌐 Multi-Coin Vibe Overview")
+st.caption("Click any coin to view details")
 
 markets = get_markets()
 coin_map = {c["id"]: c for c in markets} if markets else {}
@@ -257,12 +285,14 @@ for i, (name, cid, tick) in enumerate(COIN_ORDER):
             low = c["low_24h"]
             ch1 = c.get("price_change_percentage_1h_in_currency") or 0
             ch24 = c.get("price_change_percentage_24h") or 0
-            score, meme, _ = calc_vibe(price, high, low, ch1, ch24, fg_value, btc_change, candle_quality=0)
-            
-            st.markdown(f"**{tick}**")
-            st.metric(label="", value=f"${price:,.4f}" if price < 10 else f"${price:,.2f}",
-                      delta=f"{ch24:+.2f}%")
-            st.progress(score / 100, text=f"Vibe {score}")
+            score, meme, _, _ = calc_vibe(price, high, low, ch1, ch24, fg_value, btc_change, 0)
+
+            # Clickable card
+            if st.button(f"**{tick}**\n\n${price:,.4f}" if price < 10 else f"**{tick}**\n\n${price:,.2f}\n{ch24:+.2f}%\nVibe {score}", key=f"btn_{cid}"):
+                st.session_state.selected_coin = name
+                st.rerun()
+
+            st.progress(score / 100)
             st.caption(meme)
         else:
             st.info(f"{tick}\nLoading...")
@@ -272,9 +302,14 @@ st.divider()
 # ========== DETAILED VIEW ==========
 st.subheader("🎯 Detailed View")
 
+selected = st.session_state.selected_coin
+
 col_a, col_b = st.columns([2, 1])
 with col_a:
-    selected = st.selectbox("Select Coin", [x[0] for x in COIN_ORDER], index=3)
+    # Keep a selectbox as backup
+    selected = st.selectbox("Select Coin", [x[0] for x in COIN_ORDER], 
+                            index=[x[0] for x in COIN_ORDER].index(selected))
+    st.session_state.selected_coin = selected
 with col_b:
     timeframe = st.selectbox("Timeframe", ["Last 1 Day (30 min)", "Last 7 Days", "Last 30 Days"])
 
@@ -296,7 +331,7 @@ if c:
     ohlc_1d = get_ohlc(coin_id, "1")
     candle_quality = analyze_candles(ohlc_1d)
 
-    score, meme, range_pos = calc_vibe(price, high, low, change_1h, change_24h, fg_value, btc_change, candle_quality)
+    score, meme, range_pos, reasons = calc_vibe(price, high, low, change_1h, change_24h, fg_value, btc_change, candle_quality)
 
     price_text = f"${price:,.4f}" if price < 10 else f"${price:,.2f}"
     st.metric(f"{selected}", price_text, f"{change_24h:+.2f}% (24h)  |  {change_1h:+.2f}% (1h)")
@@ -315,6 +350,14 @@ if c:
         st.error(meme)
     else:
         st.info(meme)
+
+    # Why this score?
+    with st.expander("🤔 Why this score?"):
+        if reasons:
+            for r in reasons:
+                st.write(f"• {r}")
+        else:
+            st.write("• Mixed signals across factors")
 
     st.markdown(f"""
     <div style="display:flex; flex-wrap:wrap; gap:10px; margin: 12px 0;">
