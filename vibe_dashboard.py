@@ -41,8 +41,6 @@ if "last_score" not in st.session_state:
     st.session_state.last_score = None
 if "last_refresh" not in st.session_state:
     st.session_state.last_refresh = datetime.now()
-if "score_history" not in st.session_state:
-    st.session_state.score_history = {}
 
 # ========== HELPERS ==========
 @st.cache_data(ttl=45)
@@ -315,15 +313,6 @@ if c:
 
     score, meme, range_pos, reasons = calc_vibe(price, high, low, change_1h, change_24h, fg_value, btc_change, candle_quality)
 
-    # Calculate score change
-    prev_score = st.session_state.score_history.get(ticker)
-    score_delta = None
-    if prev_score is not None:
-        score_delta = score - prev_score
-
-    # Store current score
-    st.session_state.score_history[ticker] = score
-
     # Alerts
     if st.session_state.last_score is not None:
         if score >= 70 and st.session_state.last_score < 70:
@@ -344,17 +333,7 @@ if c:
     c4.metric("Candle Quality", f"{candle_quality:+.1f}")
     c5.metric("vs BTC (24h)", f"{vs_btc:+.2f}%")
 
-    # Vibe Score with change indicator
-    if score_delta is not None:
-        if score_delta > 0:
-            delta_text = f"↑ +{score_delta}"
-        elif score_delta < 0:
-            delta_text = f"↓ {score_delta}"
-        else:
-            delta_text = "→ 0"
-        st.progress(score / 100, text=f"Vibe Score: {score}  {delta_text}")
-    else:
-        st.progress(score / 100, text=f"Vibe Score: {score}")
+    st.progress(score / 100, text=f"Vibe Score: {score}/100")
 
     if score >= 80:
         st.success(meme)
