@@ -13,7 +13,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Auto-refresh every 45 seconds
 st_autorefresh(interval=45 * 1000, key="datarefresh")
 
 st.markdown("""
@@ -59,26 +58,37 @@ try:
     volume = market["total_volume"]["usd"]
     market_cap = market["market_cap"]["usd"]
 
-    # ===== IMPROVED VIBE SCORING =====
-    # Uses both 1h and 24h change for better accuracy
-    if change_24h > 8 and change_1h > 1.5:
-        score, meme = 95, "🔥 PRE-BART INCOMING! Strong momentum still pushing."
-    elif change_24h > 6 and change_1h > 0.5:
-        score, meme = 85, "🚀 Still strong but watching for continuation."
-    elif change_24h > 4 and change_1h > -0.5:
-        score, meme = 75, "📈 Good daily move, short-term is stable."
-    elif change_24h > 4 and change_1h < -1:
-        score, meme = 60, "😮‍💨 Cooling off after a strong daily pump."
-    elif change_24h > 1.5:
-        score, meme = 55, "📊 Mild bullish vibes overall."
-    elif change_24h > -1.5 and change_1h > -1:
-        score, meme = 45, "😐 Sideways vibes. Waiting for a catalyst."
-    elif change_1h < -2 or change_24h < -3:
-        score, meme = 25, "🐻 Short-term weakness showing."
-    elif change_24h < -5:
-        score, meme = 15, "💀 Full Bart dump energy."
+    # Calculate position in the 24h range (0 = at low, 100 = at high)
+    if high != low:
+        range_position = ((price - low) / (high - low)) * 100
     else:
-        score, meme = 40, "😐 Mixed signals right now."
+        range_position = 50
+
+    # ========== DYNAMIC VIBE SCORING ==========
+    if range_position > 85 and change_1h > 0.8:
+        score, meme = 95, "🔥 PRE-BART INCOMING! Price pushing highs with strong momentum."
+    elif range_position > 75 and change_1h > 0.3:
+        score, meme = 85, "🚀 Holding near the highs. Continuation looking likely."
+    elif range_position > 65 and change_1h > -0.3:
+        score, meme = 75, "📈 Strong position in the daily range. Still constructive."
+    elif range_position > 55:
+        score, meme = 65, "📊 Above the middle of the range. Mildly bullish."
+    elif range_position > 40 and change_1h > -0.5:
+        score, meme = 50, "😐 Mid-range chop. Waiting for direction."
+    elif range_position > 30:
+        score, meme = 40, "⚠️ Losing strength. Sliding toward support."
+    elif range_position > 15 and change_1h < 0:
+        score, meme = 28, "🐻 Near the lows of the day. Short-term bearish."
+    elif range_position <= 15:
+        score, meme = 15, "💀 Sitting on the lows. Full Bart dump pressure."
+    else:
+        score, meme = 45, "😐 Mixed signals right now."
+
+    # Small adjustment based on overall 24h trend
+    if change_24h > 6 and score < 90:
+        score = min(score + 5, 95)
+    elif change_24h < -4 and score > 20:
+        score = max(score - 8, 10)
 
     # Display
     price_text = f"${price:,.4f}" if price < 10 else f"${price:,.2f}"
@@ -87,10 +97,10 @@ try:
     c1, c2, c3 = st.columns(3)
     c1.metric("24h Volume", f"${volume/1_000_000:,.1f}M")
     c2.metric("Market Cap", f"${market_cap/1_000_000_000:,.2f}B")
-    c3.metric("24h Range", f"${low:,.2f} – ${high:,.2f}")
+    c3.metric("Range Position", f"{range_position:.0f}% of today's range")
 
     st.progress(score / 100, text=f"Vibe Score: {score}/100")
-    
+
     if score >= 80:
         st.success(meme)
     elif score <= 30:
@@ -140,9 +150,6 @@ try:
                 hovermode="x unified"
             )
             fig.update_yaxes(range=[price_min - padding, price_max + padding], row=1, col=1)
-            fig.update_xaxes(showgrid=True, gridcolor="#1c2128")
-            fig.update_yaxes(showgrid=True, gridcolor="#1c2128")
-
             st.plotly_chart(fig, use_container_width=True)
 
     else:
