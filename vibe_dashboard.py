@@ -103,39 +103,98 @@ def get_market_chart(coin_id, days="1"):
     r = requests.get(url, headers=HEADERS, params=params, timeout=10)
     return r.json()
 
-def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change=None):
+def analyze_candles(ohlc_data):
+    """Returns a quality score from -2 (very weak) to +2 (very strong)"""
+    if not isinstance(ohlc_data, list) or len(ohlc_data) < 3:
+        return 0
+
+    df = pd.DataFrame(ohlc_data[-6:], columns=["timestamp", "open", "high", "low", "close"])  # last ~6 candles
+    quality = 0
+
+    for i, row in df.iterrows():
+        body = abs(row["close"] - row["open"])
+        upper_wick = row["high"] - max(row["open"], row["close"])
+        lower_wick = min(row["open"], row["close"]) - row["low"]
+        full_range = row["high"] - row["low"]
+
+        if full_range == 0:
+            continue
+
+        # Penalize large upper wicks (rejection)
+        if upper_wick > body * 1.4 and upper_wick / full_range > 0.4:
+            quality -= 1.1
+
+        # Reward strong closes near the high
+        close_position = (row["close"] - row["low"]) / full_range
+        if close_position > 0.75 and row["close"] > row["open"]:
+            quality += 0.7
+        elif close_position < 0.35:
+            quality -= 0.6
+
+    # Check for higher lows (structure)
+    lows = df["low"].values
+    if len(lows) >= 3 and lows[-1] > lows[-2] > lows[-3]:
+        quality += 1.2
+    elif len(lows) >= 2 and lows[-1] < lows[-2]:
+        quality -= 0.8
+
+    return max(min(quality, 2.5), -2.5)
+
+def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change=None, candle_quality=0):
     if high != low:
         range_pos = ((price - low) / (high - low)) * 100
     else:
         range_pos = 50
 
-    # === CONFIRMATION-BASED SCORING ===
-    # 80+ only with strong multi-factor alignment
+    # Base confirmation scoring
     if (range_pos > 85 and change_1h > 1.0 and change_24h > 3 and 
         (fg_value is None or fg_value >= 45) and (btc_change is None or btc_change > -1)):
-        score, meme = 88, "🔥 Strong multi-timeframe alignment. High conviction."
+        score = 86
+        meme = "🔥 Strong multi-timeframe alignment."
     elif range_pos > 78 and change_1h > 0.6 and change_24h > 1.5:
-        score, meme = 78, "🚀 Higher highs forming + good momentum."
+        score = 76
+        meme = "🚀 Higher highs forming + good momentum."
     elif range_pos > 68 and change_1h > 0.2:
-        score, meme = 68, "📈 Reclaiming structure / defending higher."
+        score = 66
+        meme = "📈 Reclaiming structure / defending higher."
     elif range_pos > 55 and change_1h > -0.4:
-        score, meme = 58, "📊 Holding mid-range. Waiting for confirmation."
+        score = 56
+        meme = "📊 Holding mid-range. Waiting for confirmation."
     elif range_pos > 42:
-        score, meme = 48, "😐 Neutral zone. No clear edge yet."
+        score = 46
+        meme = "😐 Neutral zone. No clear edge yet."
     elif range_pos > 28 and change_1h < 0:
-        score, meme = 35, "⚠️ Losing short-term structure."
+        score = 34
+        meme = "⚠️ Losing short-term structure."
     elif range_pos > 15:
-        score, meme = 24, "🐻 Below key short-term levels."
+        score = 23
+        meme = "🐻 Below key short-term levels."
     else:
-        score, meme = 12, "💀 Weak. Sitting on the lows."
+        score = 12
+        meme = "💀 Weak. Sitting on the lows."
 
-    # Extra penalties / small boosts
+    # === CANDLE QUALITY ADJUSTMENT (False positive filter) ===
+    score += candle_quality * 4.5   # Each point of quality moves score meaningfully
+
+    # Extra penalties
     if change_1h < -1.8:
-        score = max(score - 8, 8)
+        score -= 8
     if change_24h < -4:
-        score = max(score - 9, 8)
+        score -= 9
     if fg_value is not None and fg_value < 30:
-        score = max(score - 5, 8)
+        score -= 5
+
+    score = max(min(int(score), 95), 8)
+
+    # Update meme based on final score
+    if score >= 82:
+        meme = "🔥 High conviction – candles + momentum aligned."
+    elif score >= 70:
+        meme = "🚀 Structure improving with decent candle quality."
+    elif score >= 58:
+        meme = "📈 Holding structure but needs stronger confirmation."
+    elif score <= 25:
+        meme = "💀 Weak candles + poor location."
 
     return score, meme, range_pos
 
@@ -177,7 +236,6 @@ st.subheader("🌐 Multi-Coin Vibe Overview")
 markets = get_markets()
 coin_map = {c["id"]: c for c in markets} if markets else {}
 
-# Get BTC 24h change for context
 btc_change = None
 if "bitcoin" in coin_map:
     btc_change = coin_map["bitcoin"].get("price_change_percentage_24h") or 0
@@ -200,7 +258,8 @@ for i, (name, cid, tick) in enumerate(COIN_ORDER):
             low = c["low_24h"]
             ch1 = c.get("price_change_percentage_1h_in_currency") or 0
             ch24 = c.get("price_change_percentage_24h") or 0
-            score, meme, _ = calc_vibe(price, high, low, ch1, ch24, fg_value, btc_change)
+            # For overview we skip deep candle analysis to save API calls
+            score, meme, _ = calc_vibe(price, high, low, ch1, ch24, fg_value, btc_change, candle_quality=0)
             
             st.markdown(f"**{tick}**")
             st.metric(label="", value=f"${price:,.4f}" if price < 10 else f"${price:,.2f}",
@@ -236,15 +295,20 @@ if c:
     volume = c["total_volume"]
     market_cap = c["market_cap"]
 
-    score, meme, range_pos = calc_vibe(price, high, low, change_1h, change_24h, fg_value, btc_change)
+    # Get recent candles for quality analysis
+    ohlc_1d = get_ohlc(coin_id, "1")
+    candle_quality = analyze_candles(ohlc_1d)
+
+    score, meme, range_pos = calc_vibe(price, high, low, change_1h, change_24h, fg_value, btc_change, candle_quality)
 
     price_text = f"${price:,.4f}" if price < 10 else f"${price:,.2f}"
     st.metric(f"{selected}", price_text, f"{change_24h:+.2f}% (24h)  |  {change_1h:+.2f}% (1h)")
 
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
     c1.metric("24h Volume", f"${volume/1_000_000:,.1f}M")
     c2.metric("Market Cap", f"${market_cap/1_000_000_000:,.2f}B")
-    c3.metric("Range Position", f"{range_pos:.0f}% of today's range")
+    c3.metric("Range Position", f"{range_pos:.0f}%")
+    c4.metric("Candle Quality", f"{candle_quality:+.1f}")
 
     st.progress(score / 100, text=f"Vibe Score: {score}/100")
 
@@ -255,7 +319,6 @@ if c:
     else:
         st.info(meme)
 
-    # X Links
     st.markdown(f"""
     <div style="display:flex; flex-wrap:wrap; gap:10px; margin: 12px 0;">
         <a href="https://x.com/search?q=%24{ticker}&src=typed_query&f=live" target="_blank" 
@@ -309,7 +372,6 @@ if c:
             name="Price"
         ), row=1, col=1)
 
-        # Key Levels
         fig.add_hline(y=high, line_dash="dot", line_color="rgba(0,255,159,0.6)", 
                       annotation_text="24h High", annotation_position="top left", row=1, col=1)
         fig.add_hline(y=low, line_dash="dot", line_color="rgba(255,77,109,0.6)", 
