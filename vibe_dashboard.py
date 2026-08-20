@@ -26,16 +26,6 @@ st.markdown("""
 <style>
     .stApp { background-color: #0b0e11; }
     .stMetric { background-color: #161a1e; padding: 12px; border-radius: 10px; }
-    .x-button {
-        background-color: #1da1f2;
-        color: white;
-        padding: 8px 16px;
-        border-radius: 20px;
-        text-decoration: none;
-        font-weight: 600;
-        display: inline-block;
-        margin: 4px;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -154,25 +144,22 @@ try:
     else:
         st.info(meme)
 
-    # ========== LATEST ON X SECTION ==========
+    # X Links
     st.divider()
     st.subheader(f"🐦 Latest on X • ${ticker}")
 
     st.markdown(f"""
-    <div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom: 15px;">
-        <a href="https://x.com/search?q=%24{ticker}&src=typed_query&f=live" target="_blank" style="background:#1da1f2; color:white; padding:8px 16px; border-radius:20px; text-decoration:none; font-weight:600;">
+    <div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom: 12px;">
+        <a href="https://x.com/search?q=%24{ticker}&src=typed_query&f=live" target="_blank" 
+           style="background:#1da1f2; color:white; padding:8px 16px; border-radius:20px; text-decoration:none; font-weight:600;">
             ${ticker} Live
         </a>
-        <a href="https://x.com/search?q={quote(selected + ' crypto')}&src=typed_query&f=live" target="_blank" style="background:#1da1f2; color:white; padding:8px 16px; border-radius:20px; text-decoration:none; font-weight:600;">
+        <a href="https://x.com/search?q={quote(selected + ' crypto')}&src=typed_query&f=live" target="_blank" 
+           style="background:#1da1f2; color:white; padding:8px 16px; border-radius:20px; text-decoration:none; font-weight:600;">
             {selected} Crypto
-        </a>
-        <a href="https://x.com/search?q=%24{ticker}%20OR%20{selected}&src=typed_query&f=live" target="_blank" style="background:#1da1f2; color:white; padding:8px 16px; border-radius:20px; text-decoration:none; font-weight:600;">
-            ${ticker} + {selected}
         </a>
     </div>
     """, unsafe_allow_html=True)
-
-    st.caption("Click any button to open live posts on X in a new tab")
 
     st.divider()
     st.subheader(f"{selected} • {timeframe}")
@@ -202,22 +189,68 @@ try:
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("Chart temporarily unavailable.")
+
     else:
+        # Improved 7D / 30D Candlestick + Volume
         days = "7" if "7" in timeframe else "30"
         ohlc_data = get_ohlc(coin_id, days)
+        volume_data = get_market_chart(coin_id, days)
 
         if isinstance(ohlc_data, list) and len(ohlc_data) > 0:
             df = pd.DataFrame(ohlc_data, columns=["timestamp", "open", "high", "low", "close"])
             df["time"] = pd.to_datetime(df["timestamp"], unit="ms")
-            fig = go.Figure(data=[go.Candlestick(
-                x=df["time"], open=df["open"], high=df["high"],
-                low=df["low"], close=df["close"],
-                increasing_line_color="#26a69a", decreasing_line_color="#ef5350"
-            )])
-            fig.update_layout(height=520, template="plotly_dark",
-                              paper_bgcolor="#0b0e11", plot_bgcolor="#0b0e11",
-                              margin=dict(l=0, r=0, t=10, b=0),
-                              xaxis_rangeslider_visible=False)
+
+            # Try to add volume
+            has_volume = False
+            if "total_volumes" in volume_data:
+                vol_df = pd.DataFrame(volume_data["total_volumes"], columns=["timestamp", "volume"])
+                vol_df["time"] = pd.to_datetime(vol_df["timestamp"], unit="ms")
+                # Approximate volume by nearest time
+                df = df.sort_values("time")
+                vol_df = vol_df.sort_values("time")
+                df = pd.merge_asof(df, vol_df, on="time", direction="nearest")
+                has_volume = True
+
+            fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
+                                vertical_spacing=0.03, row_heights=[0.72, 0.28])
+
+            fig.add_trace(go.Candlestick(
+                x=df["time"],
+                open=df["open"],
+                high=df["high"],
+                low=df["low"],
+                close=df["close"],
+                increasing_line_color="#26a69a",
+                decreasing_line_color="#ef5350",
+                increasing_fillcolor="#26a69a",
+                decreasing_fillcolor="#ef5350",
+                name="Price"
+            ), row=1, col=1)
+
+            if has_volume:
+                colors = ["#26a69a" if row["close"] >= row["open"] else "#ef5350" 
+                          for _, row in df.iterrows()]
+                fig.add_trace(go.Bar(
+                    x=df["time"],
+                    y=df["volume"],
+                    marker_color=colors,
+                    name="Volume",
+                    opacity=0.7
+                ), row=2, col=1)
+
+            fig.update_layout(
+                height=580,
+                template="plotly_dark",
+                paper_bgcolor="#0b0e11",
+                plot_bgcolor="#0b0e11",
+                margin=dict(l=0, r=0, t=10, b=0),
+                xaxis_rangeslider_visible=False,
+                showlegend=False,
+                hovermode="x unified"
+            )
+            fig.update_xaxes(showgrid=True, gridcolor="#1c2128")
+            fig.update_yaxes(showgrid=True, gridcolor="#1c2128")
+
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("Chart temporarily unavailable.")
