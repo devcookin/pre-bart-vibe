@@ -5,7 +5,6 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from urllib.parse import quote
-import time
 
 try:
     from streamlit_autorefresh import st_autorefresh
@@ -38,8 +37,6 @@ st.markdown("""
 # ========== SESSION STATE ==========
 if "selected_coin" not in st.session_state:
     st.session_state.selected_coin = "Avalanche"
-if "vibe_history" not in st.session_state:
-    st.session_state.vibe_history = []
 if "last_score" not in st.session_state:
     st.session_state.last_score = None
 if "last_refresh" not in st.session_state:
@@ -310,7 +307,7 @@ if c:
 
     score, meme, range_pos, reasons = calc_vibe(price, high, low, change_1h, change_24h, fg_value, btc_change, candle_quality)
 
-    # --- Alerts ---
+    # Alerts
     if st.session_state.last_score is not None:
         if score >= 70 and st.session_state.last_score < 70:
             st.toast(f"🚀 {ticker} Vibe crossed 70!", icon="🚀")
@@ -318,12 +315,6 @@ if c:
             st.toast(f"🐻 {ticker} Vibe dropped below 30", icon="🐻")
     st.session_state.last_score = score
 
-    # --- Vibe History ---
-    st.session_state.vibe_history.append(score)
-    if len(st.session_state.vibe_history) > 12:
-        st.session_state.vibe_history = st.session_state.vibe_history[-12:]
-
-    # Relative strength vs BTC
     vs_btc = change_24h - (btc_change or 0)
 
     price_text = f"${price:,.4f}" if price < 10 else f"${price:,.2f}"
@@ -345,16 +336,11 @@ if c:
     else:
         st.info(meme)
 
-    # Vibe History Sparkline
-    if len(st.session_state.vibe_history) > 1:
-        hist_df = pd.DataFrame({"Vibe": st.session_state.vibe_history})
-        st.line_chart(hist_df, height=120)
-
     with st.expander("🤔 Why this score?"):
         for r in reasons:
             st.write(f"• {r}")
 
-    # Share button
+    # Share
     share_text = f"{ticker} Vibe Score: {score}/100 – {meme}\nhttps://prebartvibes.streamlit.app/"
     st.text_area("📋 Share this vibe (copy the text below)", share_text, height=80)
 
