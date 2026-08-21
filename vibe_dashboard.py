@@ -304,19 +304,32 @@ def make_sparkline(history):
     times = [h[0] for h in history]
     scores = [h[1] for h in history]
     
+    # Auto-zoom so changes look more pronounced
+    min_score = min(scores)
+    max_score = max(scores)
+    padding = max(4, (max_score - min_score) * 0.25)
+    y_min = max(0, min_score - padding)
+    y_max = min(100, max_score + padding)
+    
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=times, y=scores,
-        mode="lines",
-        line=dict(color="#00c853" if scores[-1] >= 60 else "#ff5252", width=2.5),
+        mode="lines+markers",
+        line=dict(color="#00c853" if scores[-1] >= 60 else "#ff5252", width=3),
+        marker=dict(size=5),
         fill="tozeroy",
         fillcolor="rgba(0,200,83,0.12)" if scores[-1] >= 60 else "rgba(255,82,82,0.12)"
     ))
     fig.update_layout(
-        height=150,
+        height=160,
         margin=dict(l=0, r=10, t=10, b=30),
         xaxis=dict(showgrid=False, showticklabels=True, tickformat="%H:%M"),
-        yaxis=dict(showgrid=True, gridcolor="rgba(0,0,0,0.05)", range=[0, 100], title="Vibe"),
+        yaxis=dict(
+            showgrid=True,
+            gridcolor="rgba(0,0,0,0.06)",
+            range=[y_min, y_max],
+            title="Vibe"
+        ),
         plot_bgcolor="rgba(0,0,0,0)",
         paper_bgcolor="rgba(0,0,0,0)",
         showlegend=False
@@ -367,13 +380,12 @@ with ctx4:
 st.divider()
 
 # ========== LIVE TOP COINS ==========
-top_coins = get_top_coins(20)  # Live Top 20 by market cap
+top_coins = get_top_coins(20)
 
 if not top_coins:
     st.error("Could not load top coins. Please try refreshing.")
     st.stop()
 
-# Build dynamic list
 COIN_ORDER = []
 coin_map = {}
 for c in top_coins:
@@ -425,7 +437,6 @@ for name, cid, tick in COIN_ORDER:
         "history": st.session_state.score_history.get(cid, [])
     })
 
-# Sort by vibe score
 vibe_data_sorted = sorted(vibe_data, key=lambda x: x["score"], reverse=True)
 
 # ========== MULTI-COIN CARDS ==========
@@ -507,9 +518,6 @@ st.divider()
 st.subheader("🎯 Detailed View")
 
 if st.session_state.search_coin:
-    # Handle searched coin (single market call)
-    single = get_top_coins(1)  # fallback, better to call markets for single id
-    # Simpler: use a direct call
     try:
         r = requests.get(
             "https://api.coingecko.com/api/v3/coins/markets",
