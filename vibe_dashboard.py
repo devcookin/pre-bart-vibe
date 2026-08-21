@@ -235,15 +235,14 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
 
 
 def colored_progress(score: int, height: int = 12):
-    """Fun colored progress bar based on vibe score"""
     if score >= 75:
-        color = "linear-gradient(90deg, #00e676, #00c853)"      # strong green
+        color = "linear-gradient(90deg, #00e676, #00c853)"
     elif score >= 60:
-        color = "linear-gradient(90deg, #69f0ae, #00e676)"      # green
+        color = "linear-gradient(90deg, #69f0ae, #00e676)"
     elif score >= 45:
-        color = "linear-gradient(90deg, #ffd600, #ffab00)"      # yellow / orange
+        color = "linear-gradient(90deg, #ffd600, #ffab00)"
     else:
-        color = "linear-gradient(90deg, #ff5252, #d50000)"      # red
+        color = "linear-gradient(90deg, #ff5252, #d50000)"
 
     return f"""
     <div style="
@@ -310,10 +309,7 @@ with ctx4:
 
 st.divider()
 
-# ========== MULTI-COIN OVERVIEW ==========
-st.subheader("🌐 Multi-Coin Vibe Overview")
-st.caption("Click “View” on any coin to open the detailed view")
-
+# ========== DATA PREP ==========
 markets = get_markets()
 coin_map = {c["id"]: c for c in markets} if markets else {}
 
@@ -329,68 +325,125 @@ COIN_ORDER = [
     ("Dogecoin", "dogecoin", "DOGE"),
 ]
 
+# Pre-calculate all scores for cards + leaderboard
+vibe_data = []
+for name, cid, tick in COIN_ORDER:
+    c = coin_map.get(cid)
+    if c:
+        price = c["current_price"]
+        high = c["high_24h"]
+        low = c["low_24h"]
+        ch1 = c.get("price_change_percentage_1h_in_currency") or 0
+        ch24 = c.get("price_change_percentage_24h") or 0
+        image_url = c.get("image", "")
+
+        ohlc = get_ohlc(cid, "1")
+        candle_quality = analyze_candles(ohlc)
+
+        score, meme, range_pos, reasons = calc_vibe(
+            price, high, low, ch1, ch24, fg_value, btc_change, candle_quality
+        )
+
+        vibe_data.append({
+            "name": name,
+            "cid": cid,
+            "tick": tick,
+            "price": price,
+            "ch24": ch24,
+            "ch1": ch1,
+            "score": score,
+            "meme": meme,
+            "image_url": image_url,
+            "candle_quality": candle_quality,
+            "range_pos": range_pos,
+            "reasons": reasons
+        })
+
+# Sort for leaderboard
+vibe_data_sorted = sorted(vibe_data, key=lambda x: x["score"], reverse=True)
+
+# ========== MULTI-COIN OVERVIEW (CARDS) ==========
+st.subheader("🌐 Multi-Coin Vibe Overview")
+st.caption("Click “View” on any coin to open the detailed view")
+
 cols = st.columns(5)
-for i, (name, cid, tick) in enumerate(COIN_ORDER):
+for i, item in enumerate(vibe_data):
     with cols[i]:
-        c = coin_map.get(cid)
-        if c:
-            price = c["current_price"]
-            high = c["high_24h"]
-            low = c["low_24h"]
-            ch1 = c.get("price_change_percentage_1h_in_currency") or 0
-            ch24 = c.get("price_change_percentage_24h") or 0
-            image_url = c.get("image", "")
+        with st.container(border=True):
+            if item["image_url"]:
+                st.image(item["image_url"], width=28)
+            else:
+                st.markdown("<div style='height:28px; margin-bottom:4px;'></div>", unsafe_allow_html=True)
 
-            ohlc = get_ohlc(cid, "1")
-            candle_quality = analyze_candles(ohlc)
+            st.markdown(f"**{item['tick']}**")
+            
+            if item["price"] >= 1000:
+                price_str = f"${item['price']:,.0f}"
+            elif item["price"] >= 1:
+                price_str = f"${item['price']:,.2f}"
+            else:
+                price_str = f"${item['price']:.4f}"
+            
+            st.markdown(
+                f"<div style='font-size:1.35rem; font-weight:600; height:32px; line-height:32px; overflow:hidden;'>{price_str}</div>",
+                unsafe_allow_html=True
+            )
+            st.caption(f"{item['ch24']:+.2f}% • Vibe {item['score']}")
+            
+            st.markdown(colored_progress(item["score"], height=10), unsafe_allow_html=True)
+            
+            st.markdown(
+                f"""
+                <div style="
+                    height: 44px;
+                    min-height: 44px;
+                    max-height: 44px;
+                    font-size: 13px;
+                    color: #888;
+                    line-height: 1.3;
+                    overflow: hidden;
+                    margin-bottom: 8px;
+                ">{item['meme']}</div>
+                """,
+                unsafe_allow_html=True
+            )
+            
+            if st.button("View", key=f"btn_{item['cid']}", use_container_width=True):
+                st.session_state.selected_coin = item["name"]
+                st.rerun()
 
-            score, meme, _, _ = calc_vibe(price, high, low, ch1, ch24, fg_value, btc_change, candle_quality)
+st.divider()
 
-            with st.container(border=True):
-                if image_url:
-                    st.image(image_url, width=28)
-                else:
-                    st.markdown("<div style='height:28px; margin-bottom:4px;'></div>", unsafe_allow_html=True)
+# ========== VIBE LEADERBOARD ==========
+st.subheader("🏆 Vibe Leaderboard")
+st.caption("Live ranking by current vibe score")
 
-                st.markdown(f"**{tick}**")
-                
-                if price >= 1000:
-                    price_str = f"${price:,.0f}"
-                elif price >= 1:
-                    price_str = f"${price:,.2f}"
-                else:
-                    price_str = f"${price:.4f}"
-                
-                st.markdown(
-                    f"<div style='font-size:1.35rem; font-weight:600; height:32px; line-height:32px; overflow:hidden;'>{price_str}</div>",
-                    unsafe_allow_html=True
-                )
-                st.caption(f"{ch24:+.2f}% • Vibe {score}")
-                
-                # Fun colored progress bar
-                st.markdown(colored_progress(score, height=10), unsafe_allow_html=True)
-                
-                st.markdown(
-                    f"""
-                    <div style="
-                        height: 44px;
-                        min-height: 44px;
-                        max-height: 44px;
-                        font-size: 13px;
-                        color: #888;
-                        line-height: 1.3;
-                        overflow: hidden;
-                        margin-bottom: 8px;
-                    ">{meme}</div>
-                    """,
-                    unsafe_allow_html=True
-                )
-                
-                if st.button("View", key=f"btn_{cid}", use_container_width=True):
-                    st.session_state.selected_coin = name
-                    st.rerun()
-        else:
-            st.info(f"{tick}\nLoading...")
+leaderboard_rows = []
+for rank, item in enumerate(vibe_data_sorted, 1):
+    medal = "🥇" if rank == 1 else "🥈" if rank == 2 else "🥉" if rank == 3 else f"{rank}."
+    leaderboard_rows.append({
+        "Rank": medal,
+        "Coin": item["tick"],
+        "Price": f"${item['price']:,.2f}" if item["price"] >= 1 else f"${item['price']:.4f}",
+        "24h": f"{item['ch24']:+.2f}%",
+        "Vibe": item["score"],
+        "Status": item["meme"]
+    })
+
+df_leader = pd.DataFrame(leaderboard_rows)
+st.dataframe(
+    df_leader,
+    use_container_width=True,
+    hide_index=True,
+    column_config={
+        "Rank": st.column_config.TextColumn("Rank", width="small"),
+        "Coin": st.column_config.TextColumn("Coin", width="small"),
+        "Price": st.column_config.TextColumn("Price", width="medium"),
+        "24h": st.column_config.TextColumn("24h", width="small"),
+        "Vibe": st.column_config.ProgressColumn("Vibe", min_value=0, max_value=100, format="%d"),
+        "Status": st.column_config.TextColumn("Status", width="large"),
+    }
+)
 
 st.divider()
 
@@ -416,20 +469,24 @@ name_to_tick = {x[0]: x[2] for x in COIN_ORDER}
 coin_id = name_to_id[selected]
 ticker = name_to_tick[selected]
 
-c = coin_map.get(coin_id)
-if c:
-    price = c["current_price"]
-    change_24h = c.get("price_change_percentage_24h") or 0
-    change_1h = c.get("price_change_percentage_1h_in_currency") or 0
-    high = c["high_24h"]
-    low = c["low_24h"]
-    volume = c["total_volume"]
-    market_cap = c["market_cap"]
+# Find the pre-calculated data for the selected coin
+selected_item = next((item for item in vibe_data if item["name"] == selected), None)
 
-    ohlc_1d = get_ohlc(coin_id, "1")
-    candle_quality = analyze_candles(ohlc_1d)
+if selected_item:
+    price = selected_item["price"]
+    change_24h = selected_item["ch24"]
+    change_1h = selected_item["ch1"]
+    score = selected_item["score"]
+    meme = selected_item["meme"]
+    range_pos = selected_item["range_pos"]
+    candle_quality = selected_item["candle_quality"]
+    reasons = selected_item["reasons"]
 
-    score, meme, range_pos, reasons = calc_vibe(price, high, low, change_1h, change_24h, fg_value, btc_change, candle_quality)
+    c = coin_map.get(coin_id)
+    volume = c["total_volume"] if c else 0
+    market_cap = c["market_cap"] if c else 0
+    high = c["high_24h"] if c else price
+    low = c["low_24h"] if c else price
 
     if st.session_state.last_score is not None:
         if score >= 70 and st.session_state.last_score < 70:
@@ -450,7 +507,6 @@ if c:
     c4.metric("Candle Quality", f"{candle_quality:+.1f}")
     c5.metric("vs BTC (24h)", f"{vs_btc:+.2f}%")
 
-    # Fun colored progress bar + score text
     st.markdown(f"**Vibe Score: {score}/100**")
     st.markdown(colored_progress(score, height=14), unsafe_allow_html=True)
 
