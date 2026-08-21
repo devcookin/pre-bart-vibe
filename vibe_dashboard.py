@@ -200,119 +200,82 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
         range_pos = 50.0
     reasons = []
     
-    # Slightly lower base to give more room for differentiation
-    base = 52
+    # Balanced base – not too low
+    base = 54.0
     
-    # Stronger structure emphasis (most unique signal)
-    structure_boost = candle_quality * 14
+    # Structure (important but not overpowering)
+    structure_boost = candle_quality * 10.5
     base += structure_boost
     if candle_quality > 1.0:
-        reasons.append("Excellent bullish structure (higher lows + strong closes)")
+        reasons.append("Excellent bullish structure")
     elif candle_quality > 0.5:
-        reasons.append("Solid constructive candle structure")
+        reasons.append("Solid constructive structure")
     elif candle_quality > 0.15:
         reasons.append("Mildly positive structure")
-    elif candle_quality < -0.8:
-        reasons.append("Weak structure with lower lows / heavy rejection")
-    elif candle_quality < -0.3:
-        reasons.append("Mixed or deteriorating structure")
+    elif candle_quality < -0.7:
+        reasons.append("Weak structure / rejection")
+    elif candle_quality < -0.25:
+        reasons.append("Mixed structure")
 
-    # Continuous + tiered range position (more sensitive)
-    range_adj = (range_pos - 50) * 0.12
-    base += range_adj
+    # Continuous range position
+    base += (range_pos - 50) * 0.14
     if range_pos > 88:
-        base += 5
-        reasons.append("Price near top of daily range")
+        reasons.append("Near top of daily range")
     elif range_pos > 72:
-        base += 3
         reasons.append("Upper half of range")
     elif range_pos < 18:
-        if candle_quality > 0.2:
-            base += 3
-            reasons.append("Building from lows (potential accumulation)")
+        if candle_quality > 0.15:
+            reasons.append("Building from lows")
         else:
-            base -= 6
-            reasons.append("Sitting near bottom of range")
+            reasons.append("Near bottom of range")
     elif range_pos < 32:
-        if candle_quality > 0.1:
-            base += 1
-        else:
-            base -= 3
-            reasons.append("Lower half of range")
+        reasons.append("Lower half of range")
 
-    # More granular 1h momentum
-    if change_1h > 2.5:
-        base += 16
+    # Continuous 1h momentum (softer negatives)
+    base += change_1h * 3.8
+    if change_1h > 2.0:
         reasons.append("Very strong 1h momentum")
-    elif change_1h > 1.5:
-        base += 12
-        reasons.append("Strong positive 1h momentum")
     elif change_1h > 0.7:
-        base += 8
-        reasons.append("Positive 1h momentum")
+        reasons.append("Strong 1h momentum")
     elif change_1h > 0.2:
-        base += 4
-        reasons.append("Slightly positive 1h")
-    elif change_1h > -0.3:
-        base += 0
-    elif change_1h > -0.9:
-        base -= 4
+        reasons.append("Positive 1h")
+    elif change_1h < -1.5:
+        reasons.append("Strong negative 1h")
+    elif change_1h < -0.4:
         reasons.append("Mild negative 1h")
-    elif change_1h > -1.8:
-        base -= 8
-        reasons.append("Negative 1h momentum")
-    else:
-        base -= 13
-        reasons.append("Strong negative 1h momentum")
 
-    # 24h change
-    if change_24h > 6:
-        base += 5
-    elif change_24h > 2.5:
-        base += 3
-    elif change_24h > 0.5:
-        base += 1
-    elif change_24h < -6:
-        base -= 5
-    elif change_24h < -2.5:
-        base -= 3
-    elif change_24h < -0.5:
-        base -= 1
+    # 24h continuous (gentle)
+    base += change_24h * 0.45
 
-    # Stronger vs-BTC
+    # vs BTC (moderate)
     if btc_change is not None:
         vs_btc = change_24h - btc_change
-        if vs_btc > 4:
-            base += 6
+        base += vs_btc * 0.75
+        if vs_btc > 3.5:
             reasons.append("Clearly outperforming BTC")
-        elif vs_btc > 1.5:
-            base += 3
+        elif vs_btc > 1.2:
             reasons.append("Outperforming BTC")
-        elif vs_btc < -4:
-            base -= 5
-            reasons.append("Lagging BTC significantly")
-        elif vs_btc < -1.5:
-            base -= 2
+        elif vs_btc < -3.5:
             reasons.append("Lagging BTC")
 
-    # Fear & Greed (small influence)
+    # Fear & Greed (very light)
     if fg_value is not None:
         if fg_value < 25:
-            base -= 3
+            base -= 1.5
         elif fg_value > 75:
-            base += 2
+            base += 1.0
 
-    score = max(min(int(round(base)), 94), 12)
+    score = max(min(int(round(base)), 91), 18)
     
-    if score >= 82:
+    if score >= 80:
         meme = "🔥 Strong structure + momentum"
-    elif score >= 70:
+    elif score >= 68:
         meme = "🚀 Constructive structure"
-    elif score >= 58:
+    elif score >= 55:
         meme = "📈 Structure okay, mixed short-term"
-    elif score >= 45:
+    elif score >= 42:
         meme = "😐 Mixed signals"
-    elif score >= 30:
+    elif score >= 28:
         meme = "⚠️ Short-term weakness"
     else:
         meme = "💀 Weak structure"
@@ -537,7 +500,6 @@ st.divider()
 # ========== DETAILED VIEW ==========
 st.subheader("🎯 Detailed View")
 
-# Search moved here
 st.markdown("##### Search or select a coin")
 search_query = st.text_input("Type coin name or symbol", placeholder="e.g. Bitcoin, SOL, PEPE, WIF...", key="detail_search")
 search_results = search_coins(search_query) if search_query else []
@@ -550,7 +512,6 @@ if search_results:
         st.session_state.selected_coin = chosen.split(" (")[0]
         st.rerun()
 
-# Quick select from current Top 20
 st.markdown("Or pick from current Top 20:")
 selected = st.selectbox(
     "Quick select",
@@ -567,7 +528,6 @@ col_time, _ = st.columns([1, 3])
 with col_time:
     timeframe = st.selectbox("Timeframe", ["Last 1 Day (30 min)", "Last 7 Days", "Last 30 Days"])
 
-# Load data
 if st.session_state.search_coin:
     try:
         r = requests.get(
@@ -618,7 +578,6 @@ else:
     low = c.get("low_24h", price)
     image_url = item["image_url"]
 
-# Alerts
 if st.session_state.last_score is not None:
     if score >= 70 and st.session_state.last_score < 70:
         st.toast(f"🚀 {tick} Vibe crossed 70!", icon="🚀")
