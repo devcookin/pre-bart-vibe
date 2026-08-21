@@ -117,7 +117,6 @@ def get_global():
 
 @st.cache_data(ttl=60)
 def get_top_coins(limit=20):
-    """Fetch live Top coins by market cap"""
     url = "https://api.coingecko.com/api/v3/coins/markets"
     params = {
         "vs_currency": "usd",
@@ -304,7 +303,6 @@ def make_sparkline(history):
     times = [h[0] for h in history]
     scores = [h[1] for h in history]
     
-    # Auto-zoom so changes look more pronounced
     min_score = min(scores)
     max_score = max(scores)
     padding = max(4, (max_score - min_score) * 0.25)
@@ -396,21 +394,6 @@ for c in top_coins:
     coin_map[cid] = c
 
 btc_change = next((c.get("price_change_percentage_24h") or 0 for c in top_coins if c["id"] == "bitcoin"), 0)
-
-# Search
-st.subheader("🔍 Search any coin")
-search_query = st.text_input("Type coin name or symbol", placeholder="e.g. PEPE, WIF, BONK, INJ...")
-search_results = search_coins(search_query) if search_query else []
-
-if search_results:
-    options = {f"{c['name']} ({c['symbol'].upper()})": c["id"] for c in search_results}
-    chosen = st.selectbox("Select from results", list(options.keys()))
-    if st.button("Load this coin’s vibe", type="primary"):
-        st.session_state.search_coin = options[chosen]
-        st.session_state.selected_coin = chosen.split(" (")[0]
-        st.rerun()
-
-st.divider()
 
 # ========== PRE-CALCULATE VIBES ==========
 vibe_data = []
@@ -517,6 +500,37 @@ st.divider()
 # ========== DETAILED VIEW ==========
 st.subheader("🎯 Detailed View")
 
+# Search moved here
+st.markdown("##### Search or select a coin")
+search_query = st.text_input("Type coin name or symbol", placeholder="e.g. Bitcoin, SOL, PEPE, WIF...", key="detail_search")
+search_results = search_coins(search_query) if search_query else []
+
+if search_results:
+    options = {f"{c['name']} ({c['symbol'].upper()})": c["id"] for c in search_results}
+    chosen = st.selectbox("Select from search results", list(options.keys()), key="search_select")
+    if st.button("Load this coin", type="primary", key="load_search"):
+        st.session_state.search_coin = options[chosen]
+        st.session_state.selected_coin = chosen.split(" (")[0]
+        st.rerun()
+
+# Quick select from current Top 20
+st.markdown("Or pick from current Top 20:")
+selected = st.selectbox(
+    "Quick select",
+    [x[0] for x in COIN_ORDER],
+    index=[x[0] for x in COIN_ORDER].index(st.session_state.selected_coin) if st.session_state.selected_coin in [x[0] for x in COIN_ORDER] else 0,
+    key="quick_select"
+)
+if selected != st.session_state.selected_coin:
+    st.session_state.selected_coin = selected
+    st.session_state.search_coin = None
+    st.rerun()
+
+col_time, _ = st.columns([1, 3])
+with col_time:
+    timeframe = st.selectbox("Timeframe", ["Last 1 Day (30 min)", "Last 7 Days", "Last 30 Days"])
+
+# Load data
 if st.session_state.search_coin:
     try:
         r = requests.get(
@@ -551,19 +565,7 @@ if st.session_state.search_coin:
         st.warning("Could not load searched coin.")
         st.stop()
 else:
-    selected = st.session_state.selected_coin
-    col_a, col_b = st.columns([2, 1])
-    with col_a:
-        selected = st.selectbox(
-            "Select Coin",
-            [x[0] for x in COIN_ORDER],
-            index=[x[0] for x in COIN_ORDER].index(selected) if selected in [x[0] for x in COIN_ORDER] else 0
-        )
-        st.session_state.selected_coin = selected
-    with col_b:
-        timeframe = st.selectbox("Timeframe", ["Last 1 Day (30 min)", "Last 7 Days", "Last 30 Days"])
-
-    item = next((v for v in vibe_data if v["name"] == selected), None)
+    item = next((v for v in vibe_data if v["name"] == st.session_state.selected_coin), None)
     if not item:
         st.warning("Loading...")
         st.stop()
@@ -674,11 +676,10 @@ st.divider()
 st.subheader(f"{name} • Chart")
 
 days = "1"
-if "timeframe" in locals():
-    if "7 Days" in timeframe:
-        days = "7"
-    elif "30 Days" in timeframe:
-        days = "30"
+if "7 Days" in timeframe:
+    days = "7"
+elif "30 Days" in timeframe:
+    days = "30"
 
 ohlc_data = get_ohlc(cid, days)
 volume_data = get_market_chart(cid, days)
