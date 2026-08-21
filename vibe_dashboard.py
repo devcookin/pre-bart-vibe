@@ -5,7 +5,6 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from urllib.parse import quote
-import time
 
 try:
     from streamlit_autorefresh import st_autorefresh
@@ -42,7 +41,7 @@ if "last_score" not in st.session_state:
 if "last_refresh" not in st.session_state:
     st.session_state.last_refresh = datetime.now()
 if "score_history" not in st.session_state:
-    st.session_state.score_history = {}  # {cid: [(ts, score), ...]}
+    st.session_state.score_history = {}
 if "search_coin" not in st.session_state:
     st.session_state.search_coin = None
 
@@ -323,15 +322,15 @@ coin_map = {c["id"]: c for c in markets} if markets else {}
 
 btc_change = coin_map.get("bitcoin", {}).get("price_change_percentage_24h") or 0
 
-# Search box
+# Search
 st.subheader("🔍 Search any coin")
-search_query = st.text_input("Type coin name or symbol (e.g. PEPE, SUI, WIF)", placeholder="Search CoinGecko...")
+search_query = st.text_input("Type coin name or symbol", placeholder="e.g. PEPE, SUI, WIF, BONK...")
 search_results = search_coins(search_query) if search_query else []
 
 if search_results:
     options = {f"{c['name']} ({c['symbol'].upper()})": c["id"] for c in search_results}
     chosen = st.selectbox("Select from results", list(options.keys()))
-    if st.button("Load this coin’s vibe"):
+    if st.button("Load this coin’s vibe", type="primary"):
         st.session_state.search_coin = options[chosen]
         st.session_state.selected_coin = chosen.split(" (")[0]
         st.rerun()
@@ -354,11 +353,10 @@ for name, cid, tick in COIN_ORDER:
     cq = analyze_candles(ohlc)
     score, meme, range_pos, reasons = calc_vibe(price, high, low, ch1, ch24, fg_value, btc_change, cq)
 
-    # Update history
     if cid not in st.session_state.score_history:
         st.session_state.score_history[cid] = []
     st.session_state.score_history[cid].append((datetime.now(), score))
-    st.session_state.score_history[cid] = st.session_state.score_history[cid][-20:]  # keep last 20
+    st.session_state.score_history[cid] = st.session_state.score_history[cid][-20:]
 
     vibe_data.append({
         "name": name, "cid": cid, "tick": tick, "price": price, "ch24": ch24, "ch1": ch1,
@@ -368,60 +366,106 @@ for name, cid, tick in COIN_ORDER:
 
 vibe_data_sorted = sorted(vibe_data, key=lambda x: x["score"], reverse=True)
 
-# ========== CARDS (top row of 5 + more if needed) ==========
-st.subheader("🌐 Multi-Coin Vibe Overview")
-st.caption("Top vibes right now — click View for details")
-
-# Show in rows of 5
-for row_start in range(0, len(vibe_data), 5):
-    cols = st.columns(5)
-    for i, item in enumerate(vibe_data[row_start:row_start+5]):
-        with cols[i]:
-            with st.container(border=True):
-                if item["image_url"]:
-                    st.image(item["image_url"], width=28)
-                st.markdown(f"**{item['tick']}**")
-                price_str = f"${item['price']:,.2f}" if item["price"] >= 1 else f"${item['price']:.6f}"
-                st.markdown(f"<div style='font-size:1.25rem;font-weight:600;height:28px;overflow:hidden;'>{price_str}</div>", unsafe_allow_html=True)
-                st.caption(f"{item['ch24']:+.2f}% • Vibe {item['score']}")
-                st.markdown(colored_progress(item["score"], height=9), unsafe_allow_html=True)
-                st.markdown(f"<div style='height:40px;font-size:12px;color:#888;overflow:hidden;'>{item['meme']}</div>", unsafe_allow_html=True)
-                if st.button("View", key=f"btn_{item['cid']}", use_container_width=True):
-                    st.session_state.selected_coin = item["name"]
-                    st.session_state.search_coin = None
-                    st.rerun()
-
-st.divider()
-
-# ========== LEADERBOARD ==========
+# ========== LEADERBOARD WITH ICONS ==========
 st.subheader("🏆 Vibe Leaderboard")
-leaderboard_rows = []
+st.caption("Sorted by current vibe score")
+
+# Build custom HTML table with icons
+html = """
+<style>
+.leaderboard-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 15px;
+}
+.leaderboard-table th {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 2px solid #ddd;
+    color: #555;
+    font-weight: 600;
+}
+.leaderboard-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #eee;
+    vertical-align: middle;
+}
+.coin-cell {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.coin-cell img {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+}
+</style>
+<table class="leaderboard-table">
+    <thead>
+        <tr>
+            <th>Rank</th>
+            <th>Coin</th>
+            <th>Price</th>
+            <th>24h</th>
+            <th>Vibe</th>
+            <th>Status</th>
+        </tr>
+    </thead>
+    <tbody>
+"""
+
 for rank, item in enumerate(vibe_data_sorted, 1):
     medal = "🥇" if rank == 1 else "🥈" if rank == 2 else "🥉" if rank == 3 else f"{rank}."
-    leaderboard_rows.append({
-        "Rank": medal,
-        "Coin": item["tick"],
-        "Price": f"${item['price']:,.2f}" if item["price"] >= 1 else f"${item['price']:.4f}",
-        "24h": f"{item['ch24']:+.2f}%",
-        "Vibe": item["score"],
-        "Status": item["meme"]
-    })
-df_leader = pd.DataFrame(leaderboard_rows)
-st.dataframe(df_leader, use_container_width=True, hide_index=True,
-    column_config={
-        "Rank": st.column_config.TextColumn(width="small"),
-        "Vibe": st.column_config.ProgressColumn(min_value=0, max_value=100, format="%d"),
-        "Status": st.column_config.TextColumn(width="large"),
-    })
+    price_str = f"${item['price']:,.2f}" if item['price'] >= 1 else f"${item['price']:.4f}"
+    ch24_str = f"{item['ch24']:+.2f}%"
+    
+    # Simple colored vibe bar
+    if item['score'] >= 75:
+        bar_color = "#00c853"
+    elif item['score'] >= 60:
+        bar_color = "#69f0ae"
+    elif item['score'] >= 45:
+        bar_color = "#ffab00"
+    else:
+        bar_color = "#ff5252"
+    
+    html += f"""
+    <tr>
+        <td style="font-weight:600;">{medal}</td>
+        <td>
+            <div class="coin-cell">
+                <img src="{item['image_url']}" alt="{item['tick']}">
+                <strong>{item['tick']}</strong>
+            </div>
+        </td>
+        <td>{price_str}</td>
+        <td>{ch24_str}</td>
+        <td>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <div style="background:#eee;width:80px;height:8px;border-radius:4px;overflow:hidden;">
+                    <div style="width:{item['score']}%;height:100%;background:{bar_color};"></div>
+                </div>
+                <span style="font-weight:600;">{item['score']}</span>
+            </div>
+        </td>
+        <td style="color:#666;">{item['meme']}</td>
+    </tr>
+    """
+
+html += """
+    </tbody>
+</table>
+"""
+
+st.markdown(html, unsafe_allow_html=True)
 
 st.divider()
 
 # ========== DETAILED VIEW ==========
 st.subheader("🎯 Detailed View")
 
-# Handle search coin override
 if st.session_state.search_coin:
-    # Fetch single coin
     single = get_markets(st.session_state.search_coin)
     if single:
         c = single[0]
@@ -468,7 +512,6 @@ else:
     high = c.get("high_24h", price)
     low = c.get("low_24h", price)
     image_url = item["image_url"]
-    timeframe = timeframe  # already set
 
 # Alerts
 if st.session_state.last_score is not None:
@@ -499,9 +542,8 @@ elif score <= 30:
 else:
     st.info(meme)
 
-# Sparkline
 if history and len(history) >= 2:
-    st.caption("Vibe score history (last ~15–20 min)")
+    st.caption("Vibe score history")
     fig = make_sparkline(history)
     if fig:
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
@@ -510,7 +552,7 @@ with st.expander("🤔 Why this score?"):
     for r in reasons:
         st.write(f"• {r}")
 
-# ========== ONE-CLICK SHARE CARD ==========
+# Share Card
 st.markdown("### 📤 Share this vibe")
 share_html = f"""
 <div style="
@@ -561,10 +603,13 @@ st.markdown(f"""
 # Chart
 st.divider()
 st.subheader(f"{name} • Chart")
-days = "1" if "1 Day" in st.session_state.get("timeframe", "Last 1 Day (30 min)") else ("7" if "7 Days" in st.session_state.get("timeframe", "") else "30")
-# fallback
-if "timeframe" not in locals():
-    days = "1"
+
+days = "1"
+if "timeframe" in locals():
+    if "7 Days" in timeframe:
+        days = "7"
+    elif "30 Days" in timeframe:
+        days = "30"
 
 ohlc_data = get_ohlc(cid, days)
 volume_data = get_market_chart(cid, days)
