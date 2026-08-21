@@ -40,99 +40,14 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ========== IMPROVED DUAL THEME CSS ==========
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
-    html, body, [class*="css"] {
-        font-family: 'Inter', sans-serif;
-    }
-
-    h1 {
-        font-weight: 700 !important;
-    }
-
-    /* ===== LIGHT MODE ===== */
-    .stMetric {
-        background-color: #ffffff !important;
-        border: 1px solid #e5e7eb !important;
-        border-radius: 14px !important;
-        padding: 12px 16px !important;
-    }
-
-    div[data-testid="stMetricValue"] {
-        font-size: 1.45rem !important;
-        font-weight: 600 !important;
-        color: #111827 !important;
-    }
-
-    div.stButton > button {
-        width: 100%;
-        border-radius: 10px;
-        font-weight: 600;
-        background-color: #f3f4f6 !important;
-        border: 1px solid #d1d5db !important;
-        color: #111827 !important;
-    }
-
-    div[data-testid="stVerticalBlockBorderWrapper"] {
-        background-color: #ffffff !important;
-        border: 1px solid #e5e7eb !important;
-        border-radius: 16px !important;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.06) !important;
-    }
-
-    /* ===== DARK MODE (DEGEN MODE) ===== */
-    [data-theme="dark"] h1 {
-        color: #f9fafb !important;
-        text-shadow: 0 0 18px rgba(0, 255, 157, 0.25);
-    }
-
-    [data-theme="dark"] .stMetric {
-        background-color: #0f172a !important;
-        border: 1px solid #1e293b !important;
-        box-shadow: 0 0 15px rgba(0, 255, 157, 0.07) !important;
-    }
-
-    [data-theme="dark"] div[data-testid="stMetricValue"] {
-        color: #00ff9d !important;
-    }
-
-    [data-theme="dark"] div[data-testid="stMetricLabel"] {
-        color: #94a3b8 !important;
-    }
-
-    [data-theme="dark"] div.stButton > button {
-        background: linear-gradient(135deg, rgba(0,255,157,0.12), rgba(255,45,146,0.08)) !important;
-        border: 1px solid rgba(0,255,157,0.45) !important;
-        color: #00ff9d !important;
-        box-shadow: 0 0 12px rgba(0,255,157,0.15) !important;
-    }
-
-    [data-theme="dark"] div.stButton > button:hover {
-        background: linear-gradient(135deg, rgba(0,255,157,0.22), rgba(255,45,146,0.15)) !important;
-        border-color: #00ff9d !important;
-        color: #ffffff !important;
-        box-shadow: 0 0 20px rgba(0,255,157,0.35) !important;
-    }
-
-    [data-theme="dark"] div[data-testid="stVerticalBlockBorderWrapper"] {
-        background-color: #0b1120 !important;
-        border: 1px solid #1e293b !important;
-        box-shadow: 0 0 20px rgba(0, 255, 157, 0.08) !important;
-    }
-
-    [data-theme="dark"] .stCaption, 
-    [data-theme="dark"] p,
-    [data-theme="dark"] .stMarkdown {
-        color: #94a3b8 !important;
-    }
-
-    /* Progress bar glow in dark mode */
-    [data-theme="dark"] div[data-testid="stProgress"] > div > div > div > div {
-        box-shadow: 0 0 10px rgba(0, 255, 157, 0.4);
-    }
+    html, body, [class*="css"]  { font-family: 'Inter', sans-serif; }
+    h1 { font-weight: 700 !important; }
+    .stMetric { border-radius: 14px; padding: 12px 16px; }
+    div[data-testid="stMetricValue"] { font-size: 1.45rem !important; font-weight: 600; }
+    div.stButton > button { width: 100%; border-radius: 10px; font-weight: 600; }
 </style>
 """, unsafe_allow_html=True)
 
