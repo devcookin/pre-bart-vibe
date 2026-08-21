@@ -202,6 +202,7 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
     
     base = 54.0
     
+    # Structure
     structure_boost = candle_quality * 10.5
     base += structure_boost
     if candle_quality > 1.0:
@@ -215,6 +216,7 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
     elif candle_quality < -0.25:
         reasons.append("Mixed structure")
 
+    # Range position
     base += (range_pos - 50) * 0.14
     if range_pos > 88:
         reasons.append("Near top of daily range")
@@ -228,6 +230,7 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
     elif range_pos < 32:
         reasons.append("Lower half of range")
 
+    # 1h momentum
     base += change_1h * 3.8
     if change_1h > 2.0:
         reasons.append("Very strong 1h momentum")
@@ -240,8 +243,10 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
     elif change_1h < -0.4:
         reasons.append("Mild negative 1h")
 
+    # 24h
     base += change_24h * 0.45
 
+    # vs BTC
     if btc_change is not None:
         vs_btc = change_24h - btc_change
         base += vs_btc * 0.75
@@ -252,13 +257,25 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
         elif vs_btc < -3.5:
             reasons.append("Lagging BTC")
 
+    # Fear & Greed
     if fg_value is not None:
         if fg_value < 25:
             base -= 1.5
         elif fg_value > 75:
             base += 1.0
 
-    score = max(min(int(round(base)), 91), 18)
+    # ========== MODEST BREAKOUT BOOST ==========
+    if range_pos >= 87 and change_1h >= 0.6 and candle_quality > 0.15:
+        base += 5
+        reasons.append("Clear breakout in progress")
+    elif range_pos >= 82 and change_1h >= 1.0:
+        base += 3.5
+        reasons.append("Breaking higher with momentum")
+    elif range_pos >= 78 and change_1h >= 0.4 and candle_quality > 0.3:
+        base += 2
+        reasons.append("Pushing into breakout territory")
+
+    score = max(min(int(round(base)), 92), 16)
     
     if score >= 80:
         meme = "🔥 Strong structure + momentum"
@@ -513,7 +530,6 @@ if search_query and len(search_query.strip()) >= 2:
             key="search_results_select"
         )
         
-        # Load immediately when selection changes
         selected_id = options[chosen]
         if st.session_state.search_coin != selected_id:
             st.session_state.search_coin = selected_id
@@ -524,7 +540,6 @@ if search_query and len(search_query.strip()) >= 2:
 else:
     st.caption("Type at least 2 characters to search")
 
-# Timeframe
 col_time, _ = st.columns([1, 3])
 with col_time:
     timeframe = st.selectbox("Timeframe", ["Last 1 Day (30 min)", "Last 7 Days", "Last 30 Days"])
@@ -564,10 +579,9 @@ if st.session_state.search_coin:
         st.warning("Could not load coin data.")
         st.stop()
 else:
-    # Fallback to a top coin if nothing is selected yet
     item = next((v for v in vibe_data if v["name"] == st.session_state.selected_coin), vibe_data[0] if vibe_data else None)
     if not item:
-        st.info("Search for a coin above to see its vibe score and chart.")
+        st.info("Search for a coin above or click View on a card to see details.")
         st.stop()
     
     name, cid, tick = item["name"], item["cid"], item["tick"]
