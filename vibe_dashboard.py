@@ -501,6 +501,18 @@ for name, cid, tick in COIN_ORDER:
     st.session_state.score_history = update_history(cid, score, st.session_state.score_history)
     hist = st.session_state.score_history.get(cid, [])
     prev_score = hist[-2][1] if len(hist) >= 2 else None
+
+    # ===== MULTI-COIN NOTIFICATIONS =====
+    if prev_score is not None:
+        if score >= 80 and prev_score < 80:
+            st.toast(f"🔥 {tick} Vibe crossed 80!", icon="🔥")
+        elif score >= 70 and prev_score < 70:
+            st.toast(f"🚀 {tick} Vibe crossed 70!", icon="🚀")
+        elif score <= 30 and prev_score > 30:
+            st.toast(f"🐻 {tick} Vibe dropped below 30", icon="🐻")
+        elif score <= 40 and prev_score > 40:
+            st.toast(f"⚠️ {tick} Vibe dropped below 40", icon="⚠️")
+
     vs_btc_val = ch24 - btc_change
     save_vibe_snapshot(cid, tick, price, score, meme, ch24, range_pos, vs_btc_val, prev_score, {"reasons": reasons, "candle_quality": cq})
 
