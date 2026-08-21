@@ -5,6 +5,8 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from urllib.parse import quote
+import json
+import os
 
 try:
     from streamlit_autorefresh import st_autorefresh
@@ -14,6 +16,8 @@ except:
 
 API_KEY = "CG-h61Dg6UoB2gVfCSUJQDj4dLa"
 HEADERS = {"x-cg-demo-api-key": API_KEY}
+
+HISTORY_FILE = "vibe_history.json"
 
 st.set_page_config(
     page_title="Pre-Bart Vibe Dashboard",
@@ -40,10 +44,61 @@ if "last_score" not in st.session_state:
     st.session_state.last_score = None
 if "last_refresh" not in st.session_state:
     st.session_state.last_refresh = datetime.now()
-if "score_history" not in st.session_state:
-    st.session_state.score_history = {}
 if "search_coin" not in st.session_state:
     st.session_state.search_coin = None
+
+# ========== PERSISTENT HISTORY HELPERS ==========
+def load_history():
+    if os.path.exists(HISTORY_FILE):
+        try:
+            with open(HISTORY_FILE, "r") as f:
+                data = json.load(f)
+                # Convert string timestamps back to datetime
+                for cid in data:
+                    data[cid] = [(datetime.fromisoformat(t), s) for t, s in data[cid]]
+                return data
+        except:
+            return {}
+    return {}
+
+def save_history(history):
+    try:
+        # Convert datetime to string for JSON
+        serializable = {}
+        for cid, entries in history.items():
+            serializable[cid] = [(t.isoformat(), s) for t, s in entries]
+        with open(HISTORY_FILE, "w") as f:
+            json.dump(serializable, f)
+    except:
+        pass  # Fail silently if write fails
+
+def update_history(cid, score, history_dict):
+    """Only append when score changes or enough time has passed"""
+    now = datetime.now()
+    if cid not in history_dict:
+        history_dict[cid] = []
+    
+    entries = history_dict[cid]
+    
+    should_add = False
+    if not entries:
+        should_add = True
+    else:
+        last_time, last_score = entries[-1]
+        if score != last_score or (now - last_time) > timedelta(minutes=2):
+            should_add = True
+    
+    if should_add:
+        entries.append((now, score))
+        # Keep last 150 points per coin
+        history_dict[cid] = entries[-150:]
+        save_history(history_dict)
+    
+    return history_dict
+
+# Load persistent history once
+if "score_history" not in st.session_state:
+    st.session_state.score_history = load_history()
 
 # ========== HELPERS ==========
 @st.cache_data(ttl=45)
@@ -252,8 +307,8 @@ def make_sparkline(history):
         fillcolor="rgba(0,200,83,0.12)" if scores[-1] >= 60 else "rgba(255,82,82,0.12)"
     ))
     fig.update_layout(
-        height=140,
-        margin=dict(l=0, r=10, t=10, b=20),
+        height=150,
+        margin=dict(l=0, r=10, t=10, b=30),
         xaxis=dict(showgrid=False, showticklabels=True, tickformat="%H:%M"),
         yaxis=dict(showgrid=True, gridcolor="rgba(0,0,0,0.05)", range=[0, 100], title="Vibe"),
         plot_bgcolor="rgba(0,0,0,0)",
@@ -261,27 +316,6 @@ def make_sparkline(history):
         showlegend=False
     )
     return fig
-
-def update_history(cid, score):
-    """Only append when score changes or enough time has passed"""
-    now = datetime.now()
-    if cid not in st.session_state.score_history:
-        st.session_state.score_history[cid] = []
-    
-    history = st.session_state.score_history[cid]
-    
-    should_add = False
-    if not history:
-        should_add = True
-    else:
-        last_time, last_score = history[-1]
-        if score != last_score or (now - last_time) > timedelta(minutes=2):
-            should_add = True
-    
-    if should_add:
-        history.append((now, score))
-        # Keep last 120 points
-        st.session_state.score_history[cid] = history[-120:]
 
 # ========== HEADER ==========
 col_title, col_refresh = st.columns([5, 1])
@@ -392,13 +426,14 @@ for name, cid, tick in COIN_ORDER:
     cq = analyze_candles(ohlc)
     score, meme, range_pos, reasons = calc_vibe(price, high, low, ch1, ch24, fg_value, btc_change, cq)
 
-    # Improved history update
-    update_history(cid, score)
+    # Persistent history update
+    st.session_state.score_history = update_history(cid, score, st.session_state.score_history)
 
     vibe_data.append({
         "name": name, "cid": cid, "tick": tick, "price": price, "ch24": ch24, "ch1": ch1,
         "score": score, "meme": meme, "image_url": image_url, "candle_quality": cq,
-        "range_pos": range_pos, "reasons": reasons, "history": st.session_state.score_history.get(cid, [])
+        "range_pos": range_pos, "reasons": reasons,
+        "history": st.session_state.score_history.get(cid, [])
     })
 
 # ========== MULTI-COIN CARDS ==========
@@ -476,8 +511,8 @@ if st.session_state.search_coin:
         volume = c["total_volume"]
         market_cap = c["market_cap"]
         image_url = c.get("image", "")
+        st.session_state.score_history = update_history(cid, score, st.session_state.score_history)
         history = st.session_state.score_history.get(cid, [])
-        update_history(cid, score)  # also update for searched coins
     else:
         st.warning("Could not load searched coin.")
         st.stop()
@@ -536,13 +571,13 @@ elif score <= 30:
 else:
     st.info(meme)
 
-# Improved history chart
+# History chart
 st.markdown("##### Vibe Score History")
 if history and len(history) >= 2:
     fig = make_sparkline(history)
     if fig:
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-    st.caption(f"Showing last {len(history)} readings • Builds over time (resets on new session)")
+    st.caption(f"Showing last {len(history)} readings • Persistent across most restarts")
 else:
     st.info("History will start building after a few more refreshes...")
 
