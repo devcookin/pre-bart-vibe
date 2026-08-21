@@ -27,7 +27,7 @@ if SUPABASE_URL and SUPABASE_KEY:
 
 MODEL_VERSION = "v2.1-breakout"
 MIN_SNAPSHOT_INTERVAL = 180
-FILL_INTERVAL_SECONDS = 210
+FILL_INTERVAL_SECONDS = 120
 
 API_KEY = "CG-h61Dg6UoB2gVfCSUJQDj4dLa"
 HEADERS = {"x-cg-demo-api-key": API_KEY}
@@ -161,7 +161,7 @@ def fill_pending_returns():
             .select("id, timestamp, coin_id, price, return_30m, return_1h, return_4h, return_24h")\
             .is_("return_24h", "null")\
             .order("timestamp", desc=False)\
-            .limit(6)\
+            .limit(40)\
             .execute()
         
         rows = result.data or []
@@ -292,7 +292,7 @@ def get_global():
         return None
 
 @st.cache_data(ttl=60)
-def get_top_coins(limit=20):
+def get_top_coins(limit=30):          # ← changed to 30
     try:
         r = requests.get("https://api.coingecko.com/api/v3/coins/markets", headers=HEADERS,
             params={"vs_currency":"usd","order":"market_cap_desc","per_page":limit,"page":1,"sparkline":False,"price_change_percentage":"1h,24h"}, timeout=12)
@@ -471,7 +471,7 @@ st.divider()
 fill_pending_returns()
 
 # ========== TOP COINS ==========
-top_coins = get_top_coins(20)
+top_coins = get_top_coins(30)          # ← now Top 30
 if not top_coins:
     st.error("Could not load top coins.")
     st.stop()
@@ -514,7 +514,7 @@ vibe_data_sorted = sorted(vibe_data, key=lambda x: x["score"], reverse=True)
 
 # ========== CARDS ==========
 st.subheader("🌐 Multi-Coin Vibe Overview")
-st.caption("Live Top 20 by market cap • Sorted by current vibe score")
+st.caption("Live Top 30 by market cap • Sorted by current vibe score")   # ← updated caption
 
 col_filter, _ = st.columns([2, 4])
 with col_filter:
