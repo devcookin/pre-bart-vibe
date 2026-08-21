@@ -292,7 +292,7 @@ def get_global():
         return None
 
 @st.cache_data(ttl=60)
-def get_top_coins(limit=30):          # ← changed to 30
+def get_top_coins(limit=30):
     try:
         r = requests.get("https://api.coingecko.com/api/v3/coins/markets", headers=HEADERS,
             params={"vs_currency":"usd","order":"market_cap_desc","per_page":limit,"page":1,"sparkline":False,"price_change_percentage":"1h,24h"}, timeout=12)
@@ -471,7 +471,7 @@ st.divider()
 fill_pending_returns()
 
 # ========== TOP COINS ==========
-top_coins = get_top_coins(30)          # ← now Top 30
+top_coins = get_top_coins(30)
 if not top_coins:
     st.error("Could not load top coins.")
     st.stop()
@@ -514,7 +514,7 @@ vibe_data_sorted = sorted(vibe_data, key=lambda x: x["score"], reverse=True)
 
 # ========== CARDS ==========
 st.subheader("🌐 Multi-Coin Vibe Overview")
-st.caption("Live Top 30 by market cap • Sorted by current vibe score")   # ← updated caption
+st.caption("Live Top 30 by market cap • Sorted by current vibe score")
 
 col_filter, _ = st.columns([2, 4])
 with col_filter:
@@ -715,8 +715,8 @@ else:
     st.info("Chart temporarily unavailable.")
 
 st.divider()
-st.subheader("📊 Vibe Performance")
-st.caption("Historical forward returns by Vibe Score bucket • Only shows when enough data exists")
+st.subheader("📊 Vibe Performance (Global)")
+st.caption("Historical forward returns across **all tracked coins**. This shows how the Vibe Score model has performed overall — not specific to the coin you are viewing. Averages and win rates only appear when a bucket has enough data.")
 
 bucket_stats = get_bucket_stats(min_n=15)
 if bucket_stats:
@@ -737,6 +737,6 @@ if bucket_stats:
                 "Win 24h":f"{s['win_24h']}%" if s['win_24h'] is not None else "—",
             })
     st.dataframe(pd.DataFrame(table_data), use_container_width=True, hide_index=True)
-    st.caption("Win rate = % of times future return was positive.")
+    st.caption("Win rate = % of times the future return was positive. This table is global and stays the same when you switch coins.")
 else:
     st.info("Collecting performance data… Check back later once more snapshots have matured.")
