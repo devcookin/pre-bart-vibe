@@ -364,48 +364,58 @@ for name, cid, tick in COIN_ORDER:
         "range_pos": range_pos, "reasons": reasons, "history": st.session_state.score_history[cid]
     })
 
-vibe_data_sorted = sorted(vibe_data, key=lambda x: x["score"], reverse=True)
+# ========== MULTI-COIN CARDS ==========
+st.subheader("🌐 Multi-Coin Vibe Overview")
+st.caption("Click **View** on any coin to open the detailed view")
 
-# ========== LEADERBOARD WITH ICONS ==========
-st.subheader("🏆 Vibe Leaderboard")
-st.caption("Sorted by current vibe score")
+# Show cards in rows of 5
+for row_start in range(0, len(vibe_data), 5):
+    cols = st.columns(5)
+    for i, item in enumerate(vibe_data[row_start:row_start+5]):
+        with cols[i]:
+            with st.container(border=True):
+                if item["image_url"]:
+                    st.image(item["image_url"], width=28)
+                else:
+                    st.markdown("<div style='height:28px; margin-bottom:4px;'></div>", unsafe_allow_html=True)
 
-leaderboard_data = []
-for rank, item in enumerate(vibe_data_sorted, 1):
-    medal = "🥇" if rank == 1 else "🥈" if rank == 2 else "🥉" if rank == 3 else f"{rank}."
-    
-    leaderboard_data.append({
-        "Rank": medal,
-        "Icon": item["image_url"],
-        "Coin": item["tick"],
-        "Price": f"${item['price']:,.2f}" if item['price'] >= 1 else f"${item['price']:.4f}",
-        "24h": f"{item['ch24']:+.2f}%",
-        "Vibe": item["score"],
-        "Status": item["meme"]
-    })
-
-df_leader = pd.DataFrame(leaderboard_data)
-
-st.dataframe(
-    df_leader,
-    use_container_width=True,
-    hide_index=True,
-    column_config={
-        "Rank": st.column_config.TextColumn("Rank", width="small"),
-        "Icon": st.column_config.ImageColumn("", width="small"),
-        "Coin": st.column_config.TextColumn("Coin", width="small"),
-        "Price": st.column_config.TextColumn("Price", width="medium"),
-        "24h": st.column_config.TextColumn("24h", width="small"),
-        "Vibe": st.column_config.ProgressColumn(
-            "Vibe Score",
-            min_value=0,
-            max_value=100,
-            format="%d",
-            width="medium"
-        ),
-        "Status": st.column_config.TextColumn("Status", width="large"),
-    }
-)
+                st.markdown(f"**{item['tick']}**")
+                
+                if item["price"] >= 1000:
+                    price_str = f"${item['price']:,.0f}"
+                elif item["price"] >= 1:
+                    price_str = f"${item['price']:,.2f}"
+                else:
+                    price_str = f"${item['price']:.4f}"
+                
+                st.markdown(
+                    f"<div style='font-size:1.25rem; font-weight:600; height:30px; line-height:30px; overflow:hidden;'>{price_str}</div>",
+                    unsafe_allow_html=True
+                )
+                st.caption(f"{item['ch24']:+.2f}% • Vibe {item['score']}")
+                
+                st.markdown(colored_progress(item["score"], height=10), unsafe_allow_html=True)
+                
+                st.markdown(
+                    f"""
+                    <div style="
+                        height: 42px;
+                        min-height: 42px;
+                        max-height: 42px;
+                        font-size: 13px;
+                        color: #888;
+                        line-height: 1.3;
+                        overflow: hidden;
+                        margin-bottom: 8px;
+                    ">{item['meme']}</div>
+                    """,
+                    unsafe_allow_html=True
+                )
+                
+                if st.button("View", key=f"btn_{item['cid']}", use_container_width=True):
+                    st.session_state.selected_coin = item["name"]
+                    st.session_state.search_coin = None
+                    st.rerun()
 
 st.divider()
 
