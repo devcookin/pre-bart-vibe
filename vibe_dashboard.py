@@ -46,14 +46,15 @@ if "last_refresh" not in st.session_state:
     st.session_state.last_refresh = datetime.now()
 if "search_coin" not in st.session_state:
     st.session_state.search_coin = None
+if "show_count" not in st.session_state:
+    st.session_state.show_count = "Top 10"
 
-# ========== PERSISTENT HISTORY HELPERS ==========
+# ========== PERSISTENT HISTORY ==========
 def load_history():
     if os.path.exists(HISTORY_FILE):
         try:
             with open(HISTORY_FILE, "r") as f:
                 data = json.load(f)
-                # Convert string timestamps back to datetime
                 for cid in data:
                     data[cid] = [(datetime.fromisoformat(t), s) for t, s in data[cid]]
                 return data
@@ -63,17 +64,15 @@ def load_history():
 
 def save_history(history):
     try:
-        # Convert datetime to string for JSON
         serializable = {}
         for cid, entries in history.items():
             serializable[cid] = [(t.isoformat(), s) for t, s in entries]
         with open(HISTORY_FILE, "w") as f:
             json.dump(serializable, f)
     except:
-        pass  # Fail silently if write fails
+        pass
 
 def update_history(cid, score, history_dict):
-    """Only append when score changes or enough time has passed"""
     now = datetime.now()
     if cid not in history_dict:
         history_dict[cid] = []
@@ -90,13 +89,11 @@ def update_history(cid, score, history_dict):
     
     if should_add:
         entries.append((now, score))
-        # Keep last 150 points per coin
         history_dict[cid] = entries[-150:]
         save_history(history_dict)
     
     return history_dict
 
-# Load persistent history once
 if "score_history" not in st.session_state:
     st.session_state.score_history = load_history()
 
@@ -426,7 +423,6 @@ for name, cid, tick in COIN_ORDER:
     cq = analyze_candles(ohlc)
     score, meme, range_pos, reasons = calc_vibe(price, high, low, ch1, ch24, fg_value, btc_change, cq)
 
-    # Persistent history update
     st.session_state.score_history = update_history(cid, score, st.session_state.score_history)
 
     vibe_data.append({
@@ -436,13 +432,36 @@ for name, cid, tick in COIN_ORDER:
         "history": st.session_state.score_history.get(cid, [])
     })
 
-# ========== MULTI-COIN CARDS ==========
-st.subheader("🌐 Multi-Coin Vibe Overview")
-st.caption("Click **View** on any coin to open the detailed view")
+# Sort by vibe score (highest first)
+vibe_data_sorted = sorted(vibe_data, key=lambda x: x["score"], reverse=True)
 
-for row_start in range(0, len(vibe_data), 5):
+# ========== MULTI-COIN CARDS (FILTERED) ==========
+st.subheader("🌐 Multi-Coin Vibe Overview")
+
+col_filter, col_spacer = st.columns([2, 4])
+with col_filter:
+    show_option = st.selectbox(
+        "Show",
+        ["Top 5", "Top 10", "Top 15", "All"],
+        index=["Top 5", "Top 10", "Top 15", "All"].index(st.session_state.show_count) if st.session_state.show_count in ["Top 5", "Top 10", "Top 15", "All"] else 1
+    )
+    st.session_state.show_count = show_option
+
+# Decide how many cards to show
+if show_option == "Top 5":
+    display_data = vibe_data_sorted[:5]
+elif show_option == "Top 10":
+    display_data = vibe_data_sorted[:10]
+elif show_option == "Top 15":
+    display_data = vibe_data_sorted[:15]
+else:
+    display_data = vibe_data_sorted
+
+st.caption(f"Showing {len(display_data)} coins sorted by vibe score • Click **View** for details")
+
+for row_start in range(0, len(display_data), 5):
     cols = st.columns(5)
-    for i, item in enumerate(vibe_data[row_start:row_start+5]):
+    for i, item in enumerate(display_data[row_start:row_start+5]):
         with cols[i]:
             with st.container(border=True):
                 if item["image_url"]:
@@ -571,7 +590,6 @@ elif score <= 30:
 else:
     st.info(meme)
 
-# History chart
 st.markdown("##### Vibe Score History")
 if history and len(history) >= 2:
     fig = make_sparkline(history)
