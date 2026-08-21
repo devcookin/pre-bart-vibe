@@ -493,40 +493,58 @@ st.divider()
 # ========== DETAILED VIEW ==========
 st.subheader("🎯 Detailed View")
 
-st.markdown("##### Search any coin")
+st.markdown("##### Search or select a coin")
 
-search_query = st.text_input("Type coin name or symbol", placeholder="e.g. Avalanche, SOL, PEPE, WIF...", key="detail_search")
+# Search input
+search_query = st.text_input("Type to search any coin", placeholder="e.g. Avalanche, PEPE, WIF, BONK...", key="detail_search")
+
+# Build combined options
+top_options = {name: ("top", cid) for name, cid, tick in COIN_ORDER}
+search_options = {}
 
 if search_query and len(search_query) >= 2:
-    search_results = search_coins(search_query)
-    
-    if search_results:
-        options = {f"{c['name']} ({c['symbol'].upper()})": c["id"] for c in search_results}
-        
-        with st.form(key="search_form"):
-            chosen_label = st.selectbox("Select from search results", list(options.keys()))
-            submitted = st.form_submit_button("Load this vibe", type="primary")
-            
-            if submitted:
-                st.session_state.search_coin = options[chosen_label]
-                st.session_state.selected_coin = chosen_label.split(" (")[0]
-                st.rerun()
+    results = search_coins(search_query)
+    for c in results:
+        label = f"🔍 {c['name']} ({c['symbol'].upper()})"
+        search_options[label] = ("search", c["id"])
+
+# Combine: search results first, then Top 20
+all_options = {**search_options, **top_options}
+option_labels = list(all_options.keys())
+
+# Default index
+current_label = st.session_state.selected_coin
+if current_label not in option_labels:
+    # Try to find a matching one
+    for label in option_labels:
+        if current_label in label:
+            current_label = label
+            break
     else:
-        st.info("No results found. Try a different search.")
+        current_label = option_labels[0] if option_labels else "Bitcoin"
 
-st.markdown("---")
-st.markdown("**Or pick from current Top 20:**")
-
-selected = st.selectbox(
-    "Quick select",
-    [x[0] for x in COIN_ORDER],
-    index=[x[0] for x in COIN_ORDER].index(st.session_state.selected_coin) if st.session_state.selected_coin in [x[0] for x in COIN_ORDER] else 0,
-    key="quick_select"
+selected_label = st.selectbox(
+    "Select coin",
+    option_labels,
+    index=option_labels.index(current_label) if current_label in option_labels else 0,
+    key="combined_select"
 )
-if selected != st.session_state.selected_coin:
-    st.session_state.selected_coin = selected
-    st.session_state.search_coin = None
-    st.rerun()
+
+# Handle selection
+selected_type, selected_id = all_options[selected_label]
+
+if selected_type == "search":
+    if st.session_state.search_coin != selected_id:
+        st.session_state.search_coin = selected_id
+        st.session_state.selected_coin = selected_label.replace("🔍 ", "").split(" (")[0]
+        st.rerun()
+else:
+    # It's a top coin
+    pure_name = selected_label
+    if st.session_state.selected_coin != pure_name or st.session_state.search_coin is not None:
+        st.session_state.selected_coin = pure_name
+        st.session_state.search_coin = None
+        st.rerun()
 
 col_time, _ = st.columns([1, 3])
 with col_time:
