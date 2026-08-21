@@ -199,87 +199,124 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
     else:
         range_pos = 50.0
     reasons = []
-    base = 55
-    structure_boost = candle_quality * 11
+    
+    # Slightly lower base to give more room for differentiation
+    base = 52
+    
+    # Stronger structure emphasis (most unique signal)
+    structure_boost = candle_quality * 14
     base += structure_boost
-    if candle_quality > 0.8:
-        reasons.append("Clean higher-lows + strong closes (bullish structure)")
-    elif candle_quality > 0.35:
-        reasons.append("Constructive recent candles / structure")
-    elif candle_quality < -0.6:
-        reasons.append("Lower-lows or heavy rejection showing")
-    elif candle_quality < -0.2:
-        reasons.append("Mixed / weak recent candle structure")
-    if range_pos > 85:
-        base += 6
-        reasons.append("Price near the top of the daily range")
-    elif range_pos > 70:
-        base += 4
-        reasons.append("Upper half of the range")
-    elif range_pos < 20:
-        if candle_quality > 0.15:
-            base += 4
-            reasons.append("Building from the bottom of the range (accumulation feel)")
+    if candle_quality > 1.0:
+        reasons.append("Excellent bullish structure (higher lows + strong closes)")
+    elif candle_quality > 0.5:
+        reasons.append("Solid constructive candle structure")
+    elif candle_quality > 0.15:
+        reasons.append("Mildly positive structure")
+    elif candle_quality < -0.8:
+        reasons.append("Weak structure with lower lows / heavy rejection")
+    elif candle_quality < -0.3:
+        reasons.append("Mixed or deteriorating structure")
+
+    # Continuous + tiered range position (more sensitive)
+    range_adj = (range_pos - 50) * 0.12
+    base += range_adj
+    if range_pos > 88:
+        base += 5
+        reasons.append("Price near top of daily range")
+    elif range_pos > 72:
+        base += 3
+        reasons.append("Upper half of range")
+    elif range_pos < 18:
+        if candle_quality > 0.2:
+            base += 3
+            reasons.append("Building from lows (potential accumulation)")
         else:
-            base -= 5
-            reasons.append("Sitting near the bottom of the range")
-    elif range_pos < 35:
+            base -= 6
+            reasons.append("Sitting near bottom of range")
+    elif range_pos < 32:
         if candle_quality > 0.1:
-            base += 2
+            base += 1
         else:
             base -= 3
-            reasons.append("Lower half of the range")
-    if change_1h > 1.3:
-        base += 13
+            reasons.append("Lower half of range")
+
+    # More granular 1h momentum
+    if change_1h > 2.5:
+        base += 16
+        reasons.append("Very strong 1h momentum")
+    elif change_1h > 1.5:
+        base += 12
         reasons.append("Strong positive 1h momentum")
-    elif change_1h > 0.5:
-        base += 9
+    elif change_1h > 0.7:
+        base += 8
         reasons.append("Positive 1h momentum")
-    elif change_1h > 0.1:
-        base += 5
-        reasons.append("Slightly positive 1h")
-    elif change_1h > -0.5:
-        base += 0
-    elif change_1h > -1.2:
-        base -= 5
-        reasons.append("Mild negative 1h")
-    else:
-        base -= 10
-        reasons.append("Strong negative 1h momentum")
-    if change_24h > 5:
+    elif change_1h > 0.2:
         base += 4
-    elif change_24h > 2:
-        base += 2
-    elif change_24h < -5:
+        reasons.append("Slightly positive 1h")
+    elif change_1h > -0.3:
+        base += 0
+    elif change_1h > -0.9:
         base -= 4
-    elif change_24h < -2:
-        base -= 2
+        reasons.append("Mild negative 1h")
+    elif change_1h > -1.8:
+        base -= 8
+        reasons.append("Negative 1h momentum")
+    else:
+        base -= 13
+        reasons.append("Strong negative 1h momentum")
+
+    # 24h change
+    if change_24h > 6:
+        base += 5
+    elif change_24h > 2.5:
+        base += 3
+    elif change_24h > 0.5:
+        base += 1
+    elif change_24h < -6:
+        base -= 5
+    elif change_24h < -2.5:
+        base -= 3
+    elif change_24h < -0.5:
+        base -= 1
+
+    # Stronger vs-BTC
     if btc_change is not None:
         vs_btc = change_24h - btc_change
-        if vs_btc > 3:
-            base += 4
-            reasons.append("Outperforming BTC on the day")
-        elif vs_btc < -3:
-            base -= 3
-            reasons.append("Lagging BTC on the day")
+        if vs_btc > 4:
+            base += 6
+            reasons.append("Clearly outperforming BTC")
+        elif vs_btc > 1.5:
+            base += 3
+            reasons.append("Outperforming BTC")
+        elif vs_btc < -4:
+            base -= 5
+            reasons.append("Lagging BTC significantly")
+        elif vs_btc < -1.5:
+            base -= 2
+            reasons.append("Lagging BTC")
+
+    # Fear & Greed (small influence)
     if fg_value is not None:
         if fg_value < 25:
-            base -= 2
-        elif fg_value > 70:
-            base += 1
-    score = max(min(int(round(base)), 92), 14)
-    if score >= 80:
+            base -= 3
+        elif fg_value > 75:
+            base += 2
+
+    score = max(min(int(round(base)), 94), 12)
+    
+    if score >= 82:
         meme = "🔥 Strong structure + momentum"
-    elif score >= 68:
+    elif score >= 70:
         meme = "🚀 Constructive structure"
-    elif score >= 55:
+    elif score >= 58:
         meme = "📈 Structure okay, mixed short-term"
-    elif score >= 42:
+    elif score >= 45:
         meme = "😐 Mixed signals"
-    elif score >= 28:
+    elif score >= 30:
         meme = "⚠️ Short-term weakness"
     else:
         meme = "💀 Weak structure"
+    
     return score, meme, range_pos, reasons
 
 def colored_progress(score: int, height: int = 12):
