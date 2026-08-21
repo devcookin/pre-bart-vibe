@@ -495,54 +495,52 @@ st.subheader("🎯 Detailed View")
 
 st.markdown("##### Search or select a coin")
 
-# Search input
-search_query = st.text_input("Type to search any coin", placeholder="e.g. Avalanche, PEPE, WIF, BONK...", key="detail_search")
+# Search input (feeds the dropdown)
+search_query = st.text_input("Type to search any coin on CoinGecko", placeholder="e.g. Avalanche, PEPE, WIF, BONK...", key="detail_search")
 
-# Build combined options
+# Build options: search results first, then Top 20
 top_options = {name: ("top", cid) for name, cid, tick in COIN_ORDER}
 search_options = {}
 
-if search_query and len(search_query) >= 2:
-    results = search_coins(search_query)
+if search_query and len(search_query.strip()) >= 2:
+    results = search_coins(search_query.strip())
     for c in results:
         label = f"🔍 {c['name']} ({c['symbol'].upper()})"
         search_options[label] = ("search", c["id"])
 
-# Combine: search results first, then Top 20
 all_options = {**search_options, **top_options}
 option_labels = list(all_options.keys())
 
-# Default index
-current_label = st.session_state.selected_coin
-if current_label not in option_labels:
-    # Try to find a matching one
-    for label in option_labels:
-        if current_label in label:
-            current_label = label
+# Determine current selection
+current = st.session_state.selected_coin
+if st.session_state.search_coin:
+    # Try to keep the searched coin selected
+    for label, (typ, cid) in all_options.items():
+        if typ == "search" and cid == st.session_state.search_coin:
+            current = label
             break
-    else:
-        current_label = option_labels[0] if option_labels else "Bitcoin"
 
 selected_label = st.selectbox(
-    "Select coin",
+    "Select coin (search results appear at the top)",
     option_labels,
-    index=option_labels.index(current_label) if current_label in option_labels else 0,
+    index=option_labels.index(current) if current in option_labels else 0,
     key="combined_select"
 )
 
-# Handle selection
+# Handle the selection
 selected_type, selected_id = all_options[selected_label]
 
 if selected_type == "search":
     if st.session_state.search_coin != selected_id:
         st.session_state.search_coin = selected_id
-        st.session_state.selected_coin = selected_label.replace("🔍 ", "").split(" (")[0]
+        # Clean name for display
+        clean_name = selected_label.replace("🔍 ", "").split(" (")[0]
+        st.session_state.selected_coin = clean_name
         st.rerun()
 else:
-    # It's a top coin
-    pure_name = selected_label
-    if st.session_state.selected_coin != pure_name or st.session_state.search_coin is not None:
-        st.session_state.selected_coin = pure_name
+    # Top coin selected
+    if st.session_state.selected_coin != selected_label or st.session_state.search_coin is not None:
+        st.session_state.selected_coin = selected_label
         st.session_state.search_coin = None
         st.rerun()
 
