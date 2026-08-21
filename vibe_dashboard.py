@@ -370,95 +370,42 @@ vibe_data_sorted = sorted(vibe_data, key=lambda x: x["score"], reverse=True)
 st.subheader("🏆 Vibe Leaderboard")
 st.caption("Sorted by current vibe score")
 
-# Build custom HTML table with icons
-html = """
-<style>
-.leaderboard-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 15px;
-}
-.leaderboard-table th {
-    text-align: left;
-    padding: 10px 12px;
-    border-bottom: 2px solid #ddd;
-    color: #555;
-    font-weight: 600;
-}
-.leaderboard-table td {
-    padding: 10px 12px;
-    border-bottom: 1px solid #eee;
-    vertical-align: middle;
-}
-.coin-cell {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-.coin-cell img {
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-}
-</style>
-<table class="leaderboard-table">
-    <thead>
-        <tr>
-            <th>Rank</th>
-            <th>Coin</th>
-            <th>Price</th>
-            <th>24h</th>
-            <th>Vibe</th>
-            <th>Status</th>
-        </tr>
-    </thead>
-    <tbody>
-"""
-
+leaderboard_data = []
 for rank, item in enumerate(vibe_data_sorted, 1):
     medal = "🥇" if rank == 1 else "🥈" if rank == 2 else "🥉" if rank == 3 else f"{rank}."
-    price_str = f"${item['price']:,.2f}" if item['price'] >= 1 else f"${item['price']:.4f}"
-    ch24_str = f"{item['ch24']:+.2f}%"
     
-    # Simple colored vibe bar
-    if item['score'] >= 75:
-        bar_color = "#00c853"
-    elif item['score'] >= 60:
-        bar_color = "#69f0ae"
-    elif item['score'] >= 45:
-        bar_color = "#ffab00"
-    else:
-        bar_color = "#ff5252"
-    
-    html += f"""
-    <tr>
-        <td style="font-weight:600;">{medal}</td>
-        <td>
-            <div class="coin-cell">
-                <img src="{item['image_url']}" alt="{item['tick']}">
-                <strong>{item['tick']}</strong>
-            </div>
-        </td>
-        <td>{price_str}</td>
-        <td>{ch24_str}</td>
-        <td>
-            <div style="display:flex;align-items:center;gap:8px;">
-                <div style="background:#eee;width:80px;height:8px;border-radius:4px;overflow:hidden;">
-                    <div style="width:{item['score']}%;height:100%;background:{bar_color};"></div>
-                </div>
-                <span style="font-weight:600;">{item['score']}</span>
-            </div>
-        </td>
-        <td style="color:#666;">{item['meme']}</td>
-    </tr>
-    """
+    leaderboard_data.append({
+        "Rank": medal,
+        "Icon": item["image_url"],
+        "Coin": item["tick"],
+        "Price": f"${item['price']:,.2f}" if item['price'] >= 1 else f"${item['price']:.4f}",
+        "24h": f"{item['ch24']:+.2f}%",
+        "Vibe": item["score"],
+        "Status": item["meme"]
+    })
 
-html += """
-    </tbody>
-</table>
-"""
+df_leader = pd.DataFrame(leaderboard_data)
 
-st.markdown(html, unsafe_allow_html=True)
+st.dataframe(
+    df_leader,
+    use_container_width=True,
+    hide_index=True,
+    column_config={
+        "Rank": st.column_config.TextColumn("Rank", width="small"),
+        "Icon": st.column_config.ImageColumn("", width="small"),
+        "Coin": st.column_config.TextColumn("Coin", width="small"),
+        "Price": st.column_config.TextColumn("Price", width="medium"),
+        "24h": st.column_config.TextColumn("24h", width="small"),
+        "Vibe": st.column_config.ProgressColumn(
+            "Vibe Score",
+            min_value=0,
+            max_value=100,
+            format="%d",
+            width="medium"
+        ),
+        "Status": st.column_config.TextColumn("Status", width="large"),
+    }
+)
 
 st.divider()
 
