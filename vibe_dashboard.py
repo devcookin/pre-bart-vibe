@@ -154,7 +154,7 @@ def search_coins(query):
         return []
     try:
         r = requests.get("https://api.coingecko.com/api/v3/search", headers=HEADERS, params={"query": query}, timeout=8)
-        return r.json().get("coins", [])[:8]
+        return r.json().get("coins", [])[:10]
     except:
         return []
 
@@ -493,57 +493,38 @@ st.divider()
 # ========== DETAILED VIEW ==========
 st.subheader("🎯 Detailed View")
 
-st.markdown("##### Search or select a coin")
+st.markdown("##### Search any coin on CoinGecko")
 
-# Search input (feeds the dropdown)
-search_query = st.text_input("Type to search any coin on CoinGecko", placeholder="e.g. Avalanche, PEPE, WIF, BONK...", key="detail_search")
-
-# Build options: search results first, then Top 20
-top_options = {name: ("top", cid) for name, cid, tick in COIN_ORDER}
-search_options = {}
+search_query = st.text_input(
+    "Type coin name or symbol",
+    placeholder="e.g. Avalanche, PEPE, WIF, BONK, INJ...",
+    key="detail_search"
+)
 
 if search_query and len(search_query.strip()) >= 2:
     results = search_coins(search_query.strip())
-    for c in results:
-        label = f"🔍 {c['name']} ({c['symbol'].upper()})"
-        search_options[label] = ("search", c["id"])
-
-all_options = {**search_options, **top_options}
-option_labels = list(all_options.keys())
-
-# Determine current selection
-current = st.session_state.selected_coin
-if st.session_state.search_coin:
-    # Try to keep the searched coin selected
-    for label, (typ, cid) in all_options.items():
-        if typ == "search" and cid == st.session_state.search_coin:
-            current = label
-            break
-
-selected_label = st.selectbox(
-    "Select coin (search results appear at the top)",
-    option_labels,
-    index=option_labels.index(current) if current in option_labels else 0,
-    key="combined_select"
-)
-
-# Handle the selection
-selected_type, selected_id = all_options[selected_label]
-
-if selected_type == "search":
-    if st.session_state.search_coin != selected_id:
-        st.session_state.search_coin = selected_id
-        # Clean name for display
-        clean_name = selected_label.replace("🔍 ", "").split(" (")[0]
-        st.session_state.selected_coin = clean_name
-        st.rerun()
+    
+    if results:
+        options = {f"{c['name']} ({c['symbol'].upper()})": c["id"] for c in results}
+        
+        chosen = st.selectbox(
+            "Select from results",
+            list(options.keys()),
+            key="search_results_select"
+        )
+        
+        # Load immediately when selection changes
+        selected_id = options[chosen]
+        if st.session_state.search_coin != selected_id:
+            st.session_state.search_coin = selected_id
+            st.session_state.selected_coin = chosen.split(" (")[0]
+            st.rerun()
+    else:
+        st.info("No coins found. Try a different search.")
 else:
-    # Top coin selected
-    if st.session_state.selected_coin != selected_label or st.session_state.search_coin is not None:
-        st.session_state.selected_coin = selected_label
-        st.session_state.search_coin = None
-        st.rerun()
+    st.caption("Type at least 2 characters to search")
 
+# Timeframe
 col_time, _ = st.columns([1, 3])
 with col_time:
     timeframe = st.selectbox("Timeframe", ["Last 1 Day (30 min)", "Last 7 Days", "Last 30 Days"])
@@ -580,13 +561,15 @@ if st.session_state.search_coin:
         st.session_state.score_history = update_history(cid, score, st.session_state.score_history)
         history = st.session_state.score_history.get(cid, [])
     else:
-        st.warning("Could not load searched coin.")
+        st.warning("Could not load coin data.")
         st.stop()
 else:
-    item = next((v for v in vibe_data if v["name"] == st.session_state.selected_coin), None)
+    # Fallback to a top coin if nothing is selected yet
+    item = next((v for v in vibe_data if v["name"] == st.session_state.selected_coin), vibe_data[0] if vibe_data else None)
     if not item:
-        st.warning("Loading...")
+        st.info("Search for a coin above to see its vibe score and chart.")
         st.stop()
+    
     name, cid, tick = item["name"], item["cid"], item["tick"]
     price, ch24, ch1 = item["price"], item["ch24"], item["ch1"]
     score, meme = item["score"], item["meme"]
