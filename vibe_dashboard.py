@@ -40,7 +40,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ========== DUAL THEME CSS ==========
+# ========== IMPROVED DUAL THEME CSS ==========
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -49,98 +49,89 @@ st.markdown("""
         font-family: 'Inter', sans-serif;
     }
 
-    /* ========== LIGHT MODE (Clean) ========== */
     h1 {
         font-weight: 700 !important;
-        color: #111827 !important;
     }
 
+    /* ===== LIGHT MODE ===== */
     .stMetric {
-        border-radius: 14px;
-        padding: 12px 16px;
-        background: #ffffff;
-        border: 1px solid #e5e7eb;
+        background-color: #ffffff !important;
+        border: 1px solid #e5e7eb !important;
+        border-radius: 14px !important;
+        padding: 12px 16px !important;
     }
 
     div[data-testid="stMetricValue"] {
         font-size: 1.45rem !important;
-        font-weight: 600;
+        font-weight: 600 !important;
+        color: #111827 !important;
     }
 
     div.stButton > button {
         width: 100%;
         border-radius: 10px;
         font-weight: 600;
-        background: #f3f4f6;
-        border: 1px solid #d1d5db;
-        color: #111827;
+        background-color: #f3f4f6 !important;
+        border: 1px solid #d1d5db !important;
+        color: #111827 !important;
     }
 
-    div.stButton > button:hover {
-        background: #e5e7eb;
-        border-color: #9ca3af;
-    }
-
-    /* Cards in light mode */
     div[data-testid="stVerticalBlockBorderWrapper"] {
-        background: #ffffff;
+        background-color: #ffffff !important;
         border: 1px solid #e5e7eb !important;
         border-radius: 16px !important;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.06) !important;
     }
 
-    /* ========== DARK MODE (Degen Mode) ========== */
+    /* ===== DARK MODE (DEGEN MODE) ===== */
     [data-theme="dark"] h1 {
         color: #f9fafb !important;
-        text-shadow: 0 0 20px rgba(0, 255, 157, 0.3);
+        text-shadow: 0 0 18px rgba(0, 255, 157, 0.25);
     }
 
     [data-theme="dark"] .stMetric {
-        background: #111827;
-        border: 1px solid #1f2937;
-        box-shadow: 0 0 15px rgba(0, 255, 157, 0.05);
+        background-color: #0f172a !important;
+        border: 1px solid #1e293b !important;
+        box-shadow: 0 0 15px rgba(0, 255, 157, 0.07) !important;
     }
 
     [data-theme="dark"] div[data-testid="stMetricValue"] {
         color: #00ff9d !important;
     }
 
-    [data-theme="dark"] div.stButton > button {
-        background: linear-gradient(135deg, #00ff9d15, #ff2d9215);
-        border: 1px solid #00ff9d55;
-        color: #00ff9d;
-        box-shadow: 0 0 12px rgba(0, 255, 157, 0.15);
-    }
-
-    [data-theme="dark"] div.stButton > button:hover {
-        background: linear-gradient(135deg, #00ff9d25, #ff2d9225);
-        border-color: #00ff9d;
-        box-shadow: 0 0 20px rgba(0, 255, 157, 0.3);
-        color: #ffffff;
-    }
-
-    /* Glowing cards in dark mode */
-    [data-theme="dark"] div[data-testid="stVerticalBlockBorderWrapper"] {
-        background: #0b1120 !important;
-        border: 1px solid #1e293b !important;
-        border-radius: 16px !important;
-        box-shadow: 0 0 20px rgba(0, 255, 157, 0.08),
-                    inset 0 0 20px rgba(0, 255, 157, 0.02);
-    }
-
-    /* Progress bar glow in dark mode */
-    [data-theme="dark"] .stProgress > div > div > div > div {
-        box-shadow: 0 0 12px rgba(0, 255, 157, 0.4);
-    }
-
-    /* Make captions and text nicer in dark */
-    [data-theme="dark"] .stCaption, [data-theme="dark"] p {
+    [data-theme="dark"] div[data-testid="stMetricLabel"] {
         color: #94a3b8 !important;
     }
 
-    /* Success / Info / Error boxes in dark mode */
-    [data-theme="dark"] div[data-testid="stAlert"] {
-        border-radius: 12px;
+    [data-theme="dark"] div.stButton > button {
+        background: linear-gradient(135deg, rgba(0,255,157,0.12), rgba(255,45,146,0.08)) !important;
+        border: 1px solid rgba(0,255,157,0.45) !important;
+        color: #00ff9d !important;
+        box-shadow: 0 0 12px rgba(0,255,157,0.15) !important;
+    }
+
+    [data-theme="dark"] div.stButton > button:hover {
+        background: linear-gradient(135deg, rgba(0,255,157,0.22), rgba(255,45,146,0.15)) !important;
+        border-color: #00ff9d !important;
+        color: #ffffff !important;
+        box-shadow: 0 0 20px rgba(0,255,157,0.35) !important;
+    }
+
+    [data-theme="dark"] div[data-testid="stVerticalBlockBorderWrapper"] {
+        background-color: #0b1120 !important;
+        border: 1px solid #1e293b !important;
+        box-shadow: 0 0 20px rgba(0, 255, 157, 0.08) !important;
+    }
+
+    [data-theme="dark"] .stCaption, 
+    [data-theme="dark"] p,
+    [data-theme="dark"] .stMarkdown {
+        color: #94a3b8 !important;
+    }
+
+    /* Progress bar glow in dark mode */
+    [data-theme="dark"] div[data-testid="stProgress"] > div > div > div > div {
+        box-shadow: 0 0 10px rgba(0, 255, 157, 0.4);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -203,7 +194,7 @@ def update_history(cid, score, history_dict):
 if "score_history" not in st.session_state:
     st.session_state.score_history = load_history()
 
-# ========== SUPABASE FUNCTIONS ==========
+# ========== SUPABASE ==========
 def save_vibe_snapshot(coin_id, symbol, price, score, label, change_24h, range_pos, vs_btc, prev_score, sub_signals):
     if not supabase:
         return
@@ -216,12 +207,9 @@ def save_vibe_snapshot(coin_id, symbol, price, score, label, change_24h, range_p
     
     direction = None
     if prev_score is not None:
-        if score > prev_score + 2:
-            direction = "rising"
-        elif score < prev_score - 2:
-            direction = "falling"
-        else:
-            direction = "flat"
+        if score > prev_score + 2: direction = "rising"
+        elif score < prev_score - 2: direction = "falling"
+        else: direction = "flat"
     
     data = {
         "timestamp": now.isoformat(),
@@ -248,7 +236,6 @@ def save_vibe_snapshot(coin_id, symbol, price, score, label, change_24h, range_p
 def fill_pending_returns():
     if not supabase:
         return
-    
     now = datetime.now(timezone.utc)
     last_fill = st.session_state.last_fill_time
     if last_fill and (now - last_fill).total_seconds() < FILL_INTERVAL_SECONDS:
@@ -268,7 +255,6 @@ def fill_pending_returns():
             return
         
         coin_ids = list(set(r["coin_id"] for r in rows))
-        
         try:
             r = requests.get(
                 "https://api.coingecko.com/api/v3/simple/price",
@@ -285,21 +271,15 @@ def fill_pending_returns():
             age = (now - ts).total_seconds()
             original = row["price"]
             current = prices.get(row["coin_id"], {}).get("usd")
-            
             if not current or original <= 0:
                 continue
             
             ret = ((current - original) / original) * 100
             updates = {}
-            
-            if age >= 1800 and row.get("return_30m") is None:
-                updates["return_30m"] = round(ret, 4)
-            if age >= 3600 and row.get("return_1h") is None:
-                updates["return_1h"] = round(ret, 4)
-            if age >= 14400 and row.get("return_4h") is None:
-                updates["return_4h"] = round(ret, 4)
-            if age >= 86400 and row.get("return_24h") is None:
-                updates["return_24h"] = round(ret, 4)
+            if age >= 1800 and row.get("return_30m") is None: updates["return_30m"] = round(ret, 4)
+            if age >= 3600 and row.get("return_1h") is None: updates["return_1h"] = round(ret, 4)
+            if age >= 14400 and row.get("return_4h") is None: updates["return_4h"] = round(ret, 4)
+            if age >= 86400 and row.get("return_24h") is None: updates["return_24h"] = round(ret, 4)
             
             if updates:
                 updates["filled_at"] = now.isoformat()
@@ -307,28 +287,21 @@ def fill_pending_returns():
                     supabase.table("vibe_snapshots").update(updates).eq("id", row["id"]).execute()
                 except:
                     pass
-        
         st.session_state.last_fill_time = now
     except:
         pass
 
 @st.cache_data(ttl=300)
 def get_bucket_stats(min_n=20):
-    if not supabase:
-        return None
+    if not supabase: return None
     try:
         result = supabase.table("vibe_snapshots")\
             .select("score, return_30m, return_1h, return_4h, return_24h")\
             .not_.is_("return_1h", "null")\
-            .limit(2000)\
-            .execute()
-        
+            .limit(2000).execute()
         rows = result.data or []
-        if not rows:
-            return None
-        
+        if not rows: return None
         df = pd.DataFrame(rows)
-        
         def bucket(s):
             if s < 20: return "0-19"
             if s < 40: return "20-39"
@@ -337,25 +310,20 @@ def get_bucket_stats(min_n=20):
             if s < 80: return "70-79"
             if s < 90: return "80-89"
             return "90-100"
-        
         df["bucket"] = df["score"].apply(bucket)
         stats = []
-        
-        for b in ["0-19", "20-39", "40-59", "60-69", "70-79", "80-89", "90-100"]:
+        for b in ["0-19","20-39","40-59","60-69","70-79","80-89","90-100"]:
             sub = df[df["bucket"] == b]
             n = len(sub)
             if n < min_n:
                 stats.append({"bucket": b, "n": n, "ready": False})
                 continue
-            
             def avg(col):
                 vals = sub[col].dropna()
                 return round(vals.mean(), 3) if len(vals) else None
-            
             def win(col):
                 vals = sub[col].dropna()
                 return round((vals > 0).mean() * 100, 1) if len(vals) else None
-            
             stats.append({
                 "bucket": b, "n": n, "ready": True,
                 "avg_30m": avg("return_30m"), "win_30m": win("return_30m"),
@@ -369,30 +337,23 @@ def get_bucket_stats(min_n=20):
 
 @st.cache_data(ttl=180)
 def get_coin_performance(coin_id, min_n=15):
-    if not supabase:
-        return None
+    if not supabase: return None
     try:
         result = supabase.table("vibe_snapshots")\
             .select("score, return_1h, return_4h")\
             .eq("coin_id", coin_id)\
             .not_.is_("return_1h", "null")\
-            .limit(500)\
-            .execute()
-        
+            .limit(500).execute()
         rows = result.data or []
         if len(rows) < min_n:
             return {"n": len(rows), "ready": False}
-        
         df = pd.DataFrame(rows)
-        avg1 = round(df["return_1h"].mean(), 3)
-        win1 = round((df["return_1h"] > 0).mean() * 100, 1)
-        avg4 = round(df["return_4h"].dropna().mean(), 3) if df["return_4h"].notna().any() else None
-        win4 = round((df["return_4h"].dropna() > 0).mean() * 100, 1) if df["return_4h"].notna().any() else None
-        
         return {
             "n": len(df), "ready": True,
-            "avg_1h": avg1, "win_1h": win1,
-            "avg_4h": avg4, "win_4h": win4
+            "avg_1h": round(df["return_1h"].mean(), 3),
+            "win_1h": round((df["return_1h"] > 0).mean() * 100, 1),
+            "avg_4h": round(df["return_4h"].dropna().mean(), 3) if df["return_4h"].notna().any() else None,
+            "win_4h": round((df["return_4h"].dropna() > 0).mean() * 100, 1) if df["return_4h"].notna().any() else None
         }
     except:
         return None
@@ -418,19 +379,8 @@ def get_global():
 @st.cache_data(ttl=60)
 def get_top_coins(limit=20):
     try:
-        r = requests.get(
-            "https://api.coingecko.com/api/v3/coins/markets",
-            headers=HEADERS,
-            params={
-                "vs_currency": "usd",
-                "order": "market_cap_desc",
-                "per_page": limit,
-                "page": 1,
-                "sparkline": False,
-                "price_change_percentage": "1h,24h"
-            },
-            timeout=12
-        )
+        r = requests.get("https://api.coingecko.com/api/v3/coins/markets", headers=HEADERS,
+            params={"vs_currency":"usd","order":"market_cap_desc","per_page":limit,"page":1,"sparkline":False,"price_change_percentage":"1h,24h"}, timeout=12)
         return r.json() if r.status_code == 200 else []
     except:
         return []
@@ -438,12 +388,8 @@ def get_top_coins(limit=20):
 @st.cache_data(ttl=60)
 def get_ohlc(coin_id, days="1"):
     try:
-        r = requests.get(
-            f"https://api.coingecko.com/api/v3/coins/{coin_id}/ohlc",
-            headers=HEADERS,
-            params={"vs_currency": "usd", "days": days},
-            timeout=10
-        )
+        r = requests.get(f"https://api.coingecko.com/api/v3/coins/{coin_id}/ohlc", headers=HEADERS,
+            params={"vs_currency":"usd","days":days}, timeout=10)
         return r.json() if r.status_code == 200 else []
     except:
         return []
@@ -451,35 +397,24 @@ def get_ohlc(coin_id, days="1"):
 @st.cache_data(ttl=60)
 def get_market_chart(coin_id, days="1"):
     try:
-        r = requests.get(
-            f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart",
-            headers=HEADERS,
-            params={"vs_currency": "usd", "days": days},
-            timeout=10
-        )
+        r = requests.get(f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart", headers=HEADERS,
+            params={"vs_currency":"usd","days":days}, timeout=10)
         return r.json() if r.status_code == 200 else {}
     except:
         return {}
 
 @st.cache_data(ttl=120)
 def search_coins(query):
-    if not query or len(query) < 2:
-        return []
+    if not query or len(query) < 2: return []
     try:
-        r = requests.get(
-            "https://api.coingecko.com/api/v3/search",
-            headers=HEADERS,
-            params={"query": query},
-            timeout=8
-        )
+        r = requests.get("https://api.coingecko.com/api/v3/search", headers=HEADERS, params={"query":query}, timeout=8)
         return r.json().get("coins", [])[:10]
     except:
         return []
 
 def analyze_candles(ohlc_data):
-    if not isinstance(ohlc_data, list) or len(ohlc_data) < 4:
-        return 0.0
-    df = pd.DataFrame(ohlc_data[-8:], columns=["timestamp", "open", "high", "low", "close"])
+    if not isinstance(ohlc_data, list) or len(ohlc_data) < 4: return 0.0
+    df = pd.DataFrame(ohlc_data[-8:], columns=["timestamp","open","high","low","close"])
     quality = 0.0
     for _, row in df.iterrows():
         body = abs(row["close"] - row["open"])
@@ -488,27 +423,18 @@ def analyze_candles(ohlc_data):
         full_range = row["high"] - row["low"]
         if full_range == 0: continue
         close_pos = (row["close"] - row["low"]) / full_range
-        if close_pos > 0.70 and row["close"] > row["open"]:
-            quality += 0.35
-        elif close_pos < 0.30:
-            quality -= 0.25
-        if upper_wick > body * 1.5 and upper_wick / full_range > 0.40:
-            quality -= 0.40
-        if lower_wick > body * 1.2 and lower_wick / full_range > 0.30:
-            quality += 0.25
-    lows = df["low"].values
-    highs = df["high"].values
-    closes = df["close"].values
+        if close_pos > 0.70 and row["close"] > row["open"]: quality += 0.35
+        elif close_pos < 0.30: quality -= 0.25
+        if upper_wick > body * 1.5 and upper_wick / full_range > 0.40: quality -= 0.40
+        if lower_wick > body * 1.2 and lower_wick / full_range > 0.30: quality += 0.25
+    lows, highs, closes = df["low"].values, df["high"].values, df["close"].values
     if len(lows) >= 4:
         if lows[-1] > lows[-2] > lows[-3]: quality += 0.70
         elif lows[-1] > lows[-2]: quality += 0.35
         elif lows[-1] < lows[-2] < lows[-3]: quality -= 0.45
-    if len(highs) >= 3 and highs[-1] > highs[-2] > highs[-3]:
-        quality += 0.40
-    if len(closes) >= 3 and closes[-1] > closes[-2] > closes[-3]:
-        quality += 0.45
-    elif len(closes) >= 2 and closes[-1] < closes[-2]:
-        quality -= 0.20
+    if len(highs) >= 3 and highs[-1] > highs[-2] > highs[-3]: quality += 0.40
+    if len(closes) >= 3 and closes[-1] > closes[-2] > closes[-3]: quality += 0.45
+    elif len(closes) >= 2 and closes[-1] < closes[-2]: quality -= 0.20
     return max(min(quality, 1.8), -1.5)
 
 def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change=None, candle_quality=0):
@@ -518,7 +444,6 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
         range_pos = 50.0
     reasons = []
     base = 54.0
-    
     structure_boost = candle_quality * 10.5
     base += structure_boost
     if candle_quality > 1.0: reasons.append("Excellent bullish structure")
@@ -526,34 +451,27 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
     elif candle_quality > 0.15: reasons.append("Mildly positive structure")
     elif candle_quality < -0.7: reasons.append("Weak structure / rejection")
     elif candle_quality < -0.25: reasons.append("Mixed structure")
-
     base += (range_pos - 50) * 0.14
     if range_pos > 88: reasons.append("Near top of daily range")
     elif range_pos > 72: reasons.append("Upper half of range")
-    elif range_pos < 18:
-        reasons.append("Building from lows" if candle_quality > 0.15 else "Near bottom of range")
+    elif range_pos < 18: reasons.append("Building from lows" if candle_quality > 0.15 else "Near bottom of range")
     elif range_pos < 32: reasons.append("Lower half of range")
-
     base += change_1h * 3.8
     if change_1h > 2.0: reasons.append("Very strong 1h momentum")
     elif change_1h > 0.7: reasons.append("Strong 1h momentum")
     elif change_1h > 0.2: reasons.append("Positive 1h")
     elif change_1h < -1.5: reasons.append("Strong negative 1h")
     elif change_1h < -0.4: reasons.append("Mild negative 1h")
-
     base += change_24h * 0.45
-
     if btc_change is not None:
         vs_btc = change_24h - btc_change
         base += vs_btc * 0.75
         if vs_btc > 3.5: reasons.append("Clearly outperforming BTC")
         elif vs_btc > 1.2: reasons.append("Outperforming BTC")
         elif vs_btc < -3.5: reasons.append("Lagging BTC")
-
     if fg_value is not None:
         if fg_value < 25: base -= 1.5
         elif fg_value > 75: base += 1.0
-
     if range_pos >= 87 and change_1h >= 0.6 and candle_quality > 0.15:
         base += 5
         reasons.append("Clear breakout in progress")
@@ -563,27 +481,20 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
     elif range_pos >= 78 and change_1h >= 0.4 and candle_quality > 0.3:
         base += 2
         reasons.append("Pushing into breakout territory")
-
     score = max(min(int(round(base)), 92), 16)
-    
     if score >= 80: meme = "🔥 Strong structure + momentum"
     elif score >= 68: meme = "🚀 Constructive structure"
     elif score >= 55: meme = "📈 Structure okay, mixed short-term"
     elif score >= 42: meme = "😐 Mixed signals"
     elif score >= 28: meme = "⚠️ Short-term weakness"
     else: meme = "💀 Weak structure"
-    
     return score, meme, range_pos, reasons
 
 def colored_progress(score: int, height: int = 12):
-    if score >= 75:
-        color = "linear-gradient(90deg, #00e676, #00c853)"
-    elif score >= 60:
-        color = "linear-gradient(90deg, #69f0ae, #00e676)"
-    elif score >= 45:
-        color = "linear-gradient(90deg, #ffd600, #ffab00)"
-    else:
-        color = "linear-gradient(90deg, #ff5252, #d50000)"
+    if score >= 75: color = "linear-gradient(90deg, #00e676, #00c853)"
+    elif score >= 60: color = "linear-gradient(90deg, #69f0ae, #00e676)"
+    elif score >= 45: color = "linear-gradient(90deg, #ffd600, #ffab00)"
+    else: color = "linear-gradient(90deg, #ff5252, #d50000)"
     return f"""
     <div style="background:#e0e0e0;border-radius:10px;height:{height}px;overflow:hidden;margin:6px 0 10px 0;">
         <div style="width:{score}%;height:100%;background:{color};border-radius:10px;transition:width 0.5s ease;"></div>
@@ -591,15 +502,13 @@ def colored_progress(score: int, height: int = 12):
     """
 
 def make_sparkline(history):
-    if not history or len(history) < 2:
-        return None
+    if not history or len(history) < 2: return None
     times = [h[0] for h in history]
     scores = [h[1] for h in history]
     min_score, max_score = min(scores), max(scores)
     padding = max(4, (max_score - min_score) * 0.25)
     y_min = max(0, min_score - padding)
     y_max = min(100, max_score + padding)
-    
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=times, y=scores, mode="lines+markers",
@@ -608,7 +517,7 @@ def make_sparkline(history):
         fillcolor="rgba(0,200,83,0.12)" if scores[-1] >= 60 else "rgba(255,82,82,0.12)"
     ))
     fig.update_layout(
-        height=160, margin=dict(l=0, r=10, t=10, b=30),
+        height=160, margin=dict(l=0,r=10,t=10,b=30),
         xaxis=dict(showgrid=False, showticklabels=True, tickformat="%H:%M"),
         yaxis=dict(showgrid=True, gridcolor="rgba(0,0,0,0.06)", range=[y_min, y_max], title="Vibe"),
         plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", showlegend=False
@@ -644,7 +553,6 @@ with ctx4:
     st.metric("Market 24h", f"{global_data.get('market_cap_change_percentage_24h_usd', 0):+.2f}%" if global_data else "—")
 
 st.divider()
-
 fill_pending_returns()
 
 # ========== TOP COINS ==========
@@ -678,16 +586,13 @@ for name, cid, tick in COIN_ORDER:
     st.session_state.score_history = update_history(cid, score, st.session_state.score_history)
     hist = st.session_state.score_history.get(cid, [])
     prev_score = hist[-2][1] if len(hist) >= 2 else None
-
     vs_btc_val = ch24 - btc_change
-    save_vibe_snapshot(cid, tick, price, score, meme, ch24, range_pos, vs_btc_val, prev_score,
-                       {"reasons": reasons, "candle_quality": cq})
+    save_vibe_snapshot(cid, tick, price, score, meme, ch24, range_pos, vs_btc_val, prev_score, {"reasons": reasons, "candle_quality": cq})
 
     vibe_data.append({
         "name": name, "cid": cid, "tick": tick, "price": price, "ch24": ch24, "ch1": ch1,
         "score": score, "meme": meme, "image_url": image_url, "candle_quality": cq,
-        "range_pos": range_pos, "reasons": reasons,
-        "history": st.session_state.score_history.get(cid, [])
+        "range_pos": range_pos, "reasons": reasons, "history": st.session_state.score_history.get(cid, [])
     })
 
 vibe_data_sorted = sorted(vibe_data, key=lambda x: x["score"], reverse=True)
@@ -699,14 +604,10 @@ st.caption("Live Top 20 by market cap • Sorted by current vibe score")
 col_filter, _ = st.columns([2, 4])
 with col_filter:
     show_option = st.selectbox("Show", ["Top 5", "Top 10", "Top 15", "All"],
-        index=["Top 5", "Top 10", "Top 15", "All"].index(st.session_state.show_count)
-        if st.session_state.show_count in ["Top 5", "Top 10", "Top 15", "All"] else 1)
+        index=["Top 5","Top 10","Top 15","All"].index(st.session_state.show_count) if st.session_state.show_count in ["Top 5","Top 10","Top 15","All"] else 1)
     st.session_state.show_count = show_option
 
-display_data = vibe_data_sorted[:5] if show_option == "Top 5" else \
-               vibe_data_sorted[:10] if show_option == "Top 10" else \
-               vibe_data_sorted[:15] if show_option == "Top 15" else vibe_data_sorted
-
+display_data = vibe_data_sorted[:5] if show_option=="Top 5" else vibe_data_sorted[:10] if show_option=="Top 10" else vibe_data_sorted[:15] if show_option=="Top 15" else vibe_data_sorted
 st.caption(f"Showing {len(display_data)} coins")
 
 for row_start in range(0, len(display_data), 5):
@@ -717,11 +618,10 @@ for row_start in range(0, len(display_data), 5):
                 if item["image_url"]:
                     st.image(item["image_url"], width=28)
                 else:
-                    st.markdown("<div style='height:28px; margin-bottom:4px;'></div>", unsafe_allow_html=True)
+                    st.markdown("<div style='height:28px;margin-bottom:4px;'></div>", unsafe_allow_html=True)
                 st.markdown(f"**{item['tick']}**")
-                price_str = f"${item['price']:,.0f}" if item["price"] >= 1000 else \
-                            f"${item['price']:,.2f}" if item["price"] >= 1 else f"${item['price']:.4f}"
-                st.markdown(f"<div style='font-size:1.25rem; font-weight:600; height:30px; line-height:30px; overflow:hidden;'>{price_str}</div>", unsafe_allow_html=True)
+                price_str = f"${item['price']:,.0f}" if item["price"]>=1000 else f"${item['price']:,.2f}" if item["price"]>=1 else f"${item['price']:.4f}"
+                st.markdown(f"<div style='font-size:1.25rem;font-weight:600;height:30px;line-height:30px;overflow:hidden;'>{price_str}</div>", unsafe_allow_html=True)
                 st.caption(f"{item['ch24']:+.2f}% • Vibe {item['score']}")
                 st.markdown(colored_progress(item["score"], height=10), unsafe_allow_html=True)
                 st.markdown(f"""<div style="height:42px;min-height:42px;max-height:42px;font-size:13px;color:#888;line-height:1.3;overflow:hidden;margin-bottom:8px;">{item['meme']}</div>""", unsafe_allow_html=True)
@@ -760,7 +660,7 @@ with col_time:
 if st.session_state.search_coin:
     try:
         r = requests.get("https://api.coingecko.com/api/v3/coins/markets", headers=HEADERS,
-                         params={"vs_currency": "usd", "ids": st.session_state.search_coin, "price_change_percentage": "1h,24h"}, timeout=10)
+            params={"vs_currency":"usd","ids":st.session_state.search_coin,"price_change_percentage":"1h,24h"}, timeout=10)
         single = r.json() if r.status_code == 200 else []
     except:
         single = []
@@ -778,8 +678,7 @@ if st.session_state.search_coin:
         st.session_state.score_history = update_history(cid, score, st.session_state.score_history)
         history = st.session_state.score_history.get(cid, [])
         prev_score = history[-2][1] if len(history) >= 2 else None
-        save_vibe_snapshot(cid, tick, price, score, meme, ch24, range_pos, ch24 - btc_change, prev_score,
-                           {"reasons": reasons, "candle_quality": cq})
+        save_vibe_snapshot(cid, tick, price, score, meme, ch24, range_pos, ch24-btc_change, prev_score, {"reasons":reasons,"candle_quality":cq})
     else:
         st.warning("Could not load coin data.")
         st.stop()
@@ -801,10 +700,8 @@ else:
     image_url = item["image_url"]
 
 if st.session_state.last_score is not None:
-    if score >= 70 and st.session_state.last_score < 70:
-        st.toast(f"🚀 {tick} Vibe crossed 70!", icon="🚀")
-    elif score <= 30 and st.session_state.last_score > 30:
-        st.toast(f"🐻 {tick} Vibe dropped below 30", icon="🐻")
+    if score >= 70 and st.session_state.last_score < 70: st.toast(f"🚀 {tick} Vibe crossed 70!", icon="🚀")
+    elif score <= 30 and st.session_state.last_score > 30: st.toast(f"🐻 {tick} Vibe dropped below 30", icon="🐻")
 st.session_state.last_score = score
 
 vs_btc = ch24 - (btc_change or 0)
@@ -834,15 +731,13 @@ else: st.info(meme)
 st.markdown("##### Vibe Score History")
 if history and len(history) >= 2:
     fig = make_sparkline(history)
-    if fig:
-        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    if fig: st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
     st.caption(f"Showing last {len(history)} readings")
 else:
     st.info("History will start building after a few more refreshes...")
 
 with st.expander("🤔 Why this score?"):
-    for r in reasons:
-        st.write(f"• {r}")
+    for r in reasons: st.write(f"• {r}")
 
 st.markdown("### 📤 Share this vibe")
 share_html = f"""
@@ -878,16 +773,15 @@ ohlc_data = get_ohlc(cid, days)
 volume_data = get_market_chart(cid, days)
 
 if isinstance(ohlc_data, list) and len(ohlc_data) > 0:
-    df = pd.DataFrame(ohlc_data, columns=["timestamp", "open", "high", "low", "close"])
+    df = pd.DataFrame(ohlc_data, columns=["timestamp","open","high","low","close"])
     df["time"] = pd.to_datetime(df["timestamp"], unit="ms")
     has_volume = False
     if "total_volumes" in volume_data:
-        vol_df = pd.DataFrame(volume_data["total_volumes"], columns=["timestamp", "volume"])
+        vol_df = pd.DataFrame(volume_data["total_volumes"], columns=["timestamp","volume"])
         vol_df["time"] = pd.to_datetime(vol_df["timestamp"], unit="ms")
         df = pd.merge_asof(df.sort_values("time"), vol_df.sort_values("time"), on="time", direction="nearest")
         has_volume = True
-
-    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=[0.72, 0.28])
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=[0.72,0.28])
     fig.add_trace(go.Candlestick(
         x=df["time"], open=df["open"], high=df["high"], low=df["low"], close=df["close"],
         increasing_line_color="#00c853", decreasing_line_color="#ff5252",
@@ -901,8 +795,7 @@ if isinstance(ohlc_data, list) and len(ohlc_data) > 0:
     fig.update_layout(height=520, template="plotly_white", margin=dict(l=0,r=0,t=20,b=0),
                       xaxis_rangeslider_visible=False, showlegend=False, hovermode="x unified")
     st.plotly_chart(fig, use_container_width=True)
-    if days == "1":
-        st.caption("30-minute candles (best available on free API)")
+    if days == "1": st.caption("30-minute candles (best available on free API)")
 else:
     st.info("Chart temporarily unavailable.")
 
@@ -911,27 +804,24 @@ st.subheader("📊 Vibe Performance")
 st.caption("Historical forward returns by Vibe Score bucket • Only shows when enough data exists")
 
 bucket_stats = get_bucket_stats(min_n=15)
-
 if bucket_stats:
     table_data = []
     for s in bucket_stats:
         if not s["ready"]:
-            table_data.append({"Bucket": s["bucket"], "n": s["n"], "Avg 30m": "—", "Win 30m": "—",
-                               "Avg 1h": "—", "Win 1h": "—", "Avg 4h": "—", "Win 4h": "—",
-                               "Avg 24h": "—", "Win 24h": "—"})
+            table_data.append({"Bucket":s["bucket"],"n":s["n"],"Avg 30m":"—","Win 30m":"—","Avg 1h":"—","Win 1h":"—","Avg 4h":"—","Win 4h":"—","Avg 24h":"—","Win 24h":"—"})
         else:
             table_data.append({
-                "Bucket": s["bucket"], "n": s["n"],
-                "Avg 30m": f"{s['avg_30m']:+.2f}%" if s['avg_30m'] is not None else "—",
-                "Win 30m": f"{s['win_30m']}%" if s['win_30m'] is not None else "—",
-                "Avg 1h": f"{s['avg_1h']:+.2f}%" if s['avg_1h'] is not None else "—",
-                "Win 1h": f"{s['win_1h']}%" if s['win_1h'] is not None else "—",
-                "Avg 4h": f"{s['avg_4h']:+.2f}%" if s['avg_4h'] is not None else "—",
-                "Win 4h": f"{s['win_4h']}%" if s['win_4h'] is not None else "—",
-                "Avg 24h": f"{s['avg_24h']:+.2f}%" if s['avg_24h'] is not None else "—",
-                "Win 24h": f"{s['win_24h']}%" if s['win_24h'] is not None else "—",
+                "Bucket":s["bucket"],"n":s["n"],
+                "Avg 30m":f"{s['avg_30m']:+.2f}%" if s['avg_30m'] is not None else "—",
+                "Win 30m":f"{s['win_30m']}%" if s['win_30m'] is not None else "—",
+                "Avg 1h":f"{s['avg_1h']:+.2f}%" if s['avg_1h'] is not None else "—",
+                "Win 1h":f"{s['win_1h']}%" if s['win_1h'] is not None else "—",
+                "Avg 4h":f"{s['avg_4h']:+.2f}%" if s['avg_4h'] is not None else "—",
+                "Win 4h":f"{s['win_4h']}%" if s['win_4h'] is not None else "—",
+                "Avg 24h":f"{s['avg_24h']:+.2f}%" if s['avg_24h'] is not None else "—",
+                "Win 24h":f"{s['win_24h']}%" if s['win_24h'] is not None else "—",
             })
     st.dataframe(pd.DataFrame(table_data), use_container_width=True, hide_index=True)
-    st.caption("Win rate = % of times future return was positive. Stats appear only after enough observations.")
+    st.caption("Win rate = % of times future return was positive.")
 else:
     st.info("Collecting performance data… Check back later once more snapshots have matured.")
