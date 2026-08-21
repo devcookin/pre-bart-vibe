@@ -299,7 +299,7 @@ with ctx4:
 
 st.divider()
 
-# ========== COIN LIST + SEARCH ==========
+# ========== COIN LIST (EXPANDED) ==========
 COIN_ORDER = [
     ("Bitcoin", "bitcoin", "BTC"),
     ("Ethereum", "ethereum", "ETH"),
@@ -314,6 +314,18 @@ COIN_ORDER = [
     ("dogwifhat", "dogwifcoin", "WIF"),
     ("Pepe", "pepe", "PEPE"),
     ("Bonk", "bonk", "BONK"),
+    ("XRP", "ripple", "XRP"),
+    ("Cardano", "cardano", "ADA"),
+    ("Polkadot", "polkadot", "DOT"),
+    ("Polygon", "matic-network", "POL"),
+    ("Uniswap", "uniswap", "UNI"),
+    ("Litecoin", "litecoin", "LTC"),
+    ("BNB", "binancecoin", "BNB"),
+    ("Shiba Inu", "shiba-inu", "SHIB"),
+    ("Arbitrum", "arbitrum", "ARB"),
+    ("Optimism", "optimism", "OP"),
+    ("Injective", "injective-protocol", "INJ"),
+    ("Fetch.ai", "fetch-ai", "FET"),
 ]
 
 ids_str = ",".join([c[1] for c in COIN_ORDER])
@@ -324,7 +336,7 @@ btc_change = coin_map.get("bitcoin", {}).get("price_change_percentage_24h") or 0
 
 # Search
 st.subheader("🔍 Search any coin")
-search_query = st.text_input("Type coin name or symbol", placeholder="e.g. PEPE, SUI, WIF, BONK...")
+search_query = st.text_input("Type coin name or symbol", placeholder="e.g. PEPE, SUI, WIF, BONK, INJ...")
 search_results = search_coins(search_query) if search_query else []
 
 if search_results:
@@ -368,7 +380,6 @@ for name, cid, tick in COIN_ORDER:
 st.subheader("🌐 Multi-Coin Vibe Overview")
 st.caption("Click **View** on any coin to open the detailed view")
 
-# Show cards in rows of 5
 for row_start in range(0, len(vibe_data), 5):
     cols = st.columns(5)
     for i, item in enumerate(vibe_data[row_start:row_start+5]):
