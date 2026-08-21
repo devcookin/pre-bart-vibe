@@ -1,18 +1,32 @@
 import streamlit as st
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from urllib.parse import quote
 import json
 import os
+from supabase import create_client, Client
 
 try:
     from streamlit_autorefresh import st_autorefresh
     st_autorefresh(interval=45 * 1000, key="datarefresh")
 except:
     pass
+
+# ========== SUPABASE ==========
+SUPABASE_URL = st.secrets.get("SUPABASE_URL", "")
+SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "")
+supabase: Client = None
+if SUPABASE_URL and SUPABASE_KEY:
+    try:
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+    except Exception as e:
+        st.warning(f"Supabase connection issue: {e}")
+
+MODEL_VERSION = "v2.1-breakout"
+MIN_SNAPSHOT_INTERVAL = 120  # seconds between snapshots for the same coin
 
 API_KEY = "CG-h61Dg6UoB2gVfCSUJQDj4dLa"
 HEADERS = {"x-cg-demo-api-key": API_KEY}
@@ -48,8 +62,10 @@ if "search_coin" not in st.session_state:
     st.session_state.search_coin = None
 if "show_count" not in st.session_state:
     st.session_state.show_count = "Top 10"
+if "last_snapshot_time" not in st.session_state:
+    st.session_state.last_snapshot_time = {}
 
-# ========== PERSISTENT HISTORY ==========
+# ========== PERSISTENT HISTORY (sparkline) ==========
 def load_history():
     if os.path.exists(HISTORY_FILE):
         try:
@@ -96,6 +112,219 @@ def update_history(cid, score, history_dict):
 
 if "score_history" not in st.session_state:
     st.session_state.score_history = load_history()
+
+# ========== SUPABASE SNAPSHOT FUNCTIONS ==========
+def save_vibe_snapshot(coin_id, symbol, price, score, label, change_24h, range_pos, vs_btc, prev_score, sub_signals):
+    if not supabase:
+        return
+    
+    now = datetime.now(timezone.utc)
+    last_time = st.session_state.last_snapshot_time.get(coin_id)
+    
+    # Throttle
+    if last_time and (now - last_time).total_seconds() < MIN_SNAPSHOT_INTERVAL:
+        if prev_score is not None and score == prev_score:
+            return
+    
+    direction = None
+    if prev_score is not None:
+        if score > prev_score + 2:
+            direction = "rising"
+        elif score < prev_score - 2:
+            direction = "falling"
+        else:
+            direction = "flat"
+    
+    data = {
+        "timestamp": now.isoformat(),
+        "coin_id": coin_id,
+        "symbol": symbol,
+        "price": float(price),
+        "score": int(score),
+        "label": label,
+        "change_24h": float(change_24h) if change_24h is not None else None,
+        "range_pos": float(range_pos) if range_pos is not None else None,
+        "vs_btc": float(vs_btc) if vs_btc is not None else None,
+        "prev_score": int(prev_score) if prev_score is not None else None,
+        "direction": direction,
+        "sub_signals": sub_signals,
+        "model_version": MODEL_VERSION,
+        "return_30m": None,
+        "return_1h": None,
+        "return_4h": None,
+        "return_24h": None,
+        "filled_at": None
+    }
+    
+    try:
+        supabase.table("vibe_snapshots").insert(data).execute()
+        st.session_state.last_snapshot_time[coin_id] = now
+    except Exception as e:
+        # Silent fail so the app doesn't break
+        pass
+
+def fill_pending_returns():
+    """Fill returns for snapshots that are old enough"""
+    if not supabase:
+        return
+    
+    try:
+        # Get snapshots that still need returns
+        result = supabase.table("vibe_snapshots")\
+            .select("id, timestamp, coin_id, price, return_30m, return_1h, return_4h, return_24h")\
+            .is_("return_24h", "null")\
+            .order("timestamp", desc=False)\
+            .limit(100)\
+            .execute()
+        
+        rows = result.data or []
+        now = datetime.now(timezone.utc)
+        
+        for row in rows:
+            ts = datetime.fromisoformat(row["timestamp"].replace("Z", "+00:00"))
+            age_seconds = (now - ts).total_seconds()
+            original_price = row["price"]
+            
+            # We need current price for this coin
+            # For simplicity we use a quick markets call only when needed
+            # (In production you could cache prices)
+            try:
+                r = requests.get(
+                    "https://api.coingecko.com/api/v3/simple/price",
+                    headers=HEADERS,
+                    params={"ids": row["coin_id"], "vs_currencies": "usd"},
+                    timeout=8
+                )
+                if r.status_code != 200:
+                    continue
+                current_price = r.json().get(row["coin_id"], {}).get("usd")
+                if not current_price or original_price <= 0:
+                    continue
+                
+                ret = ((current_price - original_price) / original_price) * 100
+                updates = {}
+                
+                if age_seconds >= 30 * 60 and row["return_30m"] is None:
+                    updates["return_30m"] = round(ret, 4)
+                if age_seconds >= 60 * 60 and row["return_1h"] is None:
+                    updates["return_1h"] = round(ret, 4)
+                if age_seconds >= 4 * 60 * 60 and row["return_4h"] is None:
+                    updates["return_4h"] = round(ret, 4)
+                if age_seconds >= 24 * 60 * 60 and row["return_24h"] is None:
+                    updates["return_24h"] = round(ret, 4)
+                
+                if updates:
+                    updates["filled_at"] = now.isoformat()
+                    supabase.table("vibe_snapshots").update(updates).eq("id", row["id"]).execute()
+            except:
+                continue
+    except Exception:
+        pass
+
+def get_bucket_stats(min_n=25):
+    """Global performance by score bucket"""
+    if not supabase:
+        return None
+    
+    try:
+        result = supabase.table("vibe_snapshots")\
+            .select("score, return_30m, return_1h, return_4h, return_24h")\
+            .not_.is_("return_1h", "null")\
+            .execute()
+        
+        rows = result.data or []
+        if not rows:
+            return None
+        
+        df = pd.DataFrame(rows)
+        
+        def bucket(s):
+            if s < 20: return "0-19"
+            if s < 40: return "20-39"
+            if s < 60: return "40-59"
+            if s < 70: return "60-69"
+            if s < 80: return "70-79"
+            if s < 90: return "80-89"
+            return "90-100"
+        
+        df["bucket"] = df["score"].apply(bucket)
+        
+        stats = []
+        for b in ["0-19", "20-39", "40-59", "60-69", "70-79", "80-89", "90-100"]:
+            sub = df[df["bucket"] == b]
+            n = len(sub)
+            if n < min_n:
+                stats.append({"bucket": b, "n": n, "ready": False})
+                continue
+            
+            def safe_avg(col):
+                vals = sub[col].dropna()
+                return round(vals.mean(), 3) if len(vals) > 0 else None
+            
+            def safe_win(col):
+                vals = sub[col].dropna()
+                if len(vals) == 0:
+                    return None
+                return round((vals > 0).mean() * 100, 1)
+            
+            stats.append({
+                "bucket": b,
+                "n": n,
+                "ready": True,
+                "avg_30m": safe_avg("return_30m"),
+                "win_30m": safe_win("return_30m"),
+                "avg_1h": safe_avg("return_1h"),
+                "win_1h": safe_win("return_1h"),
+                "avg_4h": safe_avg("return_4h"),
+                "win_4h": safe_win("return_4h"),
+                "avg_24h": safe_avg("return_24h"),
+                "win_24h": safe_win("return_24h"),
+            })
+        return stats
+    except Exception:
+        return None
+
+def get_coin_performance(coin_id, min_n=20):
+    if not supabase:
+        return None
+    try:
+        result = supabase.table("vibe_snapshots")\
+            .select("score, return_1h, return_4h")\
+            .eq("coin_id", coin_id)\
+            .not_.is_("return_1h", "null")\
+            .execute()
+        
+        rows = result.data or []
+        if len(rows) < min_n:
+            return {"n": len(rows), "ready": False}
+        
+        df = pd.DataFrame(rows)
+        high = df[df["score"] >= 70]
+        
+        def stats(sub):
+            if len(sub) == 0:
+                return None, None
+            avg = round(sub["return_1h"].mean(), 3)
+            win = round((sub["return_1h"] > 0).mean() * 100, 1)
+            return avg, win
+        
+        avg1, win1 = stats(df)
+        avg4 = round(df["return_4h"].dropna().mean(), 3) if df["return_4h"].notna().any() else None
+        win4 = round((df["return_4h"].dropna() > 0).mean() * 100, 1) if df["return_4h"].notna().any() else None
+        
+        return {
+            "n": len(df),
+            "ready": True,
+            "avg_1h": avg1,
+            "win_1h": win1,
+            "avg_4h": avg4,
+            "win_4h": win4,
+            "high_n": len(high),
+            "high_avg_1h": round(high["return_1h"].mean(), 3) if len(high) > 5 else None,
+            "high_win_1h": round((high["return_1h"] > 0).mean() * 100, 1) if len(high) > 5 else None,
+        }
+    except Exception:
+        return None
 
 # ========== HELPERS ==========
 @st.cache_data(ttl=45)
@@ -202,7 +431,6 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
     
     base = 54.0
     
-    # Structure
     structure_boost = candle_quality * 10.5
     base += structure_boost
     if candle_quality > 1.0:
@@ -216,7 +444,6 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
     elif candle_quality < -0.25:
         reasons.append("Mixed structure")
 
-    # Range position
     base += (range_pos - 50) * 0.14
     if range_pos > 88:
         reasons.append("Near top of daily range")
@@ -230,7 +457,6 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
     elif range_pos < 32:
         reasons.append("Lower half of range")
 
-    # 1h momentum
     base += change_1h * 3.8
     if change_1h > 2.0:
         reasons.append("Very strong 1h momentum")
@@ -243,10 +469,8 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
     elif change_1h < -0.4:
         reasons.append("Mild negative 1h")
 
-    # 24h
     base += change_24h * 0.45
 
-    # vs BTC
     if btc_change is not None:
         vs_btc = change_24h - btc_change
         base += vs_btc * 0.75
@@ -257,14 +481,13 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
         elif vs_btc < -3.5:
             reasons.append("Lagging BTC")
 
-    # Fear & Greed
     if fg_value is not None:
         if fg_value < 25:
             base -= 1.5
         elif fg_value > 75:
             base += 1.0
 
-    # ========== MODEST BREAKOUT BOOST ==========
+    # Breakout boost
     if range_pos >= 87 and change_1h >= 0.6 and candle_quality > 0.15:
         base += 5
         reasons.append("Clear breakout in progress")
@@ -356,7 +579,7 @@ with col_refresh:
         st.session_state.last_refresh = datetime.now()
         st.rerun()
 
-st.caption(f"Last refresh: {st.session_state.last_refresh.strftime('%H:%M:%S')}")
+st.caption(f"Last refresh: {st.session_state.last_refresh.strftime('%H:%M:%S')} • Model: {MODEL_VERSION}")
 
 # ========== MARKET CONTEXT ==========
 fg_value, fg_label = get_fear_greed()
@@ -386,6 +609,9 @@ with ctx4:
         st.metric("Market 24h", "—")
 
 st.divider()
+
+# ========== FILL PENDING RETURNS ==========
+fill_pending_returns()
 
 # ========== LIVE TOP COINS ==========
 top_coins = get_top_coins(20)
@@ -422,6 +648,25 @@ for name, cid, tick in COIN_ORDER:
     score, meme, range_pos, reasons = calc_vibe(price, high, low, ch1, ch24, fg_value, btc_change, cq)
 
     st.session_state.score_history = update_history(cid, score, st.session_state.score_history)
+
+    # Previous score from history
+    hist = st.session_state.score_history.get(cid, [])
+    prev_score = hist[-2][1] if len(hist) >= 2 else None
+
+    # Save snapshot
+    vs_btc_val = ch24 - btc_change
+    save_vibe_snapshot(
+        coin_id=cid,
+        symbol=tick,
+        price=price,
+        score=score,
+        label=meme,
+        change_24h=ch24,
+        range_pos=range_pos,
+        vs_btc=vs_btc_val,
+        prev_score=prev_score,
+        sub_signals={"reasons": reasons, "candle_quality": cq}
+    )
 
     vibe_data.append({
         "name": name, "cid": cid, "tick": tick, "price": price, "ch24": ch24, "ch1": ch1,
@@ -575,6 +820,10 @@ if st.session_state.search_coin:
         image_url = c.get("image", "")
         st.session_state.score_history = update_history(cid, score, st.session_state.score_history)
         history = st.session_state.score_history.get(cid, [])
+        
+        prev_score = history[-2][1] if len(history) >= 2 else None
+        vs_btc_val = ch24 - btc_change
+        save_vibe_snapshot(cid, tick, price, score, meme, ch24, range_pos, vs_btc_val, prev_score, {"reasons": reasons, "candle_quality": cq})
     else:
         st.warning("Could not load coin data.")
         st.stop()
@@ -615,8 +864,16 @@ c3.metric("Range Position", f"{range_pos:.0f}%")
 c4.metric("Candle Quality", f"{cq:+.1f}")
 c5.metric("vs BTC (24h)", f"{vs_btc:+.2f}%")
 
+# Current Vibe + Performance Summary
 st.markdown(f"**Vibe Score: {score}/100**")
 st.markdown(colored_progress(score, height=14), unsafe_allow_html=True)
+
+# Live performance summary
+perf = get_coin_performance(cid)
+if perf and perf.get("ready"):
+    st.caption(f"Historical 1h win rate: **{perf['win_1h']}%** • Avg 1h return: **{perf['avg_1h']:+.2f}%** • n = {perf['n']}")
+else:
+    st.caption("Collecting performance data — not enough observations yet.")
 
 if score >= 80:
     st.success(meme)
@@ -727,3 +984,46 @@ if isinstance(ohlc_data, list) and len(ohlc_data) > 0:
         st.caption("30-minute candles (best available on free API)")
 else:
     st.info("Chart temporarily unavailable.")
+
+# ========== VIBE PERFORMANCE SECTION ==========
+st.divider()
+st.subheader("📊 Vibe Performance")
+st.caption("Historical forward returns by Vibe Score bucket • Only shows when enough data exists")
+
+bucket_stats = get_bucket_stats(min_n=20)
+
+if bucket_stats:
+    # Create a nice table
+    table_data = []
+    for s in bucket_stats:
+        if not s["ready"]:
+            table_data.append({
+                "Bucket": s["bucket"],
+                "n": s["n"],
+                "Avg 30m": "—",
+                "Win 30m": "—",
+                "Avg 1h": "—",
+                "Win 1h": "—",
+                "Avg 4h": "—",
+                "Win 4h": "—",
+                "Avg 24h": "—",
+                "Win 24h": "—",
+            })
+        else:
+            table_data.append({
+                "Bucket": s["bucket"],
+                "n": s["n"],
+                "Avg 30m": f"{s['avg_30m']:+.2f}%" if s['avg_30m'] is not None else "—",
+                "Win 30m": f"{s['win_30m']}%" if s['win_30m'] is not None else "—",
+                "Avg 1h": f"{s['avg_1h']:+.2f}%" if s['avg_1h'] is not None else "—",
+                "Win 1h": f"{s['win_1h']}%" if s['win_1h'] is not None else "—",
+                "Avg 4h": f"{s['avg_4h']:+.2f}%" if s['avg_4h'] is not None else "—",
+                "Win 4h": f"{s['win_4h']}%" if s['win_4h'] is not None else "—",
+                "Avg 24h": f"{s['avg_24h']:+.2f}%" if s['avg_24h'] is not None else "—",
+                "Win 24h": f"{s['win_24h']}%" if s['win_24h'] is not None else "—",
+            })
+    
+    st.dataframe(pd.DataFrame(table_data), use_container_width=True, hide_index=True)
+    st.caption("Win rate = % of times the future return was positive. Data only appears after sufficient observations.")
+else:
+    st.info("Collecting performance data… Check back in a few hours once more snapshots have matured.")
