@@ -39,7 +39,7 @@ st.markdown("""
 
 # ========== SESSION STATE ==========
 if "selected_coin" not in st.session_state:
-    st.session_state.selected_coin = "Avalanche"
+    st.session_state.selected_coin = "Bitcoin"
 if "last_score" not in st.session_state:
     st.session_state.last_score = None
 if "last_refresh" not in st.session_state:
@@ -115,16 +115,25 @@ def get_global():
     except:
         return None
 
-@st.cache_data(ttl=30)
-def get_markets(ids_str):
+@st.cache_data(ttl=60)
+def get_top_coins(limit=20):
+    """Fetch live Top coins by market cap"""
     url = "https://api.coingecko.com/api/v3/coins/markets"
     params = {
         "vs_currency": "usd",
-        "ids": ids_str,
+        "order": "market_cap_desc",
+        "per_page": limit,
+        "page": 1,
+        "sparkline": False,
         "price_change_percentage": "1h,24h"
     }
-    r = requests.get(url, headers=HEADERS, params=params, timeout=12)
-    return r.json() if r.status_code == 200 else []
+    try:
+        r = requests.get(url, headers=HEADERS, params=params, timeout=12)
+        if r.status_code == 200:
+            return r.json()
+    except:
+        pass
+    return []
 
 @st.cache_data(ttl=60)
 def get_ohlc(coin_id, days="1"):
@@ -357,44 +366,28 @@ with ctx4:
 
 st.divider()
 
-# ========== COIN LIST ==========
-COIN_ORDER = [
-    ("Bitcoin", "bitcoin", "BTC"),
-    ("Ethereum", "ethereum", "ETH"),
-    ("Solana", "solana", "SOL"),
-    ("Avalanche", "avalanche-2", "AVAX"),
-    ("Dogecoin", "dogecoin", "DOGE"),
-    ("Chainlink", "chainlink", "LINK"),
-    ("Sui", "sui", "SUI"),
-    ("Render", "render-token", "RENDER"),
-    ("NEAR", "near", "NEAR"),
-    ("Aptos", "aptos", "APT"),
-    ("dogwifhat", "dogwifcoin", "WIF"),
-    ("Pepe", "pepe", "PEPE"),
-    ("Bonk", "bonk", "BONK"),
-    ("XRP", "ripple", "XRP"),
-    ("Cardano", "cardano", "ADA"),
-    ("Polkadot", "polkadot", "DOT"),
-    ("Polygon", "matic-network", "POL"),
-    ("Uniswap", "uniswap", "UNI"),
-    ("Litecoin", "litecoin", "LTC"),
-    ("BNB", "binancecoin", "BNB"),
-    ("Shiba Inu", "shiba-inu", "SHIB"),
-    ("Arbitrum", "arbitrum", "ARB"),
-    ("Optimism", "optimism", "OP"),
-    ("Injective", "injective-protocol", "INJ"),
-    ("Fetch.ai", "fetch-ai", "FET"),
-]
+# ========== LIVE TOP COINS ==========
+top_coins = get_top_coins(20)  # Live Top 20 by market cap
 
-ids_str = ",".join([c[1] for c in COIN_ORDER])
-markets = get_markets(ids_str)
-coin_map = {c["id"]: c for c in markets} if markets else {}
+if not top_coins:
+    st.error("Could not load top coins. Please try refreshing.")
+    st.stop()
 
-btc_change = coin_map.get("bitcoin", {}).get("price_change_percentage_24h") or 0
+# Build dynamic list
+COIN_ORDER = []
+coin_map = {}
+for c in top_coins:
+    name = c["name"]
+    cid = c["id"]
+    tick = c["symbol"].upper()
+    COIN_ORDER.append((name, cid, tick))
+    coin_map[cid] = c
+
+btc_change = next((c.get("price_change_percentage_24h") or 0 for c in top_coins if c["id"] == "bitcoin"), 0)
 
 # Search
 st.subheader("🔍 Search any coin")
-search_query = st.text_input("Type coin name or symbol", placeholder="e.g. PEPE, SUI, WIF, INJ...")
+search_query = st.text_input("Type coin name or symbol", placeholder="e.g. PEPE, WIF, BONK, INJ...")
 search_results = search_coins(search_query) if search_query else []
 
 if search_results:
@@ -432,22 +425,23 @@ for name, cid, tick in COIN_ORDER:
         "history": st.session_state.score_history.get(cid, [])
     })
 
-# Sort by vibe score (highest first)
+# Sort by vibe score
 vibe_data_sorted = sorted(vibe_data, key=lambda x: x["score"], reverse=True)
 
-# ========== MULTI-COIN CARDS (FILTERED) ==========
+# ========== MULTI-COIN CARDS ==========
 st.subheader("🌐 Multi-Coin Vibe Overview")
+st.caption("Live Top 20 by market cap • Sorted by current vibe score")
 
-col_filter, col_spacer = st.columns([2, 4])
+col_filter, _ = st.columns([2, 4])
 with col_filter:
     show_option = st.selectbox(
         "Show",
         ["Top 5", "Top 10", "Top 15", "All"],
-        index=["Top 5", "Top 10", "Top 15", "All"].index(st.session_state.show_count) if st.session_state.show_count in ["Top 5", "Top 10", "Top 15", "All"] else 1
+        index=["Top 5", "Top 10", "Top 15", "All"].index(st.session_state.show_count)
+        if st.session_state.show_count in ["Top 5", "Top 10", "Top 15", "All"] else 1
     )
     st.session_state.show_count = show_option
 
-# Decide how many cards to show
 if show_option == "Top 5":
     display_data = vibe_data_sorted[:5]
 elif show_option == "Top 10":
@@ -457,7 +451,7 @@ elif show_option == "Top 15":
 else:
     display_data = vibe_data_sorted
 
-st.caption(f"Showing {len(display_data)} coins sorted by vibe score • Click **View** for details")
+st.caption(f"Showing {len(display_data)} coins")
 
 for row_start in range(0, len(display_data), 5):
     cols = st.columns(5)
@@ -513,7 +507,20 @@ st.divider()
 st.subheader("🎯 Detailed View")
 
 if st.session_state.search_coin:
-    single = get_markets(st.session_state.search_coin)
+    # Handle searched coin (single market call)
+    single = get_top_coins(1)  # fallback, better to call markets for single id
+    # Simpler: use a direct call
+    try:
+        r = requests.get(
+            "https://api.coingecko.com/api/v3/coins/markets",
+            headers=HEADERS,
+            params={"vs_currency": "usd", "ids": st.session_state.search_coin, "price_change_percentage": "1h,24h"},
+            timeout=10
+        )
+        single = r.json() if r.status_code == 200 else []
+    except:
+        single = []
+
     if single:
         c = single[0]
         name = c["name"]
@@ -539,8 +546,11 @@ else:
     selected = st.session_state.selected_coin
     col_a, col_b = st.columns([2, 1])
     with col_a:
-        selected = st.selectbox("Select Coin", [x[0] for x in COIN_ORDER],
-                                index=[x[0] for x in COIN_ORDER].index(selected) if selected in [x[0] for x in COIN_ORDER] else 0)
+        selected = st.selectbox(
+            "Select Coin",
+            [x[0] for x in COIN_ORDER],
+            index=[x[0] for x in COIN_ORDER].index(selected) if selected in [x[0] for x in COIN_ORDER] else 0
+        )
         st.session_state.selected_coin = selected
     with col_b:
         timeframe = st.selectbox("Timeframe", ["Last 1 Day (30 min)", "Last 7 Days", "Last 30 Days"])
