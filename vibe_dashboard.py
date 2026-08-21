@@ -200,10 +200,8 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
         range_pos = 50.0
     reasons = []
     
-    # Balanced base – not too low
     base = 54.0
     
-    # Structure (important but not overpowering)
     structure_boost = candle_quality * 10.5
     base += structure_boost
     if candle_quality > 1.0:
@@ -217,7 +215,6 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
     elif candle_quality < -0.25:
         reasons.append("Mixed structure")
 
-    # Continuous range position
     base += (range_pos - 50) * 0.14
     if range_pos > 88:
         reasons.append("Near top of daily range")
@@ -231,7 +228,6 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
     elif range_pos < 32:
         reasons.append("Lower half of range")
 
-    # Continuous 1h momentum (softer negatives)
     base += change_1h * 3.8
     if change_1h > 2.0:
         reasons.append("Very strong 1h momentum")
@@ -244,10 +240,8 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
     elif change_1h < -0.4:
         reasons.append("Mild negative 1h")
 
-    # 24h continuous (gentle)
     base += change_24h * 0.45
 
-    # vs BTC (moderate)
     if btc_change is not None:
         vs_btc = change_24h - btc_change
         base += vs_btc * 0.75
@@ -258,7 +252,6 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
         elif vs_btc < -3.5:
             reasons.append("Lagging BTC")
 
-    # Fear & Greed (very light)
     if fg_value is not None:
         if fg_value < 25:
             base -= 1.5
@@ -506,11 +499,26 @@ search_results = search_coins(search_query) if search_query else []
 
 if search_results:
     options = {f"{c['name']} ({c['symbol'].upper()})": c["id"] for c in search_results}
-    chosen = st.selectbox("Select from search results", list(options.keys()), key="search_select")
-    if st.button("Load this coin", type="primary", key="load_search"):
-        st.session_state.search_coin = options[chosen]
-        st.session_state.selected_coin = chosen.split(" (")[0]
-        st.rerun()
+    
+    # Store the selected option in session state so the button can reliably access it
+    if "search_choice" not in st.session_state:
+        st.session_state.search_choice = list(options.keys())[0]
+    
+    chosen_label = st.selectbox(
+        "Select from search results",
+        list(options.keys()),
+        key="search_select"
+    )
+    
+    # Keep the choice updated
+    st.session_state.search_choice = chosen_label
+    
+    if st.button("Load this vibe", type="primary", key="load_search"):
+        selected_id = options.get(st.session_state.search_choice)
+        if selected_id:
+            st.session_state.search_coin = selected_id
+            st.session_state.selected_coin = st.session_state.search_choice.split(" (")[0]
+            st.rerun()
 
 st.markdown("Or pick from current Top 20:")
 selected = st.selectbox(
@@ -528,6 +536,7 @@ col_time, _ = st.columns([1, 3])
 with col_time:
     timeframe = st.selectbox("Timeframe", ["Last 1 Day (30 min)", "Last 7 Days", "Last 30 Days"])
 
+# Load the actual data
 if st.session_state.search_coin:
     try:
         r = requests.get(
