@@ -26,8 +26,8 @@ if SUPABASE_URL and SUPABASE_KEY:
         pass
 
 MODEL_VERSION = "v2.1-breakout"
-MIN_SNAPSHOT_INTERVAL = 180          # 3 minutes
-FILL_INTERVAL_SECONDS = 210          # ~3.5 minutes
+MIN_SNAPSHOT_INTERVAL = 180
+FILL_INTERVAL_SECONDS = 210
 
 API_KEY = "CG-h61Dg6UoB2gVfCSUJQDj4dLa"
 HEADERS = {"x-cg-demo-api-key": API_KEY}
@@ -40,14 +40,108 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+# ========== DUAL THEME CSS ==========
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-    html, body, [class*="css"]  { font-family: 'Inter', sans-serif; }
-    h1 { font-weight: 700 !important; }
-    .stMetric { border-radius: 14px; padding: 12px 16px; }
-    div[data-testid="stMetricValue"] { font-size: 1.45rem !important; font-weight: 600; }
-    div.stButton > button { width: 100%; border-radius: 10px; font-weight: 600; }
+
+    html, body, [class*="css"] {
+        font-family: 'Inter', sans-serif;
+    }
+
+    /* ========== LIGHT MODE (Clean) ========== */
+    h1 {
+        font-weight: 700 !important;
+        color: #111827 !important;
+    }
+
+    .stMetric {
+        border-radius: 14px;
+        padding: 12px 16px;
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+    }
+
+    div[data-testid="stMetricValue"] {
+        font-size: 1.45rem !important;
+        font-weight: 600;
+    }
+
+    div.stButton > button {
+        width: 100%;
+        border-radius: 10px;
+        font-weight: 600;
+        background: #f3f4f6;
+        border: 1px solid #d1d5db;
+        color: #111827;
+    }
+
+    div.stButton > button:hover {
+        background: #e5e7eb;
+        border-color: #9ca3af;
+    }
+
+    /* Cards in light mode */
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        background: #ffffff;
+        border: 1px solid #e5e7eb !important;
+        border-radius: 16px !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+
+    /* ========== DARK MODE (Degen Mode) ========== */
+    [data-theme="dark"] h1 {
+        color: #f9fafb !important;
+        text-shadow: 0 0 20px rgba(0, 255, 157, 0.3);
+    }
+
+    [data-theme="dark"] .stMetric {
+        background: #111827;
+        border: 1px solid #1f2937;
+        box-shadow: 0 0 15px rgba(0, 255, 157, 0.05);
+    }
+
+    [data-theme="dark"] div[data-testid="stMetricValue"] {
+        color: #00ff9d !important;
+    }
+
+    [data-theme="dark"] div.stButton > button {
+        background: linear-gradient(135deg, #00ff9d15, #ff2d9215);
+        border: 1px solid #00ff9d55;
+        color: #00ff9d;
+        box-shadow: 0 0 12px rgba(0, 255, 157, 0.15);
+    }
+
+    [data-theme="dark"] div.stButton > button:hover {
+        background: linear-gradient(135deg, #00ff9d25, #ff2d9225);
+        border-color: #00ff9d;
+        box-shadow: 0 0 20px rgba(0, 255, 157, 0.3);
+        color: #ffffff;
+    }
+
+    /* Glowing cards in dark mode */
+    [data-theme="dark"] div[data-testid="stVerticalBlockBorderWrapper"] {
+        background: #0b1120 !important;
+        border: 1px solid #1e293b !important;
+        border-radius: 16px !important;
+        box-shadow: 0 0 20px rgba(0, 255, 157, 0.08),
+                    inset 0 0 20px rgba(0, 255, 157, 0.02);
+    }
+
+    /* Progress bar glow in dark mode */
+    [data-theme="dark"] .stProgress > div > div > div > div {
+        box-shadow: 0 0 12px rgba(0, 255, 157, 0.4);
+    }
+
+    /* Make captions and text nicer in dark */
+    [data-theme="dark"] .stCaption, [data-theme="dark"] p {
+        color: #94a3b8 !important;
+    }
+
+    /* Success / Info / Error boxes in dark mode */
+    [data-theme="dark"] div[data-testid="stAlert"] {
+        border-radius: 12px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -67,7 +161,7 @@ if "last_snapshot_time" not in st.session_state:
 if "last_fill_time" not in st.session_state:
     st.session_state.last_fill_time = None
 
-# ========== LOCAL SPARKLINE HISTORY ==========
+# ========== LOCAL HISTORY ==========
 def load_history():
     if os.path.exists(HISTORY_FILE):
         try:
@@ -109,14 +203,13 @@ def update_history(cid, score, history_dict):
 if "score_history" not in st.session_state:
     st.session_state.score_history = load_history()
 
-# ========== SUPABASE FUNCTIONS (OPTIMIZED) ==========
+# ========== SUPABASE FUNCTIONS ==========
 def save_vibe_snapshot(coin_id, symbol, price, score, label, change_24h, range_pos, vs_btc, prev_score, sub_signals):
     if not supabase:
         return
     now = datetime.now(timezone.utc)
     last_time = st.session_state.last_snapshot_time.get(coin_id)
     
-    # Only save if score changed or enough time has passed
     if last_time and (now - last_time).total_seconds() < MIN_SNAPSHOT_INTERVAL:
         if prev_score is not None and abs(score - prev_score) < 2:
             return
@@ -153,7 +246,6 @@ def save_vibe_snapshot(coin_id, symbol, price, score, label, change_24h, range_p
         pass
 
 def fill_pending_returns():
-    """Only runs every ~3.5 minutes and processes a small batch"""
     if not supabase:
         return
     
@@ -175,10 +267,8 @@ def fill_pending_returns():
             st.session_state.last_fill_time = now
             return
         
-        # Collect unique coin_ids
         coin_ids = list(set(r["coin_id"] for r in rows))
         
-        # One batch price request
         try:
             r = requests.get(
                 "https://api.coingecko.com/api/v3/simple/price",
@@ -464,7 +554,6 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
         if fg_value < 25: base -= 1.5
         elif fg_value > 75: base += 1.0
 
-    # Breakout boost
     if range_pos >= 87 and change_1h >= 0.6 and candle_quality > 0.15:
         base += 5
         reasons.append("Clear breakout in progress")
@@ -556,7 +645,6 @@ with ctx4:
 
 st.divider()
 
-# ========== LIGHT FILL ==========
 fill_pending_returns()
 
 # ========== TOP COINS ==========
@@ -574,7 +662,6 @@ for c in top_coins:
 
 btc_change = next((c.get("price_change_percentage_24h") or 0 for c in top_coins if c["id"] == "bitcoin"), 0)
 
-# ========== PRE-CALCULATE ==========
 vibe_data = []
 for name, cid, tick in COIN_ORDER:
     c = coin_map.get(cid)
@@ -670,7 +757,6 @@ col_time, _ = st.columns([1, 3])
 with col_time:
     timeframe = st.selectbox("Timeframe", ["Last 1 Day (30 min)", "Last 7 Days", "Last 30 Days"])
 
-# Load detailed data
 if st.session_state.search_coin:
     try:
         r = requests.get("https://api.coingecko.com/api/v3/coins/markets", headers=HEADERS,
@@ -714,7 +800,6 @@ else:
     low = c.get("low_24h", price)
     image_url = item["image_url"]
 
-# Alerts
 if st.session_state.last_score is not None:
     if score >= 70 and st.session_state.last_score < 70:
         st.toast(f"🚀 {tick} Vibe crossed 70!", icon="🚀")
@@ -736,7 +821,6 @@ c5.metric("vs BTC (24h)", f"{vs_btc:+.2f}%")
 st.markdown(f"**Vibe Score: {score}/100**")
 st.markdown(colored_progress(score, height=14), unsafe_allow_html=True)
 
-# Live performance summary
 perf = get_coin_performance(cid)
 if perf and perf.get("ready"):
     st.caption(f"Historical 1h win rate: **{perf['win_1h']}%** • Avg 1h return: **{perf['avg_1h']:+.2f}%** • n = {perf['n']}")
@@ -760,7 +844,6 @@ with st.expander("🤔 Why this score?"):
     for r in reasons:
         st.write(f"• {r}")
 
-# Share
 st.markdown("### 📤 Share this vibe")
 share_html = f"""
 <div style="background:linear-gradient(135deg,#0f0c29,#302b63,#24243e);border-radius:16px;padding:24px;color:white;font-family:Inter,sans-serif;max-width:420px;box-shadow:0 10px 30px rgba(0,0,0,0.3);">
@@ -788,7 +871,6 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# Chart
 st.divider()
 st.subheader(f"{name} • Chart")
 days = "1" if "1 Day" in timeframe else "7" if "7 Days" in timeframe else "30"
@@ -824,7 +906,6 @@ if isinstance(ohlc_data, list) and len(ohlc_data) > 0:
 else:
     st.info("Chart temporarily unavailable.")
 
-# ========== VIBE PERFORMANCE ==========
 st.divider()
 st.subheader("📊 Vibe Performance")
 st.caption("Historical forward returns by Vibe Score bucket • Only shows when enough data exists")
