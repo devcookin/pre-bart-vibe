@@ -493,34 +493,30 @@ st.divider()
 # ========== DETAILED VIEW ==========
 st.subheader("🎯 Detailed View")
 
-st.markdown("##### Search or select a coin")
-search_query = st.text_input("Type coin name or symbol", placeholder="e.g. Bitcoin, SOL, PEPE, WIF...", key="detail_search")
-search_results = search_coins(search_query) if search_query else []
+st.markdown("##### Search any coin")
 
-if search_results:
-    options = {f"{c['name']} ({c['symbol'].upper()})": c["id"] for c in search_results}
-    
-    # Store the selected option in session state so the button can reliably access it
-    if "search_choice" not in st.session_state:
-        st.session_state.search_choice = list(options.keys())[0]
-    
-    chosen_label = st.selectbox(
-        "Select from search results",
-        list(options.keys()),
-        key="search_select"
-    )
-    
-    # Keep the choice updated
-    st.session_state.search_choice = chosen_label
-    
-    if st.button("Load this vibe", type="primary", key="load_search"):
-        selected_id = options.get(st.session_state.search_choice)
-        if selected_id:
-            st.session_state.search_coin = selected_id
-            st.session_state.selected_coin = st.session_state.search_choice.split(" (")[0]
-            st.rerun()
+search_query = st.text_input("Type coin name or symbol", placeholder="e.g. Avalanche, SOL, PEPE, WIF...", key="detail_search")
 
-st.markdown("Or pick from current Top 20:")
+if search_query and len(search_query) >= 2:
+    search_results = search_coins(search_query)
+    
+    if search_results:
+        options = {f"{c['name']} ({c['symbol'].upper()})": c["id"] for c in search_results}
+        
+        with st.form(key="search_form"):
+            chosen_label = st.selectbox("Select from search results", list(options.keys()))
+            submitted = st.form_submit_button("Load this vibe", type="primary")
+            
+            if submitted:
+                st.session_state.search_coin = options[chosen_label]
+                st.session_state.selected_coin = chosen_label.split(" (")[0]
+                st.rerun()
+    else:
+        st.info("No results found. Try a different search.")
+
+st.markdown("---")
+st.markdown("**Or pick from current Top 20:**")
+
 selected = st.selectbox(
     "Quick select",
     [x[0] for x in COIN_ORDER],
@@ -536,7 +532,7 @@ col_time, _ = st.columns([1, 3])
 with col_time:
     timeframe = st.selectbox("Timeframe", ["Last 1 Day (30 min)", "Last 7 Days", "Last 30 Days"])
 
-# Load the actual data
+# ========== LOAD DATA ==========
 if st.session_state.search_coin:
     try:
         r = requests.get(
@@ -587,6 +583,7 @@ else:
     low = c.get("low_24h", price)
     image_url = item["image_url"]
 
+# Alerts
 if st.session_state.last_score is not None:
     if score >= 70 and st.session_state.last_score < 70:
         st.toast(f"🚀 {tick} Vibe crossed 70!", icon="🚀")
