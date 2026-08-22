@@ -102,6 +102,24 @@ st.markdown("""
         50% { opacity: 0.4; }
         100% { opacity: 1; }
     }
+
+    /* Compact side panel styling */
+    .side-card {
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 12px;
+        padding: 12px 14px;
+        margin-bottom: 12px;
+    }
+    .side-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 13px;
+        padding: 3px 0;
+        border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .side-row:last-child { border-bottom: none; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -120,6 +138,8 @@ if "last_snapshot_time" not in st.session_state:
     st.session_state.last_snapshot_time = {}
 if "last_fill_time" not in st.session_state:
     st.session_state.last_fill_time = None
+if "movers_tf" not in st.session_state:
+    st.session_state.movers_tf = "1h"
 
 # ========== LOCAL HISTORY ==========
 def load_history():
@@ -380,6 +400,52 @@ def search_coins(query):
     except:
         return []
 
+# ========== NEW: FUNDING + OI ==========
+@st.cache_data(ttl=45)
+def get_funding_rates():
+    """Binance USDT-M perpetual last funding rate (%)"""
+    wanted = {"BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT"}
+    rates = {}
+    try:
+        r = requests.get("https://fapi.binance.com/fapi/v1/premiumIndex", timeout=8)
+        if r.status_code == 200:
+            for item in r.json():
+                sym = item.get("symbol")
+                if sym in wanted:
+                    rate = float(item.get("lastFundingRate", 0)) * 100
+                    rates[sym.replace("USDT", "")] = rate
+    except:
+        pass
+    return rates
+
+@st.cache_data(ttl=60)
+def get_open_interest_delta():
+    """Binance OI value (USD) + approximate 24h change"""
+    symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT"]
+    results = {}
+    for sym in symbols:
+        try:
+            # Historical for ~24h change (1h period, last 25 bars)
+            r = requests.get(
+                "https://fapi.binance.com/futures/data/openInterestHist",
+                params={"symbol": sym, "period": "1h", "limit": 25},
+                timeout=6
+            )
+            hist = r.json() if r.status_code == 200 else []
+            if len(hist) >= 2:
+                latest = float(hist[-1].get("sumOpenInterestValue", 0))
+                older = float(hist[0].get("sumOpenInterestValue", 0))
+                change_usd = latest - older
+                change_pct = (change_usd / older * 100) if older > 0 else 0
+                results[sym.replace("USDT", "")] = {
+                    "oi_usd": latest,
+                    "change_usd": change_usd,
+                    "change_pct": change_pct
+                }
+        except:
+            continue
+    return results
+
 def analyze_candles(ohlc_data):
     if not isinstance(ohlc_data, list) or len(ohlc_data) < 4: return 0.0
     df = pd.DataFrame(ohlc_data[-8:], columns=["timestamp","open","high","low","close"])
@@ -604,38 +670,117 @@ for name, cid, tick in COIN_ORDER:
 
 vibe_data_sorted = sorted(vibe_data, key=lambda x: x["score"], reverse=True)
 
-# ========== CARDS ==========
-st.subheader("🌐 Multi-Coin Vibe Overview")
-st.caption("Live Top 30 by market cap • Sorted by current vibe score")
+# ========== MAIN + SIDE PANEL ==========
+main_col, side_col = st.columns([3.4, 1.15], gap="medium")
 
-col_filter, _ = st.columns([2, 4])
-with col_filter:
-    show_option = st.selectbox("Show", ["Top 5", "Top 10", "Top 15", "All"],
-        index=["Top 5","Top 10","Top 15","All"].index(st.session_state.show_count) if st.session_state.show_count in ["Top 5","Top 10","Top 15","All"] else 1)
-    st.session_state.show_count = show_option
+with main_col:
+    st.subheader("🌐 Multi-Coin Vibe Overview")
+    st.caption("Live Top 30 by market cap • Sorted by current vibe score")
 
-display_data = vibe_data_sorted[:5] if show_option=="Top 5" else vibe_data_sorted[:10] if show_option=="Top 10" else vibe_data_sorted[:15] if show_option=="Top 15" else vibe_data_sorted
-st.caption(f"Showing {len(display_data)} coins")
+    col_filter, _ = st.columns([2, 4])
+    with col_filter:
+        show_option = st.selectbox("Show", ["Top 5", "Top 10", "Top 15", "All"],
+            index=["Top 5","Top 10","Top 15","All"].index(st.session_state.show_count) if st.session_state.show_count in ["Top 5","Top 10","Top 15","All"] else 1)
+        st.session_state.show_count = show_option
 
-for row_start in range(0, len(display_data), 5):
-    cols = st.columns(5)
-    for i, item in enumerate(display_data[row_start:row_start+5]):
-        with cols[i]:
-            with st.container(border=True):
-                if item["image_url"]:
-                    st.image(item["image_url"], width=28)
-                else:
-                    st.markdown("<div style='height:28px;margin-bottom:4px;'></div>", unsafe_allow_html=True)
-                st.markdown(f"**{item['tick']}**")
-                price_str = f"${item['price']:,.0f}" if item["price"]>=1000 else f"${item['price']:,.2f}" if item["price"]>=1 else f"${item['price']:.4f}"
-                st.markdown(f"<div style='font-size:1.25rem;font-weight:600;height:30px;line-height:30px;overflow:hidden;'>{price_str}</div>", unsafe_allow_html=True)
-                st.caption(f"{item['ch24']:+.2f}% • Vibe {item['score']}")
-                st.markdown(colored_progress(item["score"], height=10), unsafe_allow_html=True)
-                st.markdown(f"""<div style="height:42px;min-height:42px;max-height:42px;font-size:13px;color:#888;line-height:1.3;overflow:hidden;margin-bottom:8px;">{item['meme']}</div>""", unsafe_allow_html=True)
-                if st.button("View", key=f"btn_{item['cid']}", use_container_width=True):
-                    st.session_state.selected_coin = item["name"]
-                    st.session_state.search_coin = None
-                    st.rerun()
+    display_data = vibe_data_sorted[:5] if show_option=="Top 5" else vibe_data_sorted[:10] if show_option=="Top 10" else vibe_data_sorted[:15] if show_option=="Top 15" else vibe_data_sorted
+    st.caption(f"Showing {len(display_data)} coins")
+
+    for row_start in range(0, len(display_data), 5):
+        cols = st.columns(5)
+        for i, item in enumerate(display_data[row_start:row_start+5]):
+            with cols[i]:
+                with st.container(border=True):
+                    if item["image_url"]:
+                        st.image(item["image_url"], width=28)
+                    else:
+                        st.markdown("<div style='height:28px;margin-bottom:4px;'></div>", unsafe_allow_html=True)
+                    st.markdown(f"**{item['tick']}**")
+                    price_str = f"${item['price']:,.0f}" if item["price"]>=1000 else f"${item['price']:,.2f}" if item["price"]>=1 else f"${item['price']:.4f}"
+                    st.markdown(f"<div style='font-size:1.25rem;font-weight:600;height:30px;line-height:30px;overflow:hidden;'>{price_str}</div>", unsafe_allow_html=True)
+                    st.caption(f"{item['ch24']:+.2f}% • Vibe {item['score']}")
+                    st.markdown(colored_progress(item["score"], height=10), unsafe_allow_html=True)
+                    st.markdown(f"""<div style="height:42px;min-height:42px;max-height:42px;font-size:13px;color:#888;line-height:1.3;overflow:hidden;margin-bottom:8px;">{item['meme']}</div>""", unsafe_allow_html=True)
+                    if st.button("View", key=f"btn_{item['cid']}", use_container_width=True):
+                        st.session_state.selected_coin = item["name"]
+                        st.session_state.search_coin = None
+                        st.rerun()
+
+with side_col:
+    st.markdown("### ⚡ Market Pulse")
+
+    # ----- TOP MOVERS -----
+    with st.container(border=True):
+        st.markdown("**🔥 Top Movers**")
+        tf = st.radio("Timeframe", ["1h", "24h"], horizontal=True, key="movers_tf_radio", label_visibility="collapsed")
+        st.session_state.movers_tf = tf
+
+        key = "ch1" if tf == "1h" else "ch24"
+        movers = sorted(vibe_data, key=lambda x: x[key], reverse=True)[:6]
+
+        for m in movers:
+            ch = m[key]
+            color = "#00c853" if ch >= 0 else "#ff5252"
+            st.markdown(
+                f"<div style='display:flex;justify-content:space-between;font-size:13px;padding:2px 0;'>"
+                f"<span><b>{m['tick']}</b></span>"
+                f"<span style='color:{color};font-weight:600'>{ch:+.2f}%</span>"
+                f"</div>",
+                unsafe_allow_html=True
+            )
+
+    st.write("")
+
+    # ----- FUNDING RATES -----
+    with st.container(border=True):
+        st.markdown("**💰 Funding Rates**")
+        st.caption("Binance Perp • last rate")
+        funding = get_funding_rates()
+        if funding:
+            for sym in ["BTC", "ETH", "SOL", "BNB", "XRP"]:
+                if sym in funding:
+                    rate = funding[sym]
+                    color = "#00c853" if rate >= 0 else "#ff5252"
+                    st.markdown(
+                        f"<div style='display:flex;justify-content:space-between;font-size:13px;padding:2px 0;'>"
+                        f"<span>{sym}</span>"
+                        f"<span style='color:{color};font-weight:600'>{rate:+.4f}%</span>"
+                        f"</div>",
+                        unsafe_allow_html=True
+                    )
+        else:
+            st.caption("Loading…")
+
+    st.write("")
+
+    # ----- OPEN INTEREST Δ -----
+    with st.container(border=True):
+        st.markdown("**📊 Open Interest Δ 24h**")
+        st.caption("Binance • approx change")
+        oi_data = get_open_interest_delta()
+        if oi_data:
+            for sym in ["BTC", "ETH", "SOL", "BNB"]:
+                if sym in oi_data:
+                    d = oi_data[sym]
+                    ch_pct = d["change_pct"]
+                    ch_usd = d["change_usd"]
+                    color = "#00c853" if ch_pct >= 0 else "#ff5252"
+                    # Format USD nicely
+                    if abs(ch_usd) >= 1e9:
+                        usd_str = f"{ch_usd/1e9:+.2f}B"
+                    elif abs(ch_usd) >= 1e6:
+                        usd_str = f"{ch_usd/1e6:+.0f}M"
+                    else:
+                        usd_str = f"{ch_usd/1e3:+.0f}K"
+                    st.markdown(
+                        f"<div style='display:flex;justify-content:space-between;font-size:13px;padding:2px 0;'>"
+                        f"<span>{sym}</span>"
+                        f"<span style='color:{color};font-weight:600'>{usd_str} ({ch_pct:+.1f}%)</span>"
+                        f"</div>",
+                        unsafe_allow_html=True
+                    )
+        else:
+            st.caption("Loading…")
 
 st.divider()
 
