@@ -964,22 +964,14 @@ with st.expander("🤔 Why this score?"):
     for r in reasons: st.write(f"• {r}")
 
 st.markdown("### 📤 Share this vibe")
-share_html = f"""
-<div style="background:linear-gradient(135deg,#0f0c29,#302b63,#24243e);border-radius:16px;padding:24px;color:white;font-family:Inter,sans-serif;max-width:420px;box-shadow:0 10px 30px rgba(0,0,0,0.3);">
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
-        <img src="{image_url}" width="36" style="border-radius:50%;">
-        <div><div style="font-weight:700;font-size:1.2rem;">{tick}</div>
-        <div style="opacity:0.7;font-size:0.85rem;">{name}</div></div>
-    </div>
-    <div style="font-size:2.2rem;font-weight:700;margin:8px 0;">{score}/100</div>
-    <div style="font-size:1.05rem;margin-bottom:12px;">{meme}</div>
-    <div style="opacity:0.8;font-size:0.9rem;">{ch24:+.2f}% 24h • Range {range_pos:.0f}%</div>
-    <div style="margin-top:16px;font-size:0.8rem;opacity:0.6;">Pre-Bart Vibe Dashboard • prebartvibes.streamlit.app</div>
-</div>
-"""
-st.markdown(share_html, unsafe_allow_html=True)
-st.caption("Screenshot the card above or copy the text below")
-st.code(f"{tick} Vibe Score: {score}/100 – {meme}\n{ch24:+.2f}% 24h | Range {range_pos:.0f}%\nhttps://prebartvibes.streamlit.app/", language=None)
+st.caption("Copy the text below to share")
+
+st.code(
+    f"{tick} Vibe Score: {score}/100 – {meme}\n"
+    f"{ch24:+.2f}% 24h | Range {range_pos:.0f}%\n"
+    f"https://prebartvibes.xyz",
+    language=None
+)
 
 st.markdown(f"""
 <div style="display:flex;flex-wrap:wrap;gap:10px;margin:12px 0;">
