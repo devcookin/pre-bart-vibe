@@ -102,24 +102,6 @@ st.markdown("""
         50% { opacity: 0.4; }
         100% { opacity: 1; }
     }
-
-    /* Compact side panel styling */
-    .side-card {
-        background: rgba(255,255,255,0.03);
-        border: 1px solid rgba(255,255,255,0.08);
-        border-radius: 12px;
-        padding: 12px 14px;
-        margin-bottom: 12px;
-    }
-    .side-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        font-size: 13px;
-        padding: 3px 0;
-        border-bottom: 1px solid rgba(255,255,255,0.04);
-    }
-    .side-row:last-child { border-bottom: none; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -400,49 +382,84 @@ def search_coins(query):
     except:
         return []
 
-# ========== NEW: FUNDING + OI ==========
+# ========== FIXED: FUNDING + OI (Bybit - reliable) ==========
 @st.cache_data(ttl=45)
 def get_funding_rates():
-    """Binance USDT-M perpetual last funding rate (%)"""
-    wanted = {"BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT"}
+    """Bybit linear perpetual funding rates (%)"""
+    symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT"]
     rates = {}
     try:
-        r = requests.get("https://fapi.binance.com/fapi/v1/premiumIndex", timeout=8)
-        if r.status_code == 200:
-            for item in r.json():
-                sym = item.get("symbol")
-                if sym in wanted:
-                    rate = float(item.get("lastFundingRate", 0)) * 100
+        for sym in symbols:
+            r = requests.get(
+                "https://api.bybit.com/v5/market/tickers",
+                params={"category": "linear", "symbol": sym},
+                timeout=6,
+                headers={"User-Agent": "Mozilla/5.0"}
+            )
+            if r.status_code == 200:
+                data = r.json().get("result", {}).get("list", [])
+                if data:
+                    rate = float(data[0].get("fundingRate", 0)) * 100
                     rates[sym.replace("USDT", "")] = rate
-    except:
+    except Exception:
         pass
     return rates
 
 @st.cache_data(ttl=60)
 def get_open_interest_delta():
-    """Binance OI value (USD) + approximate 24h change"""
+    """Bybit current OI (USD) + approximate 24h change"""
     symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT"]
     results = {}
     for sym in symbols:
         try:
-            # Historical for ~24h change (1h period, last 25 bars)
+            # Current ticker (has openInterestValue)
             r = requests.get(
-                "https://fapi.binance.com/futures/data/openInterestHist",
-                params={"symbol": sym, "period": "1h", "limit": 25},
-                timeout=6
+                "https://api.bybit.com/v5/market/tickers",
+                params={"category": "linear", "symbol": sym},
+                timeout=6,
+                headers={"User-Agent": "Mozilla/5.0"}
             )
-            hist = r.json() if r.status_code == 200 else []
-            if len(hist) >= 2:
-                latest = float(hist[-1].get("sumOpenInterestValue", 0))
-                older = float(hist[0].get("sumOpenInterestValue", 0))
-                change_usd = latest - older
-                change_pct = (change_usd / older * 100) if older > 0 else 0
-                results[sym.replace("USDT", "")] = {
-                    "oi_usd": latest,
-                    "change_usd": change_usd,
-                    "change_pct": change_pct
-                }
-        except:
+            current_oi_usd = 0.0
+            if r.status_code == 200:
+                data = r.json().get("result", {}).get("list", [])
+                if data:
+                    current_oi_usd = float(data[0].get("openInterestValue", 0) or 0)
+
+            # History for change
+            r2 = requests.get(
+                "https://api.bybit.com/v5/market/open-interest",
+                params={
+                    "category": "linear",
+                    "symbol": sym,
+                    "intervalTime": "1h",
+                    "limit": 25
+                },
+                timeout=6,
+                headers={"User-Agent": "Mozilla/5.0"}
+            )
+            hist = []
+            if r2.status_code == 200:
+                hist = r2.json().get("result", {}).get("list", [])
+
+            change_usd = 0.0
+            change_pct = 0.0
+            if len(hist) >= 2 and current_oi_usd > 0:
+                # Bybit returns newest first
+                oldest_oi = float(hist[-1].get("openInterest", 0) or 0)
+                newest_oi = float(hist[0].get("openInterest", 0) or 0)
+                if oldest_oi > 0:
+                    # Approximate USD change using ratio
+                    ratio = current_oi_usd / max(newest_oi, 1e-9)
+                    old_usd_approx = oldest_oi * ratio
+                    change_usd = current_oi_usd - old_usd_approx
+                    change_pct = (change_usd / current_oi_usd) * 100
+
+            results[sym.replace("USDT", "")] = {
+                "oi_usd": current_oi_usd,
+                "change_usd": change_usd,
+                "change_pct": change_pct
+            }
+        except Exception:
             continue
     return results
 
@@ -734,7 +751,7 @@ with side_col:
     # ----- FUNDING RATES -----
     with st.container(border=True):
         st.markdown("**💰 Funding Rates**")
-        st.caption("Binance Perp • last rate")
+        st.caption("Bybit Perp • last rate")
         funding = get_funding_rates()
         if funding:
             for sym in ["BTC", "ETH", "SOL", "BNB", "XRP"]:
@@ -756,7 +773,7 @@ with side_col:
     # ----- OPEN INTEREST Δ -----
     with st.container(border=True):
         st.markdown("**📊 Open Interest Δ 24h**")
-        st.caption("Binance • approx change")
+        st.caption("Bybit • approx change")
         oi_data = get_open_interest_delta()
         if oi_data:
             for sym in ["BTC", "ETH", "SOL", "BNB"]:
@@ -765,7 +782,6 @@ with side_col:
                     ch_pct = d["change_pct"]
                     ch_usd = d["change_usd"]
                     color = "#00c853" if ch_pct >= 0 else "#ff5252"
-                    # Format USD nicely
                     if abs(ch_usd) >= 1e9:
                         usd_str = f"{ch_usd/1e9:+.2f}B"
                     elif abs(ch_usd) >= 1e6:
