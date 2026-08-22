@@ -10,8 +10,6 @@ import os
 import uuid
 from supabase import create_client, Client
 import streamlit_authenticator as stauth
-import yaml
-from yaml.loader import SafeLoader
 
 try:
     from streamlit_autorefresh import st_autorefresh
@@ -68,20 +66,18 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ========== AUTHENTICATION ==========
-# Simple credentials – change these!
-# You can later move this to st.secrets or a Supabase table
 config = {
     "credentials": {
         "usernames": {
             "prebart": {
                 "email": "prebart@example.com",
                 "name": "Pre-Bart",
-                "password": "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW"  # password = "prebart123"
+                "password": "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW"  # password = prebart123
             },
             "demo": {
                 "email": "demo@example.com",
                 "name": "Demo User",
-                "password": "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW"  # password = "prebart123"
+                "password": "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW"  # password = prebart123
             }
         }
     },
@@ -102,20 +98,23 @@ authenticator = stauth.Authenticate(
     config["cookie"]["expiry_days"]
 )
 
-# Login widget
-name, authentication_status, username = authenticator.login("Login", "main")
+# Login (fixed for latest streamlit-authenticator)
+authenticator.login(location='main')
 
-if authentication_status is False:
+if st.session_state.get("authentication_status") is False:
     st.error("Username / password is incorrect")
     st.stop()
-elif authentication_status is None:
+elif st.session_state.get("authentication_status") is None:
     st.warning("Please enter your username and password")
     st.stop()
 
 # ===== SUCCESSFUL LOGIN =====
-USER_ID = username          # ← this is now the stable per-user ID
+name = st.session_state["name"]
+username = st.session_state["username"]
+USER_ID = username
+
 st.sidebar.success(f"Logged in as **{name}**")
-authenticator.logout("Logout", "sidebar")
+authenticator.logout(button_name="Logout", location="sidebar")
 
 # ========== SUPABASE WATCHLIST ==========
 def load_watchlist():
