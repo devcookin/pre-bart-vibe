@@ -74,12 +74,17 @@ st.markdown("""
         color: #f0f0f0 !important;
     }
     
-    /* Metrics */
+    /* Metrics - equal height */
     .stMetric {
         background-color: #1a1d24;
         border-radius: 12px;
         padding: 12px 16px;
         border: 1px solid #2a2d35;
+        min-height: 110px !important;
+        height: 110px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: center !important;
     }
     
     div[data-testid="stMetricValue"] {
