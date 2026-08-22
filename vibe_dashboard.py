@@ -63,51 +63,9 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ========== OPTIONAL GOOGLE LOGIN ==========
-is_logged_in = False
-USER_ID = None
-user_name = None
-
-try:
-    is_logged_in = st.user.is_logged_in
-    if is_logged_in:
-        user_name = st.user.get("name") or st.user.get("email") or "User"
-        USER_ID = st.user.get("email") or st.user.get("sub")
-except:
-    pass
-
-# ========== SUPABASE WATCHLIST (only when logged in) ==========
-def load_watchlist():
-    if not supabase or not USER_ID:
-        return []
-    try:
-        res = supabase.table("user_watchlists")\
-            .select("watchlist")\
-            .eq("user_id", USER_ID)\
-            .maybe_single()\
-            .execute()
-        if res.data and isinstance(res.data.get("watchlist"), list):
-            return res.data["watchlist"]
-    except:
-        pass
-    return []
-
-def save_watchlist():
-    if not supabase or not USER_ID:
-        return
-    try:
-        supabase.table("user_watchlists").upsert({
-            "user_id": USER_ID,
-            "watchlist": st.session_state.watchlist,
-            "updated_at": datetime.now(timezone.utc).isoformat()
-        }).execute()
-    except:
-        pass
-
-if "watchlist" not in st.session_state:
-    st.session_state.watchlist = load_watchlist() if USER_ID else []
-
 # ========== SESSION STATE ==========
+if "watchlist" not in st.session_state:
+    st.session_state.watchlist = []
 if "selected_coin" not in st.session_state:
     st.session_state.selected_coin = "Bitcoin"
 if "last_refresh" not in st.session_state:
@@ -563,7 +521,7 @@ def fetch_single_coin_vibe(cid, btc_change, fg_value):
         return None
 
 # ========== HEADER ==========
-col_title, col_auth = st.columns([6, 1.4])
+col_title, col_refresh = st.columns([6, 1])
 with col_title:
     st.markdown("""
     <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 6px;">
@@ -577,21 +535,15 @@ with col_title:
         Spot strength, catch weakness, and stay ahead of the noise — all in one clean number.
     </div>
     """, unsafe_allow_html=True)
-
-with col_auth:
+with col_refresh:
     st.write("")
     st.write("")
-    if is_logged_in:
-        st.markdown(f"**👤 {user_name}**")
-        if st.button("Logout", use_container_width=True):
-            st.logout()
-            st.rerun()
-    else:
-        if st.button("🔐 Login with Google", use_container_width=True, type="primary"):
-            st.login()
+    if st.button("🔄 Refresh Now", use_container_width=True):
+        st.cache_data.clear()
+        st.session_state.last_refresh = datetime.now()
+        st.rerun()
 
-st.caption(f"Last refresh: {st.session_state.last_refresh.strftime('%H:%M:%S')}  •  Model: {MODEL_VERSION}" + 
-           (f"  •  Logged in as {USER_ID}" if is_logged_in else "  •  Viewing as Guest"))
+st.caption(f"Last refresh: {st.session_state.last_refresh.strftime('%H:%M:%S')}  •  Model: {MODEL_VERSION}")
 
 # ========== MARKET CONTEXT ==========
 fg_value, fg_label = get_fear_greed()
@@ -707,10 +659,7 @@ with main_col:
     elif filter_opt == "Falling":
         filtered = [v for v in filtered if v.get("prev_score") is not None and v["score"] < v["prev_score"]]
     elif filter_opt == "Watchlist Only":
-        if is_logged_in:
-            filtered = [v for v in filtered if v["cid"] in st.session_state.watchlist]
-        else:
-            filtered = []
+        filtered = [v for v in filtered if v["cid"] in st.session_state.watchlist]
 
     if show_option == "Top 5":
         display_data = filtered[:5]
@@ -723,8 +672,8 @@ with main_col:
 
     st.caption(f"Showing {len(display_data)} of {len(filtered)} coins")
 
-    # ===== WATCHLIST - ONLY WHEN LOGGED IN =====
-    if is_logged_in and st.session_state.watchlist:
+    # ===== WATCHLIST =====
+    if st.session_state.watchlist:
         st.markdown("##### ⭐ Your Watchlist")
         watch_items = []
         for cid in st.session_state.watchlist:
@@ -778,11 +727,8 @@ with main_col:
                         
                         if st.button("Unpin", key=f"unpin_{item['cid']}", use_container_width=True):
                             st.session_state.watchlist.remove(item["cid"])
-                            save_watchlist()
                             st.rerun()
         st.divider()
-    elif not is_logged_in:
-        st.info("🔐 **Login with Google** (top right) to save your personal Watchlist.")
 
     # ===== MAIN GRID =====
     if not display_data:
@@ -826,18 +772,14 @@ with main_col:
                                 st.session_state.search_coin = None
                                 st.rerun()
                         with b2:
-                            if is_logged_in:
-                                is_watched = item["cid"] in st.session_state.watchlist
-                                label = "★" if is_watched else "☆"
-                                if st.button(label, key=f"watch_{item['cid']}", use_container_width=True):
-                                    if is_watched:
-                                        st.session_state.watchlist.remove(item["cid"])
-                                    else:
-                                        st.session_state.watchlist.append(item["cid"])
-                                    save_watchlist()
-                                    st.rerun()
-                            else:
-                                st.button("☆", key=f"watch_guest_{item['cid']}", use_container_width=True, disabled=True)
+                            is_watched = item["cid"] in st.session_state.watchlist
+                            label = "★" if is_watched else "☆"
+                            if st.button(label, key=f"watch_{item['cid']}", use_container_width=True):
+                                if is_watched:
+                                    st.session_state.watchlist.remove(item["cid"])
+                                else:
+                                    st.session_state.watchlist.append(item["cid"])
+                                st.rerun()
 
 with side_col:
     st.markdown("### ⚡ Market Pulse")
@@ -971,17 +913,13 @@ arrow = get_score_arrow(cid, score)
 st.markdown(f"**Vibe Score: {score}/100{arrow}**", unsafe_allow_html=True)
 st.markdown(colored_progress(score, height=14), unsafe_allow_html=True)
 
-if is_logged_in:
-    is_watched = cid in st.session_state.watchlist
-    if st.button("★ Remove from Watchlist" if is_watched else "☆ Add to Watchlist", key="detail_watch"):
-        if is_watched:
-            st.session_state.watchlist.remove(cid)
-        else:
-            st.session_state.watchlist.append(cid)
-        save_watchlist()
-        st.rerun()
-else:
-    st.button("☆ Login to save to Watchlist", key="detail_watch_guest", disabled=True)
+is_watched = cid in st.session_state.watchlist
+if st.button("★ Remove from Watchlist" if is_watched else "☆ Add to Watchlist", key="detail_watch"):
+    if is_watched:
+        st.session_state.watchlist.remove(cid)
+    else:
+        st.session_state.watchlist.append(cid)
+    st.rerun()
 
 perf = get_coin_performance(cid)
 if perf and perf.get("ready"):
