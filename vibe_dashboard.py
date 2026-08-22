@@ -1065,14 +1065,14 @@ if bucket_stats:
             return ""
         try:
             num = float(str(val).replace("%", ""))
-            if num >= 80:
+            if num >= 85:
                 return "background-color: #1b5e20; color: white; font-weight: 600"
-            elif num >= 65:
+            elif num >= 70:
                 return "background-color: #2e7d32; color: white"
-            elif num <= 45:
-                return "background-color: #b71c1c; color: white"
-            elif num <= 55:
-                return "background-color: #e65100; color: white"
+            elif num >= 55:
+                return "background-color: #f9a825; color: black"
+            else:
+                return "background-color: #c62828; color: white"
         except:
             pass
         return ""
@@ -1082,14 +1082,16 @@ if bucket_stats:
             return ""
         try:
             num = float(str(val).replace("%", "").replace("+", ""))
-            if num >= 3:
+            if num >= 4:
                 return "background-color: #1b5e20; color: white; font-weight: 600"
-            elif num >= 1:
+            elif num >= 1.5:
                 return "background-color: #2e7d32; color: white"
-            elif num <= -1:
-                return "background-color: #b71c1c; color: white"
-            elif num < 0:
-                return "background-color: #e65100; color: white"
+            elif num >= 0:
+                return "background-color: #f9a825; color: black"
+            elif num > -1.5:
+                return "background-color: #ef6c00; color: white"
+            else:
+                return "background-color: #c62828; color: white"
         except:
             pass
         return ""
@@ -1103,8 +1105,12 @@ if bucket_stats:
                 return "background-color: #1b5e20; color: white; font-weight: 700"
             elif num >= 2:
                 return "background-color: #2e7d32; color: white; font-weight: 600"
-            elif num <= -2:
-                return "background-color: #b71c1c; color: white"
+            elif num >= 0:
+                return "background-color: #f9a825; color: black"
+            elif num > -2:
+                return "background-color: #ef6c00; color: white"
+            else:
+                return "background-color: #c62828; color: white"
         except:
             pass
         return ""
