@@ -44,7 +44,7 @@ st.set_page_config(
 
 # ========== THEME STATE ==========
 if "theme" not in st.session_state:
-    st.session_state.theme = "dark"   # default
+    st.session_state.theme = "dark"
 
 # ========== CSS ==========
 dark_css = """
@@ -107,14 +107,12 @@ dark_css = """
     div[data-testid="stVerticalBlock"] > div { gap: 0.55rem !important; }
     hr { margin: 0.7rem 0 !important; border-color: #2a2b35; }
     
-    /* Cards */
     div[data-testid="stVerticalBlockBorderWrapper"] {
         background-color: #16181d;
         border: 1px solid #2a2b35 !important;
         border-radius: 12px;
     }
     
-    /* Inputs */
     .stTextInput > div > div > input,
     .stSelectbox > div > div {
         background-color: #1a1d24 !important;
@@ -122,7 +120,6 @@ dark_css = """
         border-color: #3a3b45 !important;
     }
     
-    /* Code block */
     .stCodeBlock {
         background-color: #1a1d24 !important;
     }
@@ -140,11 +137,14 @@ light_css = """
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
     
-    html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+    html, body, [class*="css"] { 
+        font-family: 'Inter', sans-serif; 
+        color: #1a1a1a !important;
+    }
     
     .stApp {
-        background-color: #ffffff;
-        color: #1a1a1a;
+        background-color: #ffffff !important;
+        color: #1a1a1a !important;
     }
     
     .block-container {
@@ -155,25 +155,51 @@ light_css = """
         padding-right: 1.3rem !important;
     }
     
-    h1 { font-weight: 700 !important; letter-spacing: -0.5px; }
-    
-    .stMetric {
-        background-color: #f8f9fa;
-        border-radius: 12px;
-        padding: 8px 12px;
+    /* Force all text to be dark */
+    h1, h2, h3, h4, h5, h6, p, span, div, label, 
+    .stMarkdown, .stCaption, .stText, 
+    div[data-testid="stMarkdownContainer"] {
+        color: #1a1a1a !important;
     }
     
-    div[data-testid="stMetricValue"] { font-size: 1.3rem !important; font-weight: 600; }
+    /* Metrics */
+    .stMetric {
+        background-color: #f8f9fa !important;
+        border-radius: 12px;
+        padding: 8px 12px;
+        border: 1px solid #e9ecef;
+    }
+    div[data-testid="stMetricValue"] { 
+        font-size: 1.3rem !important; 
+        font-weight: 600; 
+        color: #1a1a1a !important; 
+    }
+    div[data-testid="stMetricLabel"] { 
+        color: #6c757d !important; 
+    }
+    div[data-testid="stMetricDelta"] {
+        color: #1a1a1a !important;
+    }
     
+    /* Buttons */
     div.stButton > button {
         width: 100%;
         border-radius: 10px;
         font-weight: 600;
+        background-color: #f1f3f5 !important;
+        color: #1a1a1a !important;
+        border: 1px solid #dee2e6 !important;
+    }
+    div.stButton > button:hover {
+        background-color: #e9ecef !important;
+        border-color: #ced4da !important;
     }
     
+    /* Live badge */
     .live-badge {
         display: inline-flex; align-items: center; gap: 6px;
-        background: rgba(0, 200, 83, 0.12); color: #00c853;
+        background: rgba(0, 200, 83, 0.12); 
+        color: #00c853 !important;
         font-size: 12px; font-weight: 600; padding: 3px 10px;
         border-radius: 20px; margin-left: 10px;
     }
@@ -183,8 +209,42 @@ light_css = """
     }
     @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
     
-    div[data-testid="stVerticalBlock"] > div { gap: 0.55rem !important; }
-    hr { margin: 0.7rem 0 !important; }
+    /* Cards / containers */
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        background-color: #ffffff !important;
+        border: 1px solid #e9ecef !important;
+        border-radius: 12px;
+    }
+    
+    /* Inputs & selectboxes */
+    .stTextInput > div > div > input,
+    .stSelectbox > div > div,
+    .stSelectbox [data-baseweb="select"] {
+        background-color: #ffffff !important;
+        color: #1a1a1a !important;
+        border-color: #ced4da !important;
+    }
+    
+    /* Code block */
+    .stCodeBlock, pre {
+        background-color: #f8f9fa !important;
+        color: #1a1a1a !important;
+    }
+    
+    /* Dividers */
+    hr {
+        margin: 0.7rem 0 !important;
+        border-color: #e9ecef !important;
+    }
+    
+    /* Captions */
+    .stCaption, small {
+        color: #6c757d !important;
+    }
+    
+    div[data-testid="stVerticalBlock"] > div { 
+        gap: 0.55rem !important; 
+    }
     
     @media (max-width: 768px) {
         .block-container {
@@ -687,7 +747,6 @@ with col_title:
 
 with col_theme:
     st.write("")
-    # Mobile-friendly theme toggle
     if st.button("🌙 Dark" if st.session_state.theme == "light" else "☀️ Light", 
                  use_container_width=True, key="theme_toggle"):
         st.session_state.theme = "light" if st.session_state.theme == "dark" else "dark"
@@ -1200,9 +1259,14 @@ if isinstance(ohlc_data, list) and len(ohlc_data) > 0:
     if has_volume:
         colors = ["#00c853" if r["close"] >= r["open"] else "#ff5252" for _, r in df.iterrows()]
         fig.add_trace(go.Bar(x=df["time"], y=df["volume"], marker_color=colors, opacity=0.65, name="Volume"), row=2, col=1)
-    fig.update_layout(height=480, template="plotly_white" if st.session_state.theme == "light" else "plotly_dark",
-                      margin=dict(l=0,r=0,t=15,b=0),
-                      xaxis_rangeslider_visible=False, showlegend=False, hovermode="x unified")
+    fig.update_layout(
+        height=480, 
+        template="plotly_white" if st.session_state.theme == "light" else "plotly_dark",
+        margin=dict(l=0,r=0,t=15,b=0),
+        xaxis_rangeslider_visible=False, 
+        showlegend=False, 
+        hovermode="x unified"
+    )
     st.plotly_chart(fig, use_container_width=True)
 else:
     st.info("Chart temporarily unavailable.")
