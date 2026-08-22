@@ -109,7 +109,7 @@ if "last_refresh" not in st.session_state:
 if "search_coin" not in st.session_state:
     st.session_state.search_coin = None
 if "show_count" not in st.session_state:
-    st.session_state.show_count = "All"
+    st.session_state.show_count = "Top 5"          # ← Default is now Top 5
 if "last_snapshot_time" not in st.session_state:
     st.session_state.last_snapshot_time = {}
 if "last_fill_time" not in st.session_state:
@@ -517,7 +517,7 @@ def get_score_arrow(cid, current_score):
     return ""
 
 def fetch_single_coin_vibe(cid, btc_change, fg_value):
-    """Fetch live data for a coin that is not in Top 30 (used by Watchlist)"""
+    """Fetch live data for coins outside Top 30 (used by Watchlist)"""
     try:
         r = requests.get("https://api.coingecko.com/api/v3/coins/markets", headers=HEADERS,
             params={"vs_currency":"usd","ids":cid,"price_change_percentage":"1h,24h"}, timeout=8)
@@ -666,8 +666,12 @@ with main_col:
         )
         st.session_state.quick_filter = filter_opt
     with f2:
-        show_option = st.selectbox("Show", ["Top 5", "Top 10", "Top 15", "All"],
-            index=["Top 5","Top 10","Top 15","All"].index(st.session_state.show_count) if st.session_state.show_count in ["Top 5","Top 10","Top 15","All"] else 3)
+        show_option = st.selectbox(
+            "Show", 
+            ["Top 5", "Top 10", "Top 15", "All"],
+            index=["Top 5","Top 10","Top 15","All"].index(st.session_state.show_count) 
+            if st.session_state.show_count in ["Top 5","Top 10","Top 15","All"] else 0
+        )
         st.session_state.show_count = show_option
 
     filtered = vibe_data_sorted.copy()
@@ -695,14 +699,13 @@ with main_col:
 
     st.caption(f"Showing {len(display_data)} of {len(filtered)} coins")
 
-    # ===== WATCHLIST (now supports any coin) =====
+    # ===== ENHANCED WATCHLIST =====
     if st.session_state.watchlist:
         st.markdown("##### ⭐ Your Watchlist")
         watch_items = []
         for cid in st.session_state.watchlist:
             item = next((v for v in vibe_data if v["cid"] == cid), None)
             if item is None:
-                # Coin is outside Top 30 → fetch live
                 item = fetch_single_coin_vibe(cid, btc_change, fg_value)
             if item:
                 watch_items.append(item)
@@ -716,15 +719,33 @@ with main_col:
                     with st.container(border=True):
                         if item["image_url"]:
                             st.image(item["image_url"], width=28)
-                        arrow = get_score_arrow(item["cid"], item["score"])
+                        
                         st.markdown(f"**{item['tick']}**")
-                        st.markdown(f"<div style='font-size:1.1rem;font-weight:600;'>Vibe {item['score']}{arrow}</div>", unsafe_allow_html=True)
+                        
+                        # Price
+                        price_str = f"${item['price']:,.0f}" if item["price"] >= 1000 else f"${item['price']:,.2f}" if item["price"] >= 1 else f"${item['price']:.4f}"
+                        st.markdown(f"<div style='font-size:1.15rem;font-weight:600;'>{price_str}</div>", unsafe_allow_html=True)
+                        
+                        # 24h + Vibe with arrow
+                        arrow = get_score_arrow(item["cid"], item["score"])
+                        ch_color = "#00c853" if item["ch24"] >= 0 else "#ff5252"
+                        st.markdown(
+                            f"<div style='font-size:13px;margin:4px 0;'>"
+                            f"<span style='color:{ch_color}'>{item['ch24']:+.2f}%</span> • "
+                            f"Vibe {item['score']}{arrow}"
+                            f"</div>",
+                            unsafe_allow_html=True
+                        )
+                        
+                        # Progress bar
+                        st.markdown(colored_progress(item["score"], height=8), unsafe_allow_html=True)
+                        
                         if st.button("Unpin", key=f"unpin_{item['cid']}", use_container_width=True):
                             st.session_state.watchlist.remove(item["cid"])
                             save_watchlist_to_storage()
                             st.rerun()
         else:
-            st.caption("Watchlist coins are loading…")
+            st.caption("Loading watchlist…")
         st.divider()
 
     # Main grid
@@ -995,7 +1016,7 @@ else:
 
 st.divider()
 st.subheader("📊 Vibe Performance (Global)")
-st.caption("Historical forward returns across **all tracked coins**. This shows how the Vibe Score model has performed overall — not specific to the coin you are viewing.")
+st.caption("Historical forward returns across **all tracked coins**.")
 
 bucket_stats = get_bucket_stats(min_n=5)
 if bucket_stats:
@@ -1016,6 +1037,5 @@ if bucket_stats:
                 "Win 24h":f"{s['win_24h']}%" if s['win_24h'] is not None else "—",
             })
     st.dataframe(pd.DataFrame(table_data), use_container_width=True, hide_index=True)
-    st.caption("Win rate = % of times the future return was positive.")
 else:
-    st.info("Collecting performance data… Check back later once more snapshots have matured.")
+    st.info("Collecting performance data…")
