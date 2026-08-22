@@ -9,8 +9,9 @@ import json
 import os
 import uuid
 from supabase import create_client, Client
-import streamlit.components.v1 as components
-from extra_streamlit_components import CookieManager
+import streamlit_authenticator as stauth
+import yaml
+from yaml.loader import SafeLoader
 
 try:
     from streamlit_autorefresh import st_autorefresh
@@ -66,28 +67,55 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ========== PER-BROWSER USER ID (CookieManager - reliable) ==========
-cookie_manager = CookieManager(key="prebart_cookies")
+# ========== AUTHENTICATION ==========
+# Simple credentials – change these!
+# You can later move this to st.secrets or a Supabase table
+config = {
+    "credentials": {
+        "usernames": {
+            "prebart": {
+                "email": "prebart@example.com",
+                "name": "Pre-Bart",
+                "password": "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW"  # password = "prebart123"
+            },
+            "demo": {
+                "email": "demo@example.com",
+                "name": "Demo User",
+                "password": "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW"  # password = "prebart123"
+            }
+        }
+    },
+    "cookie": {
+        "expiry_days": 30,
+        "key": "prebart_vibe_auth_key_change_me",
+        "name": "prebart_vibe_cookie"
+    },
+    "preauthorized": {
+        "emails": []
+    }
+}
 
-def get_or_create_user_id():
-    if "persistent_user_id" in st.session_state:
-        return st.session_state.persistent_user_id
+authenticator = stauth.Authenticate(
+    config["credentials"],
+    config["cookie"]["name"],
+    config["cookie"]["key"],
+    config["cookie"]["expiry_days"]
+)
 
-    user_id = cookie_manager.get("prebart_vibe_user_id")
+# Login widget
+name, authentication_status, username = authenticator.login("Login", "main")
 
-    if user_id is None:
-        user_id = str(uuid.uuid4())
-        cookie_manager.set(
-            cookie="prebart_vibe_user_id",
-            val=user_id,
-            expires_at=datetime.now(timezone.utc) + timedelta(days=730),  # 2 years
-            key="prebart_vibe_user_id"
-        )
+if authentication_status is False:
+    st.error("Username / password is incorrect")
+    st.stop()
+elif authentication_status is None:
+    st.warning("Please enter your username and password")
+    st.stop()
 
-    st.session_state.persistent_user_id = user_id
-    return user_id
-
-USER_ID = get_or_create_user_id()
+# ===== SUCCESSFUL LOGIN =====
+USER_ID = username          # ← this is now the stable per-user ID
+st.sidebar.success(f"Logged in as **{name}**")
+authenticator.logout("Logout", "sidebar")
 
 # ========== SUPABASE WATCHLIST ==========
 def load_watchlist():
@@ -598,7 +626,7 @@ with col_refresh:
         st.session_state.last_refresh = datetime.now()
         st.rerun()
 
-st.caption(f"Last refresh: {st.session_state.last_refresh.strftime('%H:%M:%S')}  •  Model: {MODEL_VERSION}")
+st.caption(f"Last refresh: {st.session_state.last_refresh.strftime('%H:%M:%S')}  •  Model: {MODEL_VERSION}  •  User: {USER_ID}")
 
 # ========== MARKET CONTEXT ==========
 fg_value, fg_label = get_fear_greed()
