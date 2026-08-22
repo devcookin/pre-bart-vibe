@@ -25,7 +25,7 @@ if SUPABASE_URL and SUPABASE_KEY:
     except:
         pass
 
-MODEL_VERSION = "v2.4-breakout"
+MODEL_VERSION = "v2.5-breakout"
 MIN_SNAPSHOT_INTERVAL = 300
 FILL_INTERVAL_SECONDS = 60
 
@@ -392,20 +392,14 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
         if fg_value < 25: base -= 1.5
         elif fg_value > 75: base += 1.0
 
-    # Targeted boost for extreme extensions (keeps normal breakouts disciplined)
-    if range_pos >= 108 and candle_quality >= 0.0:
-        base += 12
-        reasons.append("Strong extension – clear breakout")
-    elif range_pos >= 100 and candle_quality >= 0.0:
-        base += 7
-        reasons.append("Clear breakout – new highs")
-    elif range_pos >= 92 and (change_1h >= 0.25 or candle_quality >= 0.1):
+    # Conservative breakout rules (rolled back)
+    if range_pos >= 95 and change_1h >= 0.5 and candle_quality > 0.15:
         base += 5
         reasons.append("Clear breakout in progress")
-    elif range_pos >= 82 and change_1h >= 1.0:
+    elif range_pos >= 88 and change_1h >= 0.9:
         base += 3.5
         reasons.append("Breaking higher with momentum")
-    elif range_pos >= 78 and change_1h >= 0.4 and candle_quality > 0.3:
+    elif range_pos >= 80 and change_1h >= 0.4 and candle_quality > 0.25:
         base += 2
         reasons.append("Pushing into breakout territory")
 
