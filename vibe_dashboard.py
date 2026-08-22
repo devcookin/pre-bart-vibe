@@ -224,37 +224,41 @@ light_css = """
         border-radius: 12px;
     }
     
-    /* ========== STRONGER DROPDOWN FIX ========== */
+    /* ========== VERY AGGRESSIVE DROPDOWN FIX ========== */
     .stSelectbox [data-baseweb="select"],
     .stSelectbox [data-baseweb="select"] > div,
-    .stSelectbox [data-baseweb="select"] span,
-    .stSelectbox [data-baseweb="select"] svg {
+    .stSelectbox [data-baseweb="select"] span {
         background-color: #ffffff !important;
         color: #1a1a1a !important;
         border-color: #ced4da !important;
     }
 
-    /* The actual open dropdown menu */
+    /* Open dropdown portal */
+    div[data-baseweb="popover"],
     div[data-baseweb="popover"] > div,
     div[data-baseweb="menu"],
     ul[role="listbox"],
-    li[role="option"] {
+    li[role="option"],
+    div[role="listbox"],
+    div[role="option"] {
         background-color: #ffffff !important;
         color: #1a1a1a !important;
     }
 
-    li[role="option"] {
+    /* Force every single text element inside the menu */
+    div[data-baseweb="popover"] *,
+    div[data-baseweb="menu"] *,
+    ul[role="listbox"] *,
+    li[role="option"] * {
         color: #1a1a1a !important;
+        background-color: transparent !important;
     }
 
+    /* Hover and selected states */
     li[role="option"]:hover,
-    li[aria-selected="true"] {
-        background-color: #f1f3f5 !important;
-        color: #1a1a1a !important;
-    }
-
-    /* Force text color on all menu items */
-    div[data-baseweb="menu"] * {
+    li[aria-selected="true"],
+    div[role="option"]:hover {
+        background-color: #e9ecef !important;
         color: #1a1a1a !important;
     }
     
