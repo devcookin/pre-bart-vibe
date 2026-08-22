@@ -710,7 +710,7 @@ with main_col:
 
     st.caption(f"Showing {len(display_data)} of {len(filtered)} coins")
 
-    # ===== WATCHLIST - STATS ABOVE PROGRESS BAR =====
+    # ===== WATCHLIST - FIXED LAYOUT =====
     if st.session_state.watchlist:
         st.markdown("##### ⭐ Your Watchlist")
         watch_items = []
@@ -724,13 +724,15 @@ with main_col:
         watch_items = sorted(watch_items, key=lambda x: x["score"], reverse=True)
         
         if watch_items:
+            # Use max 3 columns so cards don't stretch too wide
             n_cols = min(3, len(watch_items))
             cols = st.columns(n_cols)
             
             for i, item in enumerate(watch_items[:n_cols*2]):
                 with cols[i % n_cols]:
                     with st.container(border=True):
-                        left, right = st.columns([1.35, 1])
+                        # Top row: left info + right sparkline
+                        left, right = st.columns([1.4, 1])
                         
                         with left:
                             if item["image_url"]:
@@ -740,7 +742,6 @@ with main_col:
                             price_str = f"${item['price']:,.0f}" if item["price"] >= 1000 else f"${item['price']:,.2f}" if item["price"] >= 1 else f"${item['price']:.4f}"
                             st.markdown(f"<div style='font-size:1.1rem;font-weight:600;'>{price_str}</div>", unsafe_allow_html=True)
                             
-                            # 24h + Vibe
                             arrow = get_score_arrow(item["cid"], item["score"])
                             ch_color = "#00c853" if item["ch24"] >= 0 else "#ff5252"
                             st.markdown(
@@ -750,27 +751,27 @@ with main_col:
                                 unsafe_allow_html=True
                             )
                             
-                            # ===== EXTRA STATS (ABOVE progress bar) =====
+                            # Stats ABOVE the progress bar
                             vs_btc = item["ch24"] - btc_change
                             direction = get_direction(item["cid"], item["score"])
                             st.markdown(
-                                f"<div style='font-size:11px;color:#aaa;line-height:1.4;margin-bottom:6px;'>"
-                                f"Range {item['range_pos']:.0f}%  ·  vsBTC {vs_btc:+.1f}%  ·  CQ {item['candle_quality']:+.1f}<br>"
-                                f"1h {item['ch1']:+.2f}%  ·  {direction}"
+                                f"<div style='font-size:11px;color:#aaa;line-height:1.4;margin-bottom:4px;'>"
+                                f"Range {item['range_pos']:.0f}% · vsBTC {vs_btc:+.1f}% · CQ {item['candle_quality']:+.1f}<br>"
+                                f"1h {item['ch1']:+.2f}% · {direction}"
                                 f"</div>",
                                 unsafe_allow_html=True
                             )
-                            
-                            # Progress bar (now below the stats)
-                            st.markdown(colored_progress(item["score"], height=7), unsafe_allow_html=True)
                         
                         with right:
                             if len(item.get("history", [])) >= 3:
-                                fig = make_sparkline(item["history"], height=115)
+                                fig = make_sparkline(item["history"], height=105)
                                 if fig:
                                     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
                             else:
                                 st.caption("Building…")
+                        
+                        # Progress bar FULL WIDTH (outside the columns)
+                        st.markdown(colored_progress(item["score"], height=8), unsafe_allow_html=True)
                         
                         if st.button("Unpin", key=f"unpin_{item['cid']}", use_container_width=True):
                             st.session_state.watchlist.remove(item["cid"])
