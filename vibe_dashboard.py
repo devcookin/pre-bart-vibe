@@ -382,48 +382,65 @@ def search_coins(query):
     except:
         return []
 
-# ========== FIXED: FUNDING + OI (Bybit - reliable) ==========
-@st.cache_data(ttl=45)
+# ========== FIXED v3: FUNDING + OI (Bybit - robust) ==========
+@st.cache_data(ttl=60)
 def get_funding_rates():
-    """Bybit linear perpetual funding rates (%)"""
+    """Bybit linear perpetual funding rates (%) - robust version"""
     symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT"]
     rates = {}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json"
+    }
     try:
         for sym in symbols:
-            r = requests.get(
-                "https://api.bybit.com/v5/market/tickers",
-                params={"category": "linear", "symbol": sym},
-                timeout=6,
-                headers={"User-Agent": "Mozilla/5.0"}
-            )
-            if r.status_code == 200:
-                data = r.json().get("result", {}).get("list", [])
-                if data:
-                    rate = float(data[0].get("fundingRate", 0)) * 100
-                    rates[sym.replace("USDT", "")] = rate
+            try:
+                r = requests.get(
+                    "https://api.bybit.com/v5/market/tickers",
+                    params={"category": "linear", "symbol": sym},
+                    timeout=8,
+                    headers=headers
+                )
+                if r.status_code == 200:
+                    result = r.json()
+                    if result.get("retCode") == 0:
+                        data = result.get("result", {}).get("list", [])
+                        if data:
+                            rate_str = data[0].get("fundingRate", "0")
+                            rate = float(rate_str) * 100
+                            rates[sym.replace("USDT", "")] = rate
+            except Exception:
+                continue
     except Exception:
         pass
     return rates
 
 @st.cache_data(ttl=60)
 def get_open_interest_delta():
-    """Bybit current OI (USD) + approximate 24h change"""
+    """Bybit current OI (USD) + simple 24h change"""
     symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT"]
     results = {}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json"
+    }
+    
     for sym in symbols:
         try:
-            # Current ticker (has openInterestValue)
+            # Current OI from ticker
             r = requests.get(
                 "https://api.bybit.com/v5/market/tickers",
                 params={"category": "linear", "symbol": sym},
-                timeout=6,
-                headers={"User-Agent": "Mozilla/5.0"}
+                timeout=8,
+                headers=headers
             )
             current_oi_usd = 0.0
             if r.status_code == 200:
-                data = r.json().get("result", {}).get("list", [])
-                if data:
-                    current_oi_usd = float(data[0].get("openInterestValue", 0) or 0)
+                result = r.json()
+                if result.get("retCode") == 0:
+                    data = result.get("result", {}).get("list", [])
+                    if data:
+                        current_oi_usd = float(data[0].get("openInterestValue", 0) or 0)
 
             # History for change
             r2 = requests.get(
@@ -434,25 +451,24 @@ def get_open_interest_delta():
                     "intervalTime": "1h",
                     "limit": 25
                 },
-                timeout=6,
-                headers={"User-Agent": "Mozilla/5.0"}
+                timeout=8,
+                headers=headers
             )
-            hist = []
-            if r2.status_code == 200:
-                hist = r2.json().get("result", {}).get("list", [])
-
             change_usd = 0.0
             change_pct = 0.0
-            if len(hist) >= 2 and current_oi_usd > 0:
-                # Bybit returns newest first
-                oldest_oi = float(hist[-1].get("openInterest", 0) or 0)
-                newest_oi = float(hist[0].get("openInterest", 0) or 0)
-                if oldest_oi > 0:
-                    # Approximate USD change using ratio
-                    ratio = current_oi_usd / max(newest_oi, 1e-9)
-                    old_usd_approx = oldest_oi * ratio
-                    change_usd = current_oi_usd - old_usd_approx
-                    change_pct = (change_usd / current_oi_usd) * 100
+            if r2.status_code == 200:
+                result2 = r2.json()
+                if result2.get("retCode") == 0:
+                    hist = result2.get("result", {}).get("list", [])
+                    if len(hist) >= 2 and current_oi_usd > 0:
+                        # newest first
+                        newest_oi = float(hist[0].get("openInterest", 0) or 0)
+                        oldest_oi = float(hist[-1].get("openInterest", 0) or 0)
+                        if newest_oi > 0 and oldest_oi > 0:
+                            # scale old OI to current USD value
+                            old_usd = (oldest_oi / newest_oi) * current_oi_usd
+                            change_usd = current_oi_usd - old_usd
+                            change_pct = (change_usd / current_oi_usd) * 100 if current_oi_usd else 0
 
             results[sym.replace("USDT", "")] = {
                 "oi_usd": current_oi_usd,
@@ -460,7 +476,11 @@ def get_open_interest_delta():
                 "change_pct": change_pct
             }
         except Exception:
-            continue
+            results[sym.replace("USDT", "")] = {
+                "oi_usd": 0.0,
+                "change_usd": 0.0,
+                "change_pct": 0.0
+            }
     return results
 
 def analyze_candles(ohlc_data):
