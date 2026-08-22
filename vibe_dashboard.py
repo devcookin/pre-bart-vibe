@@ -1009,15 +1009,49 @@ else:
 with st.expander("🤔 Why this score?"):
     for r in reasons: st.write(f"• {r}")
 
+# ========== SHARE SECTION (FIXED FOR IFRAME) ==========
 st.markdown("### 📤 Share this vibe")
 st.caption("Copy the text below to share")
 
-st.code(
+share_text = (
     f"{tick} Vibe Score: {score}/100 – {meme}\n"
     f"{ch24:+.2f}% 24h | Range {range_pos:.0f}%\n"
-    f"https://prebartvibes.xyz",
-    language=None
+    f"https://prebartvibes.xyz"
 )
+
+st.code(share_text, language=None)
+
+st.markdown(f"""
+<div style="margin-top: -10px; margin-bottom: 15px;">
+    <button onclick="
+        navigator.clipboard.writeText(`{share_text}`).then(() => {{
+            this.innerText = 'Copied!';
+            setTimeout(() => this.innerText = '📋 Copy to Clipboard', 2000);
+        }}).catch(() => {{
+            const textarea = document.createElement('textarea');
+            textarea.value = `{share_text}`;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            this.innerText = 'Copied!';
+            setTimeout(() => this.innerText = '📋 Copy to Clipboard', 2000);
+        }});
+    " 
+    style="
+        background: linear-gradient(90deg, #1da1f2, #0d8ecf);
+        color: white;
+        border: none;
+        padding: 8px 18px;
+        border-radius: 20px;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 14px;
+    ">
+        📋 Copy to Clipboard
+    </button>
+</div>
+""", unsafe_allow_html=True)
 
 st.markdown(f"""
 <div style="display:flex;flex-wrap:wrap;gap:10px;margin:12px 0;">
