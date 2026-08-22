@@ -72,12 +72,12 @@ config = {
             "prebart": {
                 "email": "prebart@example.com",
                 "name": "Pre-Bart",
-                "password": "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW"  # password = prebart123
+                "password": "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW"
             },
             "demo": {
                 "email": "demo@example.com",
                 "name": "Demo User",
-                "password": "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW"  # password = prebart123
+                "password": "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW"
             }
         }
     },
@@ -98,7 +98,7 @@ authenticator = stauth.Authenticate(
     config["cookie"]["expiry_days"]
 )
 
-# Login (fixed for latest streamlit-authenticator)
+# Login
 authenticator.login(location='main')
 
 if st.session_state.get("authentication_status") is False:
