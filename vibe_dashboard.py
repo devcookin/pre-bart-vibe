@@ -46,6 +46,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed"
 )
+
 # ========== FIXED DARK THEME ==========
 st.markdown("""
 <style>
@@ -297,7 +298,7 @@ def fill_pending_returns():
             return
         coin_ids = list(set(r["coin_id"] for r in rows))
         try:
-            r = requests.get("https://api.coingecko.com/api/v3/simple/price", headers=HEADERS,
+            r = requests.get("https://pro-api.coingecko.com/api/v3/simple/price", headers=HEADERS,
                              params={"ids": ",".join(coin_ids), "vs_currencies": "usd"}, timeout=8)
             prices = r.json() if r.status_code == 200 else {}
         except:
@@ -411,39 +412,25 @@ def get_fear_greed():
 @st.cache_data(ttl=45)
 def get_global():
     try:
-        r = requests.get("https://api.coingecko.com/api/v3/global", headers=HEADERS, timeout=10)
+        r = requests.get("https://pro-api.coingecko.com/api/v3/global", headers=HEADERS, timeout=10)
         return r.json()["data"]
     except:
         return None
 
 @st.cache_data(ttl=60)
-@st.cache_data(ttl=60)
 def get_top_coins(limit=30):
     try:
-        r = requests.get(
-            "https://api.coingecko.com/api/v3/coins/markets",
-            headers=HEADERS,
-            params={
-                "vs_currency": "usd",
-                "order": "market_cap_desc",
-                "per_page": limit,
-                "page": 1,
-                "sparkline": False,
-                "price_change_percentage": "1h,24h"
-            },
-            timeout=12
-        )
-        st.write("Status code:", r.status_code)
-        st.write("Response preview:", r.text[:400])
+        r = requests.get("https://pro-api.coingecko.com/api/v3/coins/markets", headers=HEADERS,
+            params={"vs_currency":"usd","order":"market_cap_desc","per_page":limit,"page":1,
+                    "sparkline":False,"price_change_percentage":"1h,24h"}, timeout=12)
         return r.json() if r.status_code == 200 else []
-    except Exception as e:
-        st.write("Exception:", str(e))
+    except:
         return []
 
 @st.cache_data(ttl=60)
 def get_ohlc(coin_id, days="1"):
     try:
-        r = requests.get(f"https://api.coingecko.com/api/v3/coins/{coin_id}/ohlc", headers=HEADERS,
+        r = requests.get(f"https://pro-api.coingecko.com/api/v3/coins/{coin_id}/ohlc", headers=HEADERS,
             params={"vs_currency":"usd","days":days}, timeout=10)
         return r.json() if r.status_code == 200 else []
     except:
@@ -452,7 +439,7 @@ def get_ohlc(coin_id, days="1"):
 @st.cache_data(ttl=60)
 def get_market_chart(coin_id, days="1"):
     try:
-        r = requests.get(f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart", headers=HEADERS,
+        r = requests.get(f"https://pro-api.coingecko.com/api/v3/coins/{coin_id}/market_chart", headers=HEADERS,
             params={"vs_currency":"usd","days":days}, timeout=10)
         return r.json() if r.status_code == 200 else {}
     except:
@@ -462,7 +449,7 @@ def get_market_chart(coin_id, days="1"):
 def search_coins(query):
     if not query or len(query) < 2: return []
     try:
-        r = requests.get("https://api.coingecko.com/api/v3/search", headers=HEADERS, params={"query":query}, timeout=8)
+        r = requests.get("https://pro-api.coingecko.com/api/v3/search", headers=HEADERS, params={"query":query}, timeout=8)
         return r.json().get("coins", [])[:10]
     except:
         return []
@@ -648,7 +635,7 @@ def get_direction(cid, current_score):
 
 def fetch_single_coin_vibe(cid, btc_change, fg_value):
     try:
-        r = requests.get("https://api.coingecko.com/api/v3/coins/markets", headers=HEADERS,
+        r = requests.get("https://pro-api.coingecko.com/api/v3/coins/markets", headers=HEADERS,
             params={"vs_currency":"usd","ids":cid,"price_change_percentage":"1h,24h"}, timeout=8)
         if r.status_code != 200: return None
         data = r.json()
@@ -889,7 +876,7 @@ with main_col:
                         with b1:
                             if st.button("View", key=f"watch_view_{item['cid']}", use_container_width=True):
                                 st.session_state.selected_coin = item["name"]
-                                st.session_state.search_coin = item["cid"]   # Fixed: load by ID
+                                st.session_state.search_coin = item["cid"]
                                 st.rerun()
                         with b2:
                             if st.button("Unpin", key=f"unpin_{item['cid']}", use_container_width=True):
@@ -1054,7 +1041,7 @@ with col_time:
 
 if st.session_state.search_coin:
     try:
-        r = requests.get("https://api.coingecko.com/api/v3/coins/markets", headers=HEADERS,
+        r = requests.get("https://pro-api.coingecko.com/api/v3/coins/markets", headers=HEADERS,
             params={"vs_currency":"usd","ids":st.session_state.search_coin,"price_change_percentage":"1h,24h"}, timeout=10)
         single = r.json() if r.status_code == 200 else []
     except:
