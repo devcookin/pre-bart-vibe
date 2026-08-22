@@ -29,8 +29,9 @@ MODEL_VERSION = "v2.5-breakout"
 MIN_SNAPSHOT_INTERVAL = 300
 FILL_INTERVAL_SECONDS = 60
 
-API_KEY = "CG-h61Dg6UoB2gVfCSUJQDj4dLa"
-HEADERS = {"x-cg-demo-api-key": API_KEY}
+# ========== SECURE API KEY ==========
+API_KEY = st.secrets.get("COINGECKO_API_KEY", "")
+HEADERS = {"x-cg-demo-api-key": API_KEY} if API_KEY else {}
 HISTORY_FILE = "vibe_history.json"
 
 st.set_page_config(
@@ -84,12 +85,10 @@ st.markdown("""
     }
     @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
     
-    /* Slightly tighter horizontal blocks */
     div[data-testid="stHorizontalBlock"] > div {
         gap: 0.9rem !important;
     }
     
-    /* ===== MOBILE ===== */
     @media (max-width: 768px) {
         .block-container {
             padding-left: 0.75rem !important;
