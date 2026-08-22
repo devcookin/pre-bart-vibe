@@ -1,4 +1,4 @@
-import streamlit as st
+=import streamlit as st
 import requests
 from datetime import datetime, timedelta, timezone
 import pandas as pd
@@ -25,7 +25,7 @@ if SUPABASE_URL and SUPABASE_KEY:
     except:
         pass
 
-MODEL_VERSION = "v2.2-breakout"
+MODEL_VERSION = "v2.3-breakout"
 MIN_SNAPSHOT_INTERVAL = 300
 FILL_INTERVAL_SECONDS = 60
 
@@ -392,8 +392,11 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
         if fg_value < 25: base -= 1.5
         elif fg_value > 75: base += 1.0
 
-    # Improved breakout detection (more responsive to clear new highs)
-    if range_pos >= 95 and (change_1h >= 0.3 or candle_quality > 0.1):
+    # Softened, less reactive breakout detection
+    if range_pos >= 100 and candle_quality >= 0.0:
+        base += 4.5
+        reasons.append("Clear breakout – new highs")
+    elif range_pos >= 92 and (change_1h >= 0.25 or candle_quality >= 0.1):
         base += 5
         reasons.append("Clear breakout in progress")
     elif range_pos >= 82 and change_1h >= 1.0:
