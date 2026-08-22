@@ -31,7 +31,12 @@ MIN_SNAPSHOT_INTERVAL = 300
 FILL_INTERVAL_SECONDS = 60
 
 # ========== API KEY ==========
-API_KEY = st.secrets.get("COINGECKO_API_KEY",)
+API_KEY = st.secrets.get("COINGECKO_API_KEY")
+
+if not API_KEY:
+    st.error("⚠️ CoinGecko API key is missing. Please add it in Streamlit secrets.")
+    st.stop()
+
 HEADERS = {"x-cg-pro-api-key": API_KEY}
 HISTORY_FILE = "vibe_history.json"
 
@@ -41,8 +46,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed"
 )
-st.write("Secrets keys:", list(st.secrets.keys()))
-st.write("Has COINGECKO key:", "COINGECKO_API_KEY" in st.secrets)
 # ========== FIXED DARK THEME ==========
 st.markdown("""
 <style>
