@@ -871,7 +871,7 @@ with main_col:
                         with b1:
                             if st.button("View", key=f"watch_view_{item['cid']}", use_container_width=True):
                                 st.session_state.selected_coin = item["name"]
-                                st.session_state.search_coin = None
+                                st.session_state.search_coin = item["cid"]   # Fixed: load by ID
                                 st.rerun()
                         with b2:
                             if st.button("Unpin", key=f"unpin_{item['cid']}", use_container_width=True):
