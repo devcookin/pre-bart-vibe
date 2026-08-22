@@ -392,9 +392,9 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
         if fg_value < 25: base -= 1.5
         elif fg_value > 75: base += 1.0
 
-    # Softened, less reactive breakout detection
+    # Stronger reward for true new highs
     if range_pos >= 100 and candle_quality >= 0.0:
-        base += 4.5
+        base += 7
         reasons.append("Clear breakout – new highs")
     elif range_pos >= 92 and (change_1h >= 0.25 or candle_quality >= 0.1):
         base += 5
