@@ -10,6 +10,7 @@ import os
 import uuid
 from supabase import create_client, Client
 import streamlit.components.v1 as components
+from extra_streamlit_components import CookieManager
 
 try:
     from streamlit_autorefresh import st_autorefresh
@@ -65,48 +66,26 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ========== PER-BROWSER USER ID (robust version) ==========
+# ========== PER-BROWSER USER ID (CookieManager - reliable) ==========
+cookie_manager = CookieManager(key="prebart_cookies")
+
 def get_or_create_user_id():
-    # 1. Already have a stable ID for this session → use it
     if "persistent_user_id" in st.session_state:
         return st.session_state.persistent_user_id
 
-    # 2. Ask the browser for the ID stored in localStorage
-    js = """
-    <script>
-    const KEY = "prebart_vibe_user_id";
-    let id = localStorage.getItem(KEY);
-    if (!id) {
-        id = (self.crypto && self.crypto.randomUUID)
-            ? self.crypto.randomUUID()
-            : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-                const r = Math.random()*16|0;
-                const v = c === 'x' ? r : (r&0x3|0x8);
-                return v.toString(16);
-              });
-        localStorage.setItem(KEY, id);
-    }
-    // Send it back to Streamlit
-    window.parent.postMessage({
-        isStreamlitMessage: true,
-        type: "streamlit:setComponentValue",
-        value: id
-    }, "*");
-    </script>
-    """
-    browser_id = components.html(js, height=0, width=0)
+    user_id = cookie_manager.get("prebart_vibe_user_id")
 
-    # 3. Browser gave us a good ID → store it permanently for this session
-    if browser_id and isinstance(browser_id, str) and len(browser_id) > 10:
-        st.session_state.persistent_user_id = browser_id
-        # Force a clean re-run so load_watchlist() uses the real ID
-        st.rerun()
+    if user_id is None:
+        user_id = str(uuid.uuid4())
+        cookie_manager.set(
+            cookie="prebart_vibe_user_id",
+            val=user_id,
+            expires_at=datetime.now(timezone.utc) + timedelta(days=730),  # 2 years
+            key="prebart_vibe_user_id"
+        )
 
-    # 4. First-ever render (or component still loading) → temporary ID
-    #    (will be replaced on the next run when browser_id arrives)
-    temp_id = str(uuid.uuid4())
-    st.session_state.persistent_user_id = temp_id
-    return temp_id
+    st.session_state.persistent_user_id = user_id
+    return user_id
 
 USER_ID = get_or_create_user_id()
 
