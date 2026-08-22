@@ -74,14 +74,6 @@ st.markdown("""
         transform: translateY(-1px);
     }
     
-    /* Sleek header styling */
-    .main-header {
-        background: linear-gradient(90deg, rgba(15,12,41,0.03), rgba(48,43,99,0.03));
-        border-radius: 16px;
-        padding: 18px 24px 14px 24px;
-        margin-bottom: 8px;
-    }
-    
     .live-badge {
         display: inline-flex;
         align-items: center;
@@ -512,12 +504,12 @@ def make_sparkline(history):
     )
     return fig
 
-# ========== HEADER (Sleeker + Explanation) ==========
+# ========== HEADER ==========
 col_title, col_refresh = st.columns([6, 1])
 
 with col_title:
     st.markdown("""
-    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 4px;">
+    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 6px;">
         <h1 style="margin: 0; padding: 0;">🚀 Pre-Bart Vibe Dashboard</h1>
         <span class="live-badge">
             <span class="live-dot"></span> LIVE
@@ -526,11 +518,9 @@ with col_title:
     """, unsafe_allow_html=True)
     
     st.markdown("""
-    <div style="font-size: 1.05rem; color: #666; margin-bottom: 6px; line-height: 1.5;">
-        Real-time crypto health scores powered by candle structure, short-term momentum, 
-        daily range position, relative strength vs Bitcoin, and a touch of Fear & Greed.
-        <br>
-        <span style="opacity: 0.85;">One clean number. No black boxes. Just pure vibes.</span>
+    <div style="font-size: 1.08rem; color: #555; margin-bottom: 4px; line-height: 1.55;">
+        Real-time Vibe Scores for the market’s top coins.<br>
+        Spot strength, catch weakness, and stay ahead of the noise — all in one clean number.
     </div>
     """, unsafe_allow_html=True)
 
@@ -593,7 +583,6 @@ for name, cid, tick in COIN_ORDER:
     hist = st.session_state.score_history.get(cid, [])
     prev_score = hist[-2][1] if len(hist) >= 2 else None
 
-    # ===== CLEAN MULTI-COIN NOTIFICATIONS =====
     if prev_score is not None:
         if score >= 80 and prev_score < 80:
             st.toast(f"{tick} Vibe crossed 80!", icon="🔥")
