@@ -5,3 +5,4 @@ plotly
 streamlit-autorefresh
 supabase
 extra-streamlit-components
+streamlit-authenticator
