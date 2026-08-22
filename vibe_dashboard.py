@@ -8,6 +8,7 @@ from urllib.parse import quote
 import json
 import os
 from supabase import create_client, Client
+import streamlit.components.v1 as components
 
 try:
     from streamlit_autorefresh import st_autorefresh
@@ -105,6 +106,47 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# ========== PERSISTENT WATCHLIST ==========
+def save_watchlist_to_storage():
+    """Save current watchlist to browser localStorage"""
+    components.html(
+        f"""
+        <script>
+            localStorage.setItem('prebart_watchlist', '{json.dumps(st.session_state.watchlist)}');
+        </script>
+        """,
+        height=0,
+    )
+
+# Load from query params (bridge from localStorage)
+if "watchlist" in st.query_params:
+    try:
+        loaded = json.loads(st.query_params["watchlist"])
+        if isinstance(loaded, list):
+            st.session_state.watchlist = loaded
+    except:
+        pass
+
+# On first load of the session → try to restore from localStorage
+if "watchlist_initialized" not in st.session_state:
+    st.session_state.watchlist_initialized = True
+    if "watchlist" not in st.session_state:
+        st.session_state.watchlist = []
+    
+    components.html(
+        """
+        <script>
+            const stored = localStorage.getItem('prebart_watchlist');
+            if (stored) {
+                const url = new URL(window.parent.location);
+                url.searchParams.set('watchlist', stored);
+                window.parent.location.href = url.toString();
+            }
+        </script>
+        """,
+        height=0,
+    )
+
 # ========== SESSION STATE ==========
 if "selected_coin" not in st.session_state:
     st.session_state.selected_coin = "Bitcoin"
@@ -122,6 +164,10 @@ if "last_fill_time" not in st.session_state:
     st.session_state.last_fill_time = None
 if "movers_tf" not in st.session_state:
     st.session_state.movers_tf = "1h"
+if "watchlist" not in st.session_state:
+    st.session_state.watchlist = []
+if "quick_filter" not in st.session_state:
+    st.session_state.quick_filter = "All"
 
 # ========== LOCAL HISTORY ==========
 def load_history():
@@ -382,10 +428,8 @@ def search_coins(query):
     except:
         return []
 
-# ========== FIXED v4: FUNDING + OI (Xoomar - works on Streamlit Cloud) ==========
 @st.cache_data(ttl=60)
 def get_funding_rates():
-    """Xoomar free API - funding rates from Bybit/Binance/OKX"""
     rates = {}
     try:
         r = requests.get(
@@ -395,7 +439,6 @@ def get_funding_rates():
         )
         if r.status_code == 200:
             data = r.json().get("data", [])
-            # Prefer Bybit, then Binance
             for item in data:
                 base = item.get("baseAsset", "").upper()
                 exchange = item.get("exchange", "").lower()
@@ -409,7 +452,6 @@ def get_funding_rates():
 
 @st.cache_data(ttl=60)
 def get_open_interest_delta():
-    """Xoomar - current OI (we show current value)"""
     results = {}
     try:
         r = requests.get(
@@ -505,7 +547,6 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
         if fg_value < 25: base -= 1.5
         elif fg_value > 75: base += 1.0
 
-    # Conservative breakout rules
     if range_pos >= 95 and change_1h >= 0.5 and candle_quality > 0.15:
         base += 5
         reasons.append("Clear breakout in progress")
@@ -562,6 +603,17 @@ def make_sparkline(history):
         plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", showlegend=False
     )
     return fig
+
+def get_score_arrow(cid, current_score):
+    hist = st.session_state.score_history.get(cid, [])
+    if len(hist) < 2:
+        return ""
+    prev = hist[-2][1]
+    if current_score > prev + 1:
+        return " <span style='color:#00c853;font-size:14px;'>↑</span>"
+    elif current_score < prev - 1:
+        return " <span style='color:#ff5252;font-size:14px;'>↓</span>"
+    return ""
 
 # ========== HEADER ==========
 col_title, col_refresh = st.columns([6, 1])
@@ -658,27 +710,90 @@ for name, cid, tick in COIN_ORDER:
     vibe_data.append({
         "name": name, "cid": cid, "tick": tick, "price": price, "ch24": ch24, "ch1": ch1,
         "score": score, "meme": meme, "image_url": image_url, "candle_quality": cq,
-        "range_pos": range_pos, "reasons": reasons, "history": st.session_state.score_history.get(cid, [])
+        "range_pos": range_pos, "reasons": reasons, "history": st.session_state.score_history.get(cid, []),
+        "prev_score": prev_score
     })
 
 vibe_data_sorted = sorted(vibe_data, key=lambda x: x["score"], reverse=True)
+
+# ========== MARKET BIAS + STRONGEST / WEAKEST ==========
+avg_vibe = sum(v["score"] for v in vibe_data) / len(vibe_data) if vibe_data else 50
+funding = get_funding_rates()
+avg_funding = sum(funding.values()) / len(funding) if funding else 0
+
+if avg_vibe >= 65 and avg_funding >= 0.01:
+    bias = "🟢 Strongly Bullish"
+elif avg_vibe >= 58 or avg_funding > 0.005:
+    bias = "🟢 Mildly Bullish"
+elif avg_vibe <= 42 and avg_funding < -0.005:
+    bias = "🔴 Mildly Bearish"
+elif avg_vibe <= 38:
+    bias = "🔴 Strongly Bearish"
+else:
+    bias = "🟡 Neutral"
+
+strongest = vibe_data_sorted[0] if vibe_data_sorted else None
+weakest = vibe_data_sorted[-1] if vibe_data_sorted else None
 
 # ========== MAIN + SIDE PANEL ==========
 main_col, side_col = st.columns([3.4, 1.15], gap="medium")
 
 with main_col:
     st.subheader("🌐 Multi-Coin Vibe Overview")
-    st.caption("Live Top 30 by market cap • Sorted by current vibe score")
 
-    col_filter, _ = st.columns([2, 4])
-    with col_filter:
+    f1, f2, f3 = st.columns([2, 2, 2])
+    with f1:
+        filter_opt = st.selectbox(
+            "Quick Filter",
+            ["All", "Vibe ≥ 70", "Vibe ≥ 60", "Vibe ≤ 40", "Rising", "Falling", "Watchlist Only"],
+            index=["All", "Vibe ≥ 70", "Vibe ≥ 60", "Vibe ≤ 40", "Rising", "Falling", "Watchlist Only"].index(st.session_state.quick_filter)
+            if st.session_state.quick_filter in ["All", "Vibe ≥ 70", "Vibe ≥ 60", "Vibe ≤ 40", "Rising", "Falling", "Watchlist Only"] else 0
+        )
+        st.session_state.quick_filter = filter_opt
+    with f2:
         show_option = st.selectbox("Show", ["Top 5", "Top 10", "Top 15", "All"],
             index=["Top 5","Top 10","Top 15","All"].index(st.session_state.show_count) if st.session_state.show_count in ["Top 5","Top 10","Top 15","All"] else 1)
         st.session_state.show_count = show_option
 
-    display_data = vibe_data_sorted[:5] if show_option=="Top 5" else vibe_data_sorted[:10] if show_option=="Top 10" else vibe_data_sorted[:15] if show_option=="Top 15" else vibe_data_sorted
+    filtered = vibe_data_sorted.copy()
+    if filter_opt == "Vibe ≥ 70":
+        filtered = [v for v in filtered if v["score"] >= 70]
+    elif filter_opt == "Vibe ≥ 60":
+        filtered = [v for v in filtered if v["score"] >= 60]
+    elif filter_opt == "Vibe ≤ 40":
+        filtered = [v for v in filtered if v["score"] <= 40]
+    elif filter_opt == "Rising":
+        filtered = [v for v in filtered if v.get("prev_score") is not None and v["score"] > v["prev_score"] + 1]
+    elif filter_opt == "Falling":
+        filtered = [v for v in filtered if v.get("prev_score") is not None and v["score"] < v["prev_score"] - 1]
+    elif filter_opt == "Watchlist Only":
+        filtered = [v for v in filtered if v["cid"] in st.session_state.watchlist]
+
+    display_data = filtered[:5] if show_option=="Top 5" else filtered[:10] if show_option=="Top 10" else filtered[:15] if show_option=="Top 15" else filtered
     st.caption(f"Showing {len(display_data)} coins")
 
+    # Watchlist section
+    if st.session_state.watchlist:
+        st.markdown("##### ⭐ Your Watchlist")
+        watch_items = [v for v in vibe_data if v["cid"] in st.session_state.watchlist]
+        watch_items = sorted(watch_items, key=lambda x: x["score"], reverse=True)
+        if watch_items:
+            cols = st.columns(min(5, len(watch_items)))
+            for i, item in enumerate(watch_items[:5]):
+                with cols[i]:
+                    with st.container(border=True):
+                        if item["image_url"]:
+                            st.image(item["image_url"], width=28)
+                        arrow = get_score_arrow(item["cid"], item["score"])
+                        st.markdown(f"**{item['tick']}**")
+                        st.markdown(f"<div style='font-size:1.1rem;font-weight:600;'>Vibe {item['score']}{arrow}</div>", unsafe_allow_html=True)
+                        if st.button("Unpin", key=f"unpin_{item['cid']}", use_container_width=True):
+                            st.session_state.watchlist.remove(item["cid"])
+                            save_watchlist_to_storage()
+                            st.rerun()
+        st.divider()
+
+    # Main grid
     for row_start in range(0, len(display_data), 5):
         cols = st.columns(5)
         for i, item in enumerate(display_data[row_start:row_start+5]):
@@ -691,18 +806,48 @@ with main_col:
                     st.markdown(f"**{item['tick']}**")
                     price_str = f"${item['price']:,.0f}" if item["price"]>=1000 else f"${item['price']:,.2f}" if item["price"]>=1 else f"${item['price']:.4f}"
                     st.markdown(f"<div style='font-size:1.25rem;font-weight:600;height:30px;line-height:30px;overflow:hidden;'>{price_str}</div>", unsafe_allow_html=True)
-                    st.caption(f"{item['ch24']:+.2f}% • Vibe {item['score']}")
+                    
+                    arrow = get_score_arrow(item["cid"], item["score"])
+                    st.caption(f"{item['ch24']:+.2f}% • Vibe {item['score']}{arrow}")
                     st.markdown(colored_progress(item["score"], height=10), unsafe_allow_html=True)
                     st.markdown(f"""<div style="height:42px;min-height:42px;max-height:42px;font-size:13px;color:#888;line-height:1.3;overflow:hidden;margin-bottom:8px;">{item['meme']}</div>""", unsafe_allow_html=True)
-                    if st.button("View", key=f"btn_{item['cid']}", use_container_width=True):
-                        st.session_state.selected_coin = item["name"]
-                        st.session_state.search_coin = None
-                        st.rerun()
+                    
+                    b1, b2 = st.columns(2)
+                    with b1:
+                        if st.button("View", key=f"btn_{item['cid']}", use_container_width=True):
+                            st.session_state.selected_coin = item["name"]
+                            st.session_state.search_coin = None
+                            st.rerun()
+                    with b2:
+                        is_watched = item["cid"] in st.session_state.watchlist
+                        label = "★" if is_watched else "☆"
+                        if st.button(label, key=f"watch_{item['cid']}", use_container_width=True):
+                            if is_watched:
+                                st.session_state.watchlist.remove(item["cid"])
+                            else:
+                                st.session_state.watchlist.append(item["cid"])
+                            save_watchlist_to_storage()
+                            st.rerun()
 
 with side_col:
     st.markdown("### ⚡ Market Pulse")
 
-    # ----- TOP MOVERS -----
+    with st.container(border=True):
+        st.markdown("**📊 Market Bias**")
+        st.markdown(f"<div style='font-size:1.15rem;font-weight:600;margin:6px 0;'>{bias}</div>", unsafe_allow_html=True)
+        st.caption(f"Avg Vibe: {avg_vibe:.1f} • Avg Funding: {avg_funding:+.4f}%")
+
+    st.write("")
+
+    with st.container(border=True):
+        st.markdown("**🏆 Strongest / Weakest**")
+        if strongest:
+            st.markdown(f"🔥 **{strongest['tick']}** {strongest['score']}")
+        if weakest:
+            st.markdown(f"💀 **{weakest['tick']}** {weakest['score']}")
+
+    st.write("")
+
     with st.container(border=True):
         st.markdown("**🔥 Top Movers**")
         tf = st.radio("Timeframe", ["1h", "24h"], horizontal=True, key="movers_tf_radio", label_visibility="collapsed")
@@ -724,11 +869,9 @@ with side_col:
 
     st.write("")
 
-    # ----- FUNDING RATES -----
     with st.container(border=True):
         st.markdown("**💰 Funding Rates**")
         st.caption("Xoomar • Bybit/Binance")
-        funding = get_funding_rates()
         if funding:
             for sym in ["BTC", "ETH", "SOL", "BNB", "XRP"]:
                 if sym in funding:
@@ -746,7 +889,6 @@ with side_col:
 
     st.write("")
 
-    # ----- OPEN INTEREST -----
     with st.container(border=True):
         st.markdown("**📊 Open Interest**")
         st.caption("Xoomar • current value")
@@ -852,8 +994,18 @@ c3.metric("Range Position", f"{range_pos:.0f}%")
 c4.metric("Candle Quality", f"{cq:+.1f}")
 c5.metric("vs BTC (24h)", f"{vs_btc:+.2f}%")
 
-st.markdown(f"**Vibe Score: {score}/100**")
+arrow = get_score_arrow(cid, score)
+st.markdown(f"**Vibe Score: {score}/100{arrow}**", unsafe_allow_html=True)
 st.markdown(colored_progress(score, height=14), unsafe_allow_html=True)
+
+is_watched = cid in st.session_state.watchlist
+if st.button("★ Remove from Watchlist" if is_watched else "☆ Add to Watchlist", key="detail_watch"):
+    if is_watched:
+        st.session_state.watchlist.remove(cid)
+    else:
+        st.session_state.watchlist.append(cid)
+    save_watchlist_to_storage()
+    st.rerun()
 
 perf = get_coin_performance(cid)
 if perf and perf.get("ready"):
