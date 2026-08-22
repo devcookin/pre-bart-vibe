@@ -43,12 +43,35 @@ st.set_page_config(
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+    
+    /* ===== FULL WIDTH FIX ===== */
+    .block-container {
+        max-width: 100% !important;
+        padding-top: 1.1rem !important;
+        padding-bottom: 2rem !important;
+        padding-left: 1.4rem !important;
+        padding-right: 1.4rem !important;
+    }
+    
+    .main .block-container {
+        padding-top: 0.9rem !important;
+    }
+    
     h1 { font-weight: 700 !important; letter-spacing: -0.5px; }
-    .stMetric { border-radius: 14px; padding: 12px 16px; }
-    div[data-testid="stMetricValue"] { font-size: 1.45rem !important; font-weight: 600; }
-    div.stButton > button { width: 100%; border-radius: 10px; font-weight: 600; transition: all 0.2s ease; }
+    
+    .stMetric { border-radius: 12px; padding: 10px 14px; }
+    div[data-testid="stMetricValue"] { font-size: 1.35rem !important; font-weight: 600; }
+    
+    div.stButton > button {
+        width: 100%;
+        border-radius: 10px;
+        font-weight: 600;
+        transition: all 0.2s ease;
+    }
     div.stButton > button:hover { transform: translateY(-1px); }
+    
     .live-badge {
         display: inline-flex; align-items: center; gap: 6px;
         background: rgba(0, 200, 83, 0.12); color: #00c853;
@@ -60,6 +83,23 @@ st.markdown("""
         display: inline-block; animation: pulse 1.5s infinite;
     }
     @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+    
+    /* Slightly tighter horizontal blocks */
+    div[data-testid="stHorizontalBlock"] > div {
+        gap: 0.9rem !important;
+    }
+    
+    /* ===== MOBILE ===== */
+    @media (max-width: 768px) {
+        .block-container {
+            padding-left: 0.75rem !important;
+            padding-right: 0.75rem !important;
+        }
+        div[data-testid="column"] {
+            width: 100% !important;
+            flex: 1 1 100% !important;
+        }
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -634,7 +674,7 @@ strongest = vibe_data_sorted[0] if vibe_data_sorted else None
 weakest = vibe_data_sorted[-1] if vibe_data_sorted else None
 
 # ========== MAIN + SIDE PANEL ==========
-main_col, side_col = st.columns([3.4, 1.15], gap="medium")
+main_col, side_col = st.columns([4.2, 1], gap="large")
 
 with main_col:
     st.subheader("🌐 Multi-Coin Vibe Overview")
