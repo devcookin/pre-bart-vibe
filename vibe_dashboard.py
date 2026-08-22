@@ -25,8 +25,8 @@ if SUPABASE_URL and SUPABASE_KEY:
     except:
         pass
 
-MODEL_VERSION = "v2.1-breakout"
-MIN_SNAPSHOT_INTERVAL = 300          # ← loosened to 5 minutes
+MODEL_VERSION = "v2.2-breakout"
+MIN_SNAPSHOT_INTERVAL = 300
 FILL_INTERVAL_SECONDS = 60
 
 API_KEY = "CG-h61Dg6UoB2gVfCSUJQDj4dLa"
@@ -116,7 +116,6 @@ def save_vibe_snapshot(coin_id, symbol, price, score, label, change_24h, range_p
     now = datetime.now(timezone.utc)
     last_time = st.session_state.last_snapshot_time.get(coin_id)
     
-    # Simple reliable throttle: write at most once every 5 minutes
     if last_time and (now - last_time).total_seconds() < MIN_SNAPSHOT_INTERVAL:
         return
     
@@ -359,24 +358,30 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
         range_pos = 50.0
     reasons = []
     base = 54.0
-    structure_boost = candle_quality * 10.5
+
+    # Dampened candle quality
+    structure_boost = candle_quality * 9.0
     base += structure_boost
     if candle_quality > 1.0: reasons.append("Excellent bullish structure")
     elif candle_quality > 0.5: reasons.append("Solid constructive structure")
     elif candle_quality > 0.15: reasons.append("Mildly positive structure")
     elif candle_quality < -0.7: reasons.append("Weak structure / rejection")
     elif candle_quality < -0.25: reasons.append("Mixed structure")
+
     base += (range_pos - 50) * 0.14
     if range_pos > 88: reasons.append("Near top of daily range")
     elif range_pos > 72: reasons.append("Upper half of range")
     elif range_pos < 18: reasons.append("Building from lows" if candle_quality > 0.15 else "Near bottom of range")
     elif range_pos < 32: reasons.append("Lower half of range")
-    base += change_1h * 3.8
+
+    # Dampened 1h momentum
+    base += change_1h * 3.3
     if change_1h > 2.0: reasons.append("Very strong 1h momentum")
     elif change_1h > 0.7: reasons.append("Strong 1h momentum")
     elif change_1h > 0.2: reasons.append("Positive 1h")
     elif change_1h < -1.5: reasons.append("Strong negative 1h")
     elif change_1h < -0.4: reasons.append("Mild negative 1h")
+
     base += change_24h * 0.45
     if btc_change is not None:
         vs_btc = change_24h - btc_change
@@ -384,9 +389,12 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
         if vs_btc > 3.5: reasons.append("Clearly outperforming BTC")
         elif vs_btc > 1.2: reasons.append("Outperforming BTC")
         elif vs_btc < -3.5: reasons.append("Lagging BTC")
+
     if fg_value is not None:
         if fg_value < 25: base -= 1.5
         elif fg_value > 75: base += 1.0
+
+    # Breakout bonuses kept strong
     if range_pos >= 87 and change_1h >= 0.6 and candle_quality > 0.15:
         base += 5
         reasons.append("Clear breakout in progress")
@@ -396,13 +404,19 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
     elif range_pos >= 78 and change_1h >= 0.4 and candle_quality > 0.3:
         base += 2
         reasons.append("Pushing into breakout territory")
-    score = max(min(int(round(base)), 92), 16)
-    if score >= 80: meme = "🔥 Strong structure + momentum"
-    elif score >= 68: meme = "🚀 Constructive structure"
-    elif score >= 55: meme = "📈 Structure okay, mixed short-term"
-    elif score >= 42: meme = "😐 Mixed signals"
-    elif score >= 28: meme = "⚠️ Short-term weakness"
-    else: meme = "💀 Weak structure"
+
+    score = max(min(int(round(base)), 98), 16)
+
+    # New descriptive phrases
+    if score >= 90: meme = "🔥 Explosive strength + clear breakout"
+    elif score >= 80: meme = "🚀 Strong structure + solid momentum"
+    elif score >= 70: meme = "📈 Constructive structure, building strength"
+    elif score >= 60: meme = "👍 Decent structure, mild positive bias"
+    elif score >= 50: meme = "😐 Mixed signals, no clear direction"
+    elif score >= 40: meme = "⚠️ Weakening structure, caution"
+    elif score >= 30: meme = "📉 Short-term weakness dominating"
+    else: meme = "💀 Heavy selling pressure / poor structure"
+
     return score, meme, range_pos, reasons
 
 def colored_progress(score: int, height: int = 12):
@@ -502,7 +516,6 @@ for name, cid, tick in COIN_ORDER:
     hist = st.session_state.score_history.get(cid, [])
     prev_score = hist[-2][1] if len(hist) >= 2 else None
 
-    # ===== MULTI-COIN NOTIFICATIONS =====
     if prev_score is not None:
         if score >= 80 and prev_score < 80:
             st.toast(f"🔥 {tick} Vibe crossed 80!", icon="🔥")
