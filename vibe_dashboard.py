@@ -38,7 +38,7 @@ if not API_KEY:
     st.stop()
 
 HEADERS = {"x-cg-demo-api-key": API_KEY}
-
+HISTORY_FILE = "vibe_history.json"
 st.set_page_config(
     page_title="Pre-Bart Vibe Dashboard",
     page_icon="🚀",
