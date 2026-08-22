@@ -793,16 +793,39 @@ with side_col:
         if strongest: st.markdown(f"🔥 **{strongest['tick']}** {strongest['score']}")
         if weakest: st.markdown(f"💀 **{weakest['tick']}** {weakest['score']}")
     st.write("")
+    
+    # ===== FIXED TOP MOVERS =====
     with st.container(border=True):
         st.markdown("**🔥 Top Movers**")
         tf = st.radio("Timeframe", ["1h", "24h"], horizontal=True, key="movers_tf_radio", label_visibility="collapsed")
         st.session_state.movers_tf = tf
         key = "ch1" if tf == "1h" else "ch24"
-        movers = sorted(vibe_data, key=lambda x: x[key], reverse=True)[:6]
-        for m in movers:
+
+        # Top 3 Gainers
+        gainers = sorted(vibe_data, key=lambda x: x[key], reverse=True)[:3]
+        # Top 3 Losers
+        losers = sorted(vibe_data, key=lambda x: x[key])[:3]
+
+        st.caption("Gainers")
+        for m in gainers:
             ch = m[key]
-            color = "#00c853" if ch >= 0 else "#ff5252"
-            st.markdown(f"<div style='display:flex;justify-content:space-between;font-size:13px;padding:2px 0;'><span><b>{m['tick']}</b></span><span style='color:{color};font-weight:600'>{ch:+.2f}%</span></div>", unsafe_allow_html=True)
+            st.markdown(
+                f"<div style='display:flex;justify-content:space-between;font-size:13px;padding:2px 0;'>"
+                f"<span><b>{m['tick']}</b></span>"
+                f"<span style='color:#00c853;font-weight:600'>{ch:+.2f}%</span></div>",
+                unsafe_allow_html=True
+            )
+
+        st.caption("Losers")
+        for m in losers:
+            ch = m[key]
+            st.markdown(
+                f"<div style='display:flex;justify-content:space-between;font-size:13px;padding:2px 0;'>"
+                f"<span><b>{m['tick']}</b></span>"
+                f"<span style='color:#ff5252;font-weight:600'>{ch:+.2f}%</span></div>",
+                unsafe_allow_html=True
+            )
+    
     st.write("")
     with st.container(border=True):
         st.markdown("**💰 Funding Rates**")
