@@ -7,9 +7,7 @@ from plotly.subplots import make_subplots
 from urllib.parse import quote
 import json
 import os
-import uuid
 from supabase import create_client, Client
-import streamlit_authenticator as stauth
 
 try:
     from streamlit_autorefresh import st_autorefresh
@@ -65,60 +63,22 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ========== AUTHENTICATION ==========
-config = {
-    "credentials": {
-        "usernames": {
-            "prebart": {
-                "email": "prebart@example.com",
-                "name": "Pre-Bart",
-                "password": "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW"
-            },
-            "demo": {
-                "email": "demo@example.com",
-                "name": "Demo User",
-                "password": "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW"
-            }
-        }
-    },
-    "cookie": {
-        "expiry_days": 30,
-        "key": "prebart_vibe_auth_key_change_me",
-        "name": "prebart_vibe_cookie"
-    },
-    "preauthorized": {
-        "emails": []
-    }
-}
+# ========== OPTIONAL GOOGLE LOGIN ==========
+is_logged_in = False
+USER_ID = None
+user_name = None
 
-authenticator = stauth.Authenticate(
-    config["credentials"],
-    config["cookie"]["name"],
-    config["cookie"]["key"],
-    config["cookie"]["expiry_days"]
-)
+try:
+    is_logged_in = st.user.is_logged_in
+    if is_logged_in:
+        user_name = st.user.get("name") or st.user.get("email") or "User"
+        USER_ID = st.user.get("email") or st.user.get("sub")
+except:
+    pass
 
-# Login
-authenticator.login(location='main')
-
-if st.session_state.get("authentication_status") is False:
-    st.error("Username / password is incorrect")
-    st.stop()
-elif st.session_state.get("authentication_status") is None:
-    st.warning("Please enter your username and password")
-    st.stop()
-
-# ===== SUCCESSFUL LOGIN =====
-name = st.session_state["name"]
-username = st.session_state["username"]
-USER_ID = username
-
-st.sidebar.success(f"Logged in as **{name}**")
-authenticator.logout(button_name="Logout", location="sidebar")
-
-# ========== SUPABASE WATCHLIST ==========
+# ========== SUPABASE WATCHLIST (only when logged in) ==========
 def load_watchlist():
-    if not supabase:
+    if not supabase or not USER_ID:
         return []
     try:
         res = supabase.table("user_watchlists")\
@@ -133,7 +93,7 @@ def load_watchlist():
     return []
 
 def save_watchlist():
-    if not supabase:
+    if not supabase or not USER_ID:
         return
     try:
         supabase.table("user_watchlists").upsert({
@@ -145,7 +105,7 @@ def save_watchlist():
         pass
 
 if "watchlist" not in st.session_state:
-    st.session_state.watchlist = load_watchlist()
+    st.session_state.watchlist = load_watchlist() if USER_ID else []
 
 # ========== SESSION STATE ==========
 if "selected_coin" not in st.session_state:
@@ -603,7 +563,7 @@ def fetch_single_coin_vibe(cid, btc_change, fg_value):
         return None
 
 # ========== HEADER ==========
-col_title, col_refresh = st.columns([6, 1])
+col_title, col_auth = st.columns([6, 1.4])
 with col_title:
     st.markdown("""
     <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 6px;">
@@ -617,15 +577,21 @@ with col_title:
         Spot strength, catch weakness, and stay ahead of the noise — all in one clean number.
     </div>
     """, unsafe_allow_html=True)
-with col_refresh:
-    st.write("")
-    st.write("")
-    if st.button("🔄 Refresh Now", use_container_width=True):
-        st.cache_data.clear()
-        st.session_state.last_refresh = datetime.now()
-        st.rerun()
 
-st.caption(f"Last refresh: {st.session_state.last_refresh.strftime('%H:%M:%S')}  •  Model: {MODEL_VERSION}  •  User: {USER_ID}")
+with col_auth:
+    st.write("")
+    st.write("")
+    if is_logged_in:
+        st.markdown(f"**👤 {user_name}**")
+        if st.button("Logout", use_container_width=True):
+            st.logout()
+            st.rerun()
+    else:
+        if st.button("🔐 Login with Google", use_container_width=True, type="primary"):
+            st.login()
+
+st.caption(f"Last refresh: {st.session_state.last_refresh.strftime('%H:%M:%S')}  •  Model: {MODEL_VERSION}" + 
+           (f"  •  Logged in as {USER_ID}" if is_logged_in else "  •  Viewing as Guest"))
 
 # ========== MARKET CONTEXT ==========
 fg_value, fg_label = get_fear_greed()
@@ -741,7 +707,10 @@ with main_col:
     elif filter_opt == "Falling":
         filtered = [v for v in filtered if v.get("prev_score") is not None and v["score"] < v["prev_score"]]
     elif filter_opt == "Watchlist Only":
-        filtered = [v for v in filtered if v["cid"] in st.session_state.watchlist]
+        if is_logged_in:
+            filtered = [v for v in filtered if v["cid"] in st.session_state.watchlist]
+        else:
+            filtered = []
 
     if show_option == "Top 5":
         display_data = filtered[:5]
@@ -754,8 +723,8 @@ with main_col:
 
     st.caption(f"Showing {len(display_data)} of {len(filtered)} coins")
 
-    # ===== WATCHLIST - EVEN CARDS =====
-    if st.session_state.watchlist:
+    # ===== WATCHLIST - ONLY WHEN LOGGED IN =====
+    if is_logged_in and st.session_state.watchlist:
         st.markdown("##### ⭐ Your Watchlist")
         watch_items = []
         for cid in st.session_state.watchlist:
@@ -812,8 +781,10 @@ with main_col:
                             save_watchlist()
                             st.rerun()
         st.divider()
+    elif not is_logged_in:
+        st.info("🔐 **Login with Google** (top right) to save your personal Watchlist.")
 
-    # ===== MAIN GRID - EVEN CARDS =====
+    # ===== MAIN GRID =====
     if not display_data:
         st.info("No coins match this filter right now.")
     else:
@@ -855,15 +826,18 @@ with main_col:
                                 st.session_state.search_coin = None
                                 st.rerun()
                         with b2:
-                            is_watched = item["cid"] in st.session_state.watchlist
-                            label = "★" if is_watched else "☆"
-                            if st.button(label, key=f"watch_{item['cid']}", use_container_width=True):
-                                if is_watched:
-                                    st.session_state.watchlist.remove(item["cid"])
-                                else:
-                                    st.session_state.watchlist.append(item["cid"])
-                                save_watchlist()
-                                st.rerun()
+                            if is_logged_in:
+                                is_watched = item["cid"] in st.session_state.watchlist
+                                label = "★" if is_watched else "☆"
+                                if st.button(label, key=f"watch_{item['cid']}", use_container_width=True):
+                                    if is_watched:
+                                        st.session_state.watchlist.remove(item["cid"])
+                                    else:
+                                        st.session_state.watchlist.append(item["cid"])
+                                    save_watchlist()
+                                    st.rerun()
+                            else:
+                                st.button("☆", key=f"watch_guest_{item['cid']}", use_container_width=True, disabled=True)
 
 with side_col:
     st.markdown("### ⚡ Market Pulse")
@@ -997,14 +971,17 @@ arrow = get_score_arrow(cid, score)
 st.markdown(f"**Vibe Score: {score}/100{arrow}**", unsafe_allow_html=True)
 st.markdown(colored_progress(score, height=14), unsafe_allow_html=True)
 
-is_watched = cid in st.session_state.watchlist
-if st.button("★ Remove from Watchlist" if is_watched else "☆ Add to Watchlist", key="detail_watch"):
-    if is_watched:
-        st.session_state.watchlist.remove(cid)
-    else:
-        st.session_state.watchlist.append(cid)
-    save_watchlist()
-    st.rerun()
+if is_logged_in:
+    is_watched = cid in st.session_state.watchlist
+    if st.button("★ Remove from Watchlist" if is_watched else "☆ Add to Watchlist", key="detail_watch"):
+        if is_watched:
+            st.session_state.watchlist.remove(cid)
+        else:
+            st.session_state.watchlist.append(cid)
+        save_watchlist()
+        st.rerun()
+else:
+    st.button("☆ Login to save to Watchlist", key="detail_watch_guest", disabled=True)
 
 perf = get_coin_performance(cid)
 if perf and perf.get("ready"):
