@@ -382,105 +382,61 @@ def search_coins(query):
     except:
         return []
 
-# ========== FIXED v3: FUNDING + OI (Bybit - robust) ==========
+# ========== FIXED v4: FUNDING + OI (Xoomar - works on Streamlit Cloud) ==========
 @st.cache_data(ttl=60)
 def get_funding_rates():
-    """Bybit linear perpetual funding rates (%) - robust version"""
-    symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT"]
+    """Xoomar free API - funding rates from Bybit/Binance/OKX"""
     rates = {}
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "application/json"
-    }
     try:
-        for sym in symbols:
-            try:
-                r = requests.get(
-                    "https://api.bybit.com/v5/market/tickers",
-                    params={"category": "linear", "symbol": sym},
-                    timeout=8,
-                    headers=headers
-                )
-                if r.status_code == 200:
-                    result = r.json()
-                    if result.get("retCode") == 0:
-                        data = result.get("result", {}).get("list", [])
-                        if data:
-                            rate_str = data[0].get("fundingRate", "0")
-                            rate = float(rate_str) * 100
-                            rates[sym.replace("USDT", "")] = rate
-            except Exception:
-                continue
+        r = requests.get(
+            "https://xoomar.com/api/markets/funding-rates",
+            timeout=10,
+            headers={"User-Agent": "Mozilla/5.0"}
+        )
+        if r.status_code == 200:
+            data = r.json().get("data", [])
+            # Prefer Bybit, then Binance
+            for item in data:
+                base = item.get("baseAsset", "").upper()
+                exchange = item.get("exchange", "").lower()
+                if base in ["BTC", "ETH", "SOL", "BNB", "XRP"] and base not in rates:
+                    if exchange in ["bybit", "binance"]:
+                        rate = float(item.get("fundingRate", 0)) * 100
+                        rates[base] = rate
     except Exception:
         pass
     return rates
 
 @st.cache_data(ttl=60)
 def get_open_interest_delta():
-    """Bybit current OI (USD) + simple 24h change"""
-    symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT"]
+    """Xoomar - current OI (we show current value)"""
     results = {}
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "application/json"
-    }
+    try:
+        r = requests.get(
+            "https://xoomar.com/api/markets/funding-rates",
+            timeout=10,
+            headers={"User-Agent": "Mozilla/5.0"}
+        )
+        if r.status_code == 200:
+            data = r.json().get("data", [])
+            for item in data:
+                base = item.get("baseAsset", "").upper()
+                exchange = item.get("exchange", "").lower()
+                if base in ["BTC", "ETH", "SOL", "BNB"] and exchange == "bybit":
+                    oi_val = item.get("openInterestValue") or item.get("openInterest")
+                    if oi_val is not None:
+                        oi_usd = float(oi_val)
+                        results[base] = {
+                            "oi_usd": oi_usd,
+                            "change_usd": 0.0,
+                            "change_pct": 0.0
+                        }
+    except Exception:
+        pass
     
-    for sym in symbols:
-        try:
-            # Current OI from ticker
-            r = requests.get(
-                "https://api.bybit.com/v5/market/tickers",
-                params={"category": "linear", "symbol": sym},
-                timeout=8,
-                headers=headers
-            )
-            current_oi_usd = 0.0
-            if r.status_code == 200:
-                result = r.json()
-                if result.get("retCode") == 0:
-                    data = result.get("result", {}).get("list", [])
-                    if data:
-                        current_oi_usd = float(data[0].get("openInterestValue", 0) or 0)
-
-            # History for change
-            r2 = requests.get(
-                "https://api.bybit.com/v5/market/open-interest",
-                params={
-                    "category": "linear",
-                    "symbol": sym,
-                    "intervalTime": "1h",
-                    "limit": 25
-                },
-                timeout=8,
-                headers=headers
-            )
-            change_usd = 0.0
-            change_pct = 0.0
-            if r2.status_code == 200:
-                result2 = r2.json()
-                if result2.get("retCode") == 0:
-                    hist = result2.get("result", {}).get("list", [])
-                    if len(hist) >= 2 and current_oi_usd > 0:
-                        # newest first
-                        newest_oi = float(hist[0].get("openInterest", 0) or 0)
-                        oldest_oi = float(hist[-1].get("openInterest", 0) or 0)
-                        if newest_oi > 0 and oldest_oi > 0:
-                            # scale old OI to current USD value
-                            old_usd = (oldest_oi / newest_oi) * current_oi_usd
-                            change_usd = current_oi_usd - old_usd
-                            change_pct = (change_usd / current_oi_usd) * 100 if current_oi_usd else 0
-
-            results[sym.replace("USDT", "")] = {
-                "oi_usd": current_oi_usd,
-                "change_usd": change_usd,
-                "change_pct": change_pct
-            }
-        except Exception:
-            results[sym.replace("USDT", "")] = {
-                "oi_usd": 0.0,
-                "change_usd": 0.0,
-                "change_pct": 0.0
-            }
+    for sym in ["BTC", "ETH", "SOL", "BNB"]:
+        if sym not in results:
+            results[sym] = {"oi_usd": 0.0, "change_usd": 0.0, "change_pct": 0.0}
     return results
 
 def analyze_candles(ohlc_data):
@@ -771,7 +727,7 @@ with side_col:
     # ----- FUNDING RATES -----
     with st.container(border=True):
         st.markdown("**💰 Funding Rates**")
-        st.caption("Bybit Perp • last rate")
+        st.caption("Xoomar • Bybit/Binance")
         funding = get_funding_rates()
         if funding:
             for sym in ["BTC", "ETH", "SOL", "BNB", "XRP"]:
@@ -790,28 +746,26 @@ with side_col:
 
     st.write("")
 
-    # ----- OPEN INTEREST Δ -----
+    # ----- OPEN INTEREST -----
     with st.container(border=True):
-        st.markdown("**📊 Open Interest Δ 24h**")
-        st.caption("Bybit • approx change")
+        st.markdown("**📊 Open Interest**")
+        st.caption("Xoomar • current value")
         oi_data = get_open_interest_delta()
         if oi_data:
             for sym in ["BTC", "ETH", "SOL", "BNB"]:
                 if sym in oi_data:
                     d = oi_data[sym]
-                    ch_pct = d["change_pct"]
-                    ch_usd = d["change_usd"]
-                    color = "#00c853" if ch_pct >= 0 else "#ff5252"
-                    if abs(ch_usd) >= 1e9:
-                        usd_str = f"{ch_usd/1e9:+.2f}B"
-                    elif abs(ch_usd) >= 1e6:
-                        usd_str = f"{ch_usd/1e6:+.0f}M"
+                    oi_usd = d["oi_usd"]
+                    if oi_usd >= 1e9:
+                        oi_str = f"${oi_usd/1e9:.2f}B"
+                    elif oi_usd >= 1e6:
+                        oi_str = f"${oi_usd/1e6:.0f}M"
                     else:
-                        usd_str = f"{ch_usd/1e3:+.0f}K"
+                        oi_str = f"${oi_usd/1e3:.0f}K"
                     st.markdown(
                         f"<div style='display:flex;justify-content:space-between;font-size:13px;padding:2px 0;'>"
                         f"<span>{sym}</span>"
-                        f"<span style='color:{color};font-weight:600'>{usd_str} ({ch_pct:+.1f}%)</span>"
+                        f"<span style='font-weight:600'>{oi_str}</span>"
                         f"</div>",
                         unsafe_allow_html=True
                     )
