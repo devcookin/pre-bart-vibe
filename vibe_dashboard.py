@@ -37,7 +37,7 @@ if not API_KEY:
     st.error("⚠️ CoinGecko API key is missing. Please add it in Streamlit secrets.")
     st.stop()
 
-HEADERS = {"x-cg-demo-api-key": API_KEY}
+HEADERS = {"x-cg-pro-api-key": API_KEY}
 HISTORY_FILE = "vibe_history.json"
 st.set_page_config(
     page_title="Pre-Bart Vibe Dashboard",
