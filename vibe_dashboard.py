@@ -482,7 +482,7 @@ def colored_progress(score: int, height: int = 12):
     </div>
     """
 
-def make_sparkline(history, height=90):
+def make_sparkline(history, height=110):
     if not history or len(history) < 2: return None
     times = [h[0] for h in history]
     scores = [h[1] for h in history]
@@ -710,7 +710,7 @@ with main_col:
 
     st.caption(f"Showing {len(display_data)} of {len(filtered)} coins")
 
-    # ===== WATCHLIST - FIXED LAYOUT =====
+    # ===== WATCHLIST - WIDER SPARKLINE =====
     if st.session_state.watchlist:
         st.markdown("##### ⭐ Your Watchlist")
         watch_items = []
@@ -724,15 +724,14 @@ with main_col:
         watch_items = sorted(watch_items, key=lambda x: x["score"], reverse=True)
         
         if watch_items:
-            # Use max 3 columns so cards don't stretch too wide
             n_cols = min(3, len(watch_items))
             cols = st.columns(n_cols)
             
             for i, item in enumerate(watch_items[:n_cols*2]):
                 with cols[i % n_cols]:
                     with st.container(border=True):
-                        # Top row: left info + right sparkline
-                        left, right = st.columns([1.4, 1])
+                        # Give more width to the sparkline (left 1 : right 1.6)
+                        left, right = st.columns([1, 1.6])
                         
                         with left:
                             if item["image_url"]:
@@ -751,7 +750,7 @@ with main_col:
                                 unsafe_allow_html=True
                             )
                             
-                            # Stats ABOVE the progress bar
+                            # Stats above progress bar
                             vs_btc = item["ch24"] - btc_change
                             direction = get_direction(item["cid"], item["score"])
                             st.markdown(
@@ -764,13 +763,13 @@ with main_col:
                         
                         with right:
                             if len(item.get("history", [])) >= 3:
-                                fig = make_sparkline(item["history"], height=105)
+                                fig = make_sparkline(item["history"], height=115)
                                 if fig:
                                     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
                             else:
                                 st.caption("Building…")
                         
-                        # Progress bar FULL WIDTH (outside the columns)
+                        # Full-width progress bar
                         st.markdown(colored_progress(item["score"], height=8), unsafe_allow_html=True)
                         
                         if st.button("Unpin", key=f"unpin_{item['cid']}", use_container_width=True):
