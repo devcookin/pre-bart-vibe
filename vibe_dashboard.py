@@ -196,7 +196,7 @@ def fill_pending_returns():
         pass
 
 @st.cache_data(ttl=300)
-def get_bucket_stats(min_n=20):
+def get_bucket_stats(min_n=5):
     if not supabase: return None
     try:
         result = supabase.table("vibe_snapshots")\
@@ -205,6 +205,10 @@ def get_bucket_stats(min_n=20):
         rows = result.data or []
         if not rows: return None
         df = pd.DataFrame(rows)
+        
+        # Overall average 1h return (for Edge calculation)
+        overall_avg_1h = df["return_1h"].mean() if len(df) > 0 else 0
+        
         def bucket(s):
             if s < 20: return "0-19"
             if s < 40: return "20-39"
@@ -214,6 +218,7 @@ def get_bucket_stats(min_n=20):
             if s < 90: return "80-89"
             return "90-100"
         df["bucket"] = df["score"].apply(bucket)
+        
         stats = []
         for b in ["0-19","20-39","40-59","60-69","70-79","80-89","90-100"]:
             sub = df[df["bucket"] == b]
@@ -221,18 +226,24 @@ def get_bucket_stats(min_n=20):
             if n < min_n:
                 stats.append({"bucket": b, "n": n, "ready": False})
                 continue
+            
             def avg(col):
                 vals = sub[col].dropna()
                 return round(vals.mean(), 3) if len(vals) else None
             def win(col):
                 vals = sub[col].dropna()
                 return round((vals > 0).mean() * 100, 1) if len(vals) else None
+            
+            avg_1h = avg("return_1h")
+            edge = round(avg_1h - overall_avg_1h, 2) if avg_1h is not None else None
+            
             stats.append({
                 "bucket": b, "n": n, "ready": True,
                 "avg_30m": avg("return_30m"), "win_30m": win("return_30m"),
-                "avg_1h": avg("return_1h"), "win_1h": win("return_1h"),
+                "avg_1h": avg_1h, "win_1h": win("return_1h"),
                 "avg_4h": avg("return_4h"), "win_4h": win("return_4h"),
                 "avg_24h": avg("return_24h"), "win_24h": win("return_24h"),
+                "edge": edge
             })
         return stats
     except:
@@ -1020,22 +1031,112 @@ st.caption("Historical forward returns across **all tracked coins**.")
 
 bucket_stats = get_bucket_stats(min_n=5)
 if bucket_stats:
+    # Create styled dataframe
     table_data = []
     for s in bucket_stats:
         if not s["ready"]:
-            table_data.append({"Bucket":s["bucket"],"n":s["n"],"Avg 30m":"—","Win 30m":"—","Avg 1h":"—","Win 1h":"—","Avg 4h":"—","Win 4h":"—","Avg 24h":"—","Win 24h":"—"})
+            table_data.append({
+                "Bucket": s["bucket"],
+                "n": s["n"],
+                "Avg 30m": "—",
+                "Win 30m": "—",
+                "Avg 1h": "—",
+                "Win 1h": "—",
+                "Edge (1h)": "—",
+                "Avg 4h": "—",
+                "Win 4h": "—",
+                "Avg 24h": "—",
+                "Win 24h": "—"
+            })
         else:
             table_data.append({
-                "Bucket":s["bucket"],"n":s["n"],
-                "Avg 30m":f"{s['avg_30m']:+.2f}%" if s['avg_30m'] is not None else "—",
-                "Win 30m":f"{s['win_30m']}%" if s['win_30m'] is not None else "—",
-                "Avg 1h":f"{s['avg_1h']:+.2f}%" if s['avg_1h'] is not None else "—",
-                "Win 1h":f"{s['win_1h']}%" if s['win_1h'] is not None else "—",
-                "Avg 4h":f"{s['avg_4h']:+.2f}%" if s['avg_4h'] is not None else "—",
-                "Win 4h":f"{s['win_4h']}%" if s['win_4h'] is not None else "—",
-                "Avg 24h":f"{s['avg_24h']:+.2f}%" if s['avg_24h'] is not None else "—",
-                "Win 24h":f"{s['win_24h']}%" if s['win_24h'] is not None else "—",
+                "Bucket": s["bucket"],
+                "n": s["n"],
+                "Avg 30m": f"{s['avg_30m']:+.2f}%" if s['avg_30m'] is not None else "—",
+                "Win 30m": f"{s['win_30m']}%" if s['win_30m'] is not None else "—",
+                "Avg 1h": f"{s['avg_1h']:+.2f}%" if s['avg_1h'] is not None else "—",
+                "Win 1h": f"{s['win_1h']}%" if s['win_1h'] is not None else "—",
+                "Edge (1h)": f"{s['edge']:+.2f}%" if s.get('edge') is not None else "—",
+                "Avg 4h": f"{s['avg_4h']:+.2f}%" if s['avg_4h'] is not None else "—",
+                "Win 4h": f"{s['win_4h']}%" if s['win_4h'] is not None else "—",
+                "Avg 24h": f"{s['avg_24h']:+.2f}%" if s['avg_24h'] is not None else "—",
+                "Win 24h": f"{s['win_24h']}%" if s['win_24h'] is not None else "—",
             })
-    st.dataframe(pd.DataFrame(table_data), use_container_width=True, hide_index=True)
+    
+    df_display = pd.DataFrame(table_data)
+    
+    # Style function for colors
+    def color_cells(val):
+        if val == "—":
+            return ""
+        try:
+            # Win rates
+            if "%" in str(val) and "Win" not in str(val):  # this is rough, better to style by column
+                pass
+        except:
+            pass
+        return ""
+    
+    # Better styling with Styler
+    def style_win(val):
+        if val == "—":
+            return ""
+        try:
+            num = float(val.replace("%", ""))
+            if num >= 80:
+                return "background-color: #1b5e20; color: white; font-weight: 600"
+            elif num >= 65:
+                return "background-color: #2e7d32; color: white"
+            elif num <= 45:
+                return "background-color: #b71c1c; color: white"
+            elif num <= 55:
+                return "background-color: #e65100; color: white"
+        except:
+            pass
+        return ""
+    
+    def style_avg(val):
+        if val == "—":
+            return ""
+        try:
+            num = float(val.replace("%", "").replace("+", ""))
+            if num >= 3:
+                return "background-color: #1b5e20; color: white; font-weight: 600"
+            elif num >= 1:
+                return "background-color: #2e7d32; color: white"
+            elif num <= -1:
+                return "background-color: #b71c1c; color: white"
+            elif num < 0:
+                return "background-color: #e65100; color: white"
+        except:
+            pass
+        return ""
+    
+    def style_edge(val):
+        if val == "—":
+            return ""
+        try:
+            num = float(val.replace("%", "").replace("+", ""))
+            if num >= 5:
+                return "background-color: #1b5e20; color: white; font-weight: 700"
+            elif num >= 2:
+                return "background-color: #2e7d32; color: white; font-weight: 600"
+            elif num <= -2:
+                return "background-color: #b71c1c; color: white"
+        except:
+            pass
+        return ""
+    
+    styler = df_display.style\
+        .applymap(style_win, subset=["Win 30m", "Win 1h", "Win 4h", "Win 24h"])\
+        .applymap(style_avg, subset=["Avg 30m", "Avg 1h", "Avg 4h", "Avg 24h"])\
+        .applymap(style_edge, subset=["Edge (1h)"])
+    
+    st.dataframe(styler, use_container_width=True, hide_index=True)
+    
+    st.caption("""
+    **Edge (1h)** = How much better (or worse) this Vibe bucket performed compared to the average coin in the next 1 hour.  
+    Positive Edge = this score range historically beat the market.
+    """)
 else:
     st.info("Collecting performance data…")
