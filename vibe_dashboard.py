@@ -42,13 +42,22 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-st.markdown("""
+# ========== THEME STATE ==========
+if "theme" not in st.session_state:
+    st.session_state.theme = "dark"   # default
+
+# ========== CSS ==========
+dark_css = """
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
     
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     
-    /* ===== COMPACT + FULL WIDTH ===== */
+    .stApp {
+        background-color: #0e1117;
+        color: #fafafa;
+    }
+    
     .block-container {
         max-width: 100% !important;
         padding-top: 0.7rem !important;
@@ -57,48 +66,65 @@ st.markdown("""
         padding-right: 1.3rem !important;
     }
     
-    .main .block-container {
-        padding-top: 0.5rem !important;
+    h1, h2, h3, h4, h5, h6, p, span, div, label {
+        color: #fafafa !important;
     }
     
-    h1 { font-weight: 700 !important; letter-spacing: -0.5px; margin-bottom: 0.2rem !important; }
-    h2, h3 { margin-top: 0.6rem !important; margin-bottom: 0.4rem !important; }
+    .stMetric {
+        background-color: #1a1d24;
+        border-radius: 12px;
+        padding: 8px 12px;
+    }
     
-    .stMetric { border-radius: 12px; padding: 8px 12px; }
-    div[data-testid="stMetricValue"] { font-size: 1.3rem !important; font-weight: 600; }
+    div[data-testid="stMetricValue"] { font-size: 1.3rem !important; font-weight: 600; color: #fafafa !important; }
+    div[data-testid="stMetricLabel"] { color: #a0a0a0 !important; }
     
     div.stButton > button {
         width: 100%;
         border-radius: 10px;
         font-weight: 600;
-        transition: all 0.2s ease;
+        background-color: #262730;
+        color: #fafafa;
+        border: 1px solid #3a3b45;
     }
-    div.stButton > button:hover { transform: translateY(-1px); }
+    div.stButton > button:hover {
+        background-color: #32333d;
+        border-color: #4a4b55;
+    }
     
     .live-badge {
         display: inline-flex; align-items: center; gap: 6px;
-        background: rgba(0, 200, 83, 0.12); color: #00c853;
+        background: rgba(0, 200, 83, 0.15); color: #00c853;
         font-size: 12px; font-weight: 600; padding: 3px 10px;
-        border-radius: 20px; margin-left: 10px; vertical-align: middle;
+        border-radius: 20px; margin-left: 10px;
     }
     .live-dot {
         width: 7px; height: 7px; background: #00c853; border-radius: 50%;
-        display: inline-block; animation: pulse 1.5s infinite;
+        animation: pulse 1.5s infinite;
     }
     @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
     
-    /* Tighter vertical spacing */
-    div[data-testid="stVerticalBlock"] > div {
-        gap: 0.55rem !important;
-    }
+    div[data-testid="stVerticalBlock"] > div { gap: 0.55rem !important; }
+    hr { margin: 0.7rem 0 !important; border-color: #2a2b35; }
     
-    hr {
-        margin: 0.7rem 0 !important;
-    }
-    
-    /* Reduce extra space from containers */
+    /* Cards */
     div[data-testid="stVerticalBlockBorderWrapper"] {
-        margin-bottom: 0.4rem !important;
+        background-color: #16181d;
+        border: 1px solid #2a2b35 !important;
+        border-radius: 12px;
+    }
+    
+    /* Inputs */
+    .stTextInput > div > div > input,
+    .stSelectbox > div > div {
+        background-color: #1a1d24 !important;
+        color: #fafafa !important;
+        border-color: #3a3b45 !important;
+    }
+    
+    /* Code block */
+    .stCodeBlock {
+        background-color: #1a1d24 !important;
     }
     
     @media (max-width: 768px) {
@@ -106,13 +132,74 @@ st.markdown("""
             padding-left: 0.7rem !important;
             padding-right: 0.7rem !important;
         }
-        div[data-testid="column"] {
-            width: 100% !important;
-            flex: 1 1 100% !important;
+    }
+</style>
+"""
+
+light_css = """
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    
+    html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+    
+    .stApp {
+        background-color: #ffffff;
+        color: #1a1a1a;
+    }
+    
+    .block-container {
+        max-width: 100% !important;
+        padding-top: 0.7rem !important;
+        padding-bottom: 1.5rem !important;
+        padding-left: 1.3rem !important;
+        padding-right: 1.3rem !important;
+    }
+    
+    h1 { font-weight: 700 !important; letter-spacing: -0.5px; }
+    
+    .stMetric {
+        background-color: #f8f9fa;
+        border-radius: 12px;
+        padding: 8px 12px;
+    }
+    
+    div[data-testid="stMetricValue"] { font-size: 1.3rem !important; font-weight: 600; }
+    
+    div.stButton > button {
+        width: 100%;
+        border-radius: 10px;
+        font-weight: 600;
+    }
+    
+    .live-badge {
+        display: inline-flex; align-items: center; gap: 6px;
+        background: rgba(0, 200, 83, 0.12); color: #00c853;
+        font-size: 12px; font-weight: 600; padding: 3px 10px;
+        border-radius: 20px; margin-left: 10px;
+    }
+    .live-dot {
+        width: 7px; height: 7px; background: #00c853; border-radius: 50%;
+        animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+    
+    div[data-testid="stVerticalBlock"] > div { gap: 0.55rem !important; }
+    hr { margin: 0.7rem 0 !important; }
+    
+    @media (max-width: 768px) {
+        .block-container {
+            padding-left: 0.7rem !important;
+            padding-right: 0.7rem !important;
         }
     }
 </style>
-""", unsafe_allow_html=True)
+"""
+
+# Apply the current theme
+if st.session_state.theme == "dark":
+    st.markdown(dark_css, unsafe_allow_html=True)
+else:
+    st.markdown(light_css, unsafe_allow_html=True)
 
 # ========== SESSION STATE ==========
 if "watchlist" not in st.session_state:
@@ -582,7 +669,8 @@ def fetch_single_coin_vibe(cid, btc_change, fg_value):
         return None
 
 # ========== HEADER ==========
-col_title, col_refresh = st.columns([6, 1])
+col_title, col_theme, col_refresh = st.columns([5.5, 1.2, 1.3])
+
 with col_title:
     st.markdown("""
     <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 4px;">
@@ -591,14 +679,23 @@ with col_title:
     </div>
     """, unsafe_allow_html=True)
     st.markdown("""
-    <div style="font-size: 1.05rem; color: #555; margin-bottom: 2px; line-height: 1.45;">
+    <div style="font-size: 1.05rem; color: #888; margin-bottom: 2px; line-height: 1.45;">
         Real-time Vibe Scores for the market’s top coins.<br>
         Spot strength, catch weakness, and stay ahead of the noise — all in one clean number.
     </div>
     """, unsafe_allow_html=True)
+
+with col_theme:
+    st.write("")
+    # Mobile-friendly theme toggle
+    if st.button("🌙 Dark" if st.session_state.theme == "light" else "☀️ Light", 
+                 use_container_width=True, key="theme_toggle"):
+        st.session_state.theme = "light" if st.session_state.theme == "dark" else "dark"
+        st.rerun()
+
 with col_refresh:
     st.write("")
-    if st.button("🔄 Refresh Now", use_container_width=True):
+    if st.button("🔄 Refresh", use_container_width=True):
         st.cache_data.clear()
         st.session_state.last_refresh = datetime.now()
         st.rerun()
@@ -1018,7 +1115,7 @@ else:
 with st.expander("🤔 Why this score?"):
     for r in reasons: st.write(f"• {r}")
 
-# ========== SHARE SECTION (CLEAN + WORKING) ==========
+# ========== SHARE SECTION ==========
 st.markdown("### 📤 Share this vibe")
 
 share_text = (
@@ -1103,7 +1200,8 @@ if isinstance(ohlc_data, list) and len(ohlc_data) > 0:
     if has_volume:
         colors = ["#00c853" if r["close"] >= r["open"] else "#ff5252" for _, r in df.iterrows()]
         fig.add_trace(go.Bar(x=df["time"], y=df["volume"], marker_color=colors, opacity=0.65, name="Volume"), row=2, col=1)
-    fig.update_layout(height=480, template="plotly_white", margin=dict(l=0,r=0,t=15,b=0),
+    fig.update_layout(height=480, template="plotly_white" if st.session_state.theme == "light" else "plotly_dark",
+                      margin=dict(l=0,r=0,t=15,b=0),
                       xaxis_rangeslider_visible=False, showlegend=False, hovermode="x unified")
     st.plotly_chart(fig, use_container_width=True)
 else:
@@ -1149,59 +1247,36 @@ if bucket_stats:
     df_display = pd.DataFrame(table_data)
     
     def style_win(val):
-        if val == "—":
-            return ""
+        if val == "—": return ""
         try:
             num = float(str(val).replace("%", ""))
-            if num >= 85:
-                return "background-color: #1b5e20; color: white; font-weight: 600"
-            elif num >= 70:
-                return "background-color: #2e7d32; color: white"
-            elif num >= 55:
-                return "background-color: #f9a825; color: black"
-            else:
-                return "background-color: #c62828; color: white"
-        except:
-            pass
-        return ""
+            if num >= 85: return "background-color: #1b5e20; color: white; font-weight: 600"
+            elif num >= 70: return "background-color: #2e7d32; color: white"
+            elif num >= 55: return "background-color: #f9a825; color: black"
+            else: return "background-color: #c62828; color: white"
+        except: return ""
     
     def style_avg(val):
-        if val == "—":
-            return ""
+        if val == "—": return ""
         try:
             num = float(str(val).replace("%", "").replace("+", ""))
-            if num >= 4:
-                return "background-color: #1b5e20; color: white; font-weight: 600"
-            elif num >= 1.5:
-                return "background-color: #2e7d32; color: white"
-            elif num >= 0:
-                return "background-color: #f9a825; color: black"
-            elif num > -1.5:
-                return "background-color: #ef6c00; color: white"
-            else:
-                return "background-color: #c62828; color: white"
-        except:
-            pass
-        return ""
+            if num >= 4: return "background-color: #1b5e20; color: white; font-weight: 600"
+            elif num >= 1.5: return "background-color: #2e7d32; color: white"
+            elif num >= 0: return "background-color: #f9a825; color: black"
+            elif num > -1.5: return "background-color: #ef6c00; color: white"
+            else: return "background-color: #c62828; color: white"
+        except: return ""
     
     def style_edge(val):
-        if val == "—":
-            return ""
+        if val == "—": return ""
         try:
             num = float(str(val).replace("%", "").replace("+", ""))
-            if num >= 5:
-                return "background-color: #1b5e20; color: white; font-weight: 700"
-            elif num >= 2:
-                return "background-color: #2e7d32; color: white; font-weight: 600"
-            elif num >= 0:
-                return "background-color: #f9a825; color: black"
-            elif num > -2:
-                return "background-color: #ef6c00; color: white"
-            else:
-                return "background-color: #c62828; color: white"
-        except:
-            pass
-        return ""
+            if num >= 5: return "background-color: #1b5e20; color: white; font-weight: 700"
+            elif num >= 2: return "background-color: #2e7d32; color: white; font-weight: 600"
+            elif num >= 0: return "background-color: #f9a825; color: black"
+            elif num > -2: return "background-color: #ef6c00; color: white"
+            else: return "background-color: #c62828; color: white"
+        except: return ""
     
     styler = df_display.style\
         .map(style_win, subset=["Win 30m", "Win 1h", "Win 4h", "Win 24h"])\
