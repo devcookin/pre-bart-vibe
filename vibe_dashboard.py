@@ -866,9 +866,17 @@ with main_col:
                         
                         st.markdown(colored_progress(item["score"], height=6), unsafe_allow_html=True)
                         
-                        if st.button("Unpin", key=f"unpin_{item['cid']}", use_container_width=True):
-                            st.session_state.watchlist.remove(item["cid"])
-                            st.rerun()
+                        # View + Unpin buttons (even layout)
+                        b1, b2 = st.columns(2)
+                        with b1:
+                            if st.button("View", key=f"watch_view_{item['cid']}", use_container_width=True):
+                                st.session_state.selected_coin = item["name"]
+                                st.session_state.search_coin = None
+                                st.rerun()
+                        with b2:
+                            if st.button("Unpin", key=f"unpin_{item['cid']}", use_container_width=True):
+                                st.session_state.watchlist.remove(item["cid"])
+                                st.rerun()
         st.divider()
 
     # ===== MAIN GRID =====
