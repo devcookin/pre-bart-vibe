@@ -64,38 +64,45 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ========== PERSISTENT WATCHLIST ==========
-def save_watchlist_to_storage():
+# ========== IMPROVED PERSISTENT WATCHLIST ==========
+WATCHLIST_KEY = "prebart_watchlist_v2"
+
+def save_watchlist():
+    """Save current watchlist to localStorage"""
     components.html(
         f"""
         <script>
-            localStorage.setItem('prebart_watchlist', '{json.dumps(st.session_state.watchlist)}');
+            localStorage.setItem('{WATCHLIST_KEY}', JSON.stringify({json.dumps(st.session_state.watchlist)}));
         </script>
         """,
         height=0,
     )
 
-if "watchlist" in st.query_params:
+# Load from query params first (most reliable)
+if "wl" in st.query_params:
     try:
-        loaded = json.loads(st.query_params["watchlist"])
+        loaded = json.loads(st.query_params["wl"])
         if isinstance(loaded, list):
             st.session_state.watchlist = loaded
     except:
         pass
 
-if "watchlist_initialized" not in st.session_state:
-    st.session_state.watchlist_initialized = True
-    if "watchlist" not in st.session_state:
-        st.session_state.watchlist = []
+# Initialize
+if "watchlist" not in st.session_state:
+    st.session_state.watchlist = []
+
+# One-time load from localStorage
+if "wl_loaded" not in st.session_state:
+    st.session_state.wl_loaded = True
     components.html(
-        """
+        f"""
         <script>
-            const stored = localStorage.getItem('prebart_watchlist');
-            if (stored) {
-                const url = new URL(window.parent.location);
-                url.searchParams.set('watchlist', stored);
+            const stored = localStorage.getItem('{WATCHLIST_KEY}');
+            if (stored) {{
+                const url = new URL(window.parent.location.href);
+                url.searchParams.set('wl', stored);
                 window.parent.location.href = url.toString();
-            }
+            }}
         </script>
         """,
         height=0,
@@ -116,8 +123,6 @@ if "last_fill_time" not in st.session_state:
     st.session_state.last_fill_time = None
 if "movers_tf" not in st.session_state:
     st.session_state.movers_tf = "1h"
-if "watchlist" not in st.session_state:
-    st.session_state.watchlist = []
 if "quick_filter" not in st.session_state:
     st.session_state.quick_filter = "All"
 
@@ -163,7 +168,7 @@ def update_history(cid, score, history_dict):
 if "score_history" not in st.session_state:
     st.session_state.score_history = load_history()
 
-# ========== SUPABASE ==========
+# ========== SUPABASE (same as before) ==========
 def save_vibe_snapshot(coin_id, symbol, price, score, label, change_24h, range_pos, vs_btc, prev_score, sub_signals):
     if not supabase: return
     now = datetime.now(timezone.utc)
@@ -510,15 +515,15 @@ def make_sparkline(history, height=115):
     return fig
 
 def get_score_arrow(cid, current_score):
-    """More reliable arrow"""
+    """More aggressive arrow - shows as soon as we have 2 readings"""
     hist = st.session_state.score_history.get(cid, [])
     if len(hist) < 2:
         return ""
     prev = hist[-2][1]
     if current_score > prev:
-        return " <span style='color:#00c853;font-weight:700;font-size:15px;'>↑</span>"
+        return ' <span style="color:#00c853;font-weight:800;font-size:16px;">↑</span>'
     elif current_score < prev:
-        return " <span style='color:#ff5252;font-weight:700;font-size:15px;'>↓</span>"
+        return ' <span style="color:#ff5252;font-weight:800;font-size:16px;">↓</span>'
     return ""
 
 def get_direction(cid, current_score):
@@ -741,7 +746,7 @@ with main_col:
                             price_str = f"${item['price']:,.0f}" if item["price"] >= 1000 else f"${item['price']:,.2f}" if item["price"] >= 1 else f"${item['price']:.4f}"
                             st.markdown(f"<div style='font-size:1.35rem;font-weight:700;margin:2px 0;'>{price_str}</div>", unsafe_allow_html=True)
                             
-                            # Arrow is back and more visible
+                            # Arrow is back and stronger
                             arrow = get_score_arrow(item["cid"], item["score"])
                             ch_color = "#00c853" if item["ch24"] >= 0 else "#ff5252"
                             st.markdown(
@@ -773,7 +778,7 @@ with main_col:
                         
                         if st.button("Unpin", key=f"unpin_{item['cid']}", use_container_width=True):
                             st.session_state.watchlist.remove(item["cid"])
-                            save_watchlist_to_storage()
+                            save_watchlist()
                             st.rerun()
         else:
             st.caption("Loading watchlist…")
@@ -823,7 +828,7 @@ with main_col:
                                     st.session_state.watchlist.remove(item["cid"])
                                 else:
                                     st.session_state.watchlist.append(item["cid"])
-                                save_watchlist_to_storage()
+                                save_watchlist()
                                 st.rerun()
 
 with side_col:
@@ -964,7 +969,7 @@ if st.button("★ Remove from Watchlist" if is_watched else "☆ Add to Watchlis
         st.session_state.watchlist.remove(cid)
     else:
         st.session_state.watchlist.append(cid)
-    save_watchlist_to_storage()
+    save_watchlist()
     st.rerun()
 
 perf = get_coin_performance(cid)
