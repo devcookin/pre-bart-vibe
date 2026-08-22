@@ -417,13 +417,27 @@ def get_global():
         return None
 
 @st.cache_data(ttl=60)
+@st.cache_data(ttl=60)
 def get_top_coins(limit=30):
     try:
-        r = requests.get("https://api.coingecko.com/api/v3/coins/markets", headers=HEADERS,
-            params={"vs_currency":"usd","order":"market_cap_desc","per_page":limit,"page":1,
-                    "sparkline":False,"price_change_percentage":"1h,24h"}, timeout=12)
+        r = requests.get(
+            "https://api.coingecko.com/api/v3/coins/markets",
+            headers=HEADERS,
+            params={
+                "vs_currency": "usd",
+                "order": "market_cap_desc",
+                "per_page": limit,
+                "page": 1,
+                "sparkline": False,
+                "price_change_percentage": "1h,24h"
+            },
+            timeout=12
+        )
+        st.write("Status code:", r.status_code)
+        st.write("Response preview:", r.text[:400])
         return r.json() if r.status_code == 200 else []
-    except:
+    except Exception as e:
+        st.write("Exception:", str(e))
         return []
 
 @st.cache_data(ttl=60)
