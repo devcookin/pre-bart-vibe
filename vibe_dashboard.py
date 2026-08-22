@@ -65,34 +65,34 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ========== SUPABASE WATCHLIST PERSISTENCE ==========
-def get_or_create_user_id():
-    """Get persistent user_id from localStorage or create a new one"""
+# ========== ROBUST SUPABASE WATCHLIST ==========
+def get_user_id():
+    """Reliable persistent user ID"""
     if "user_id" in st.session_state:
         return st.session_state.user_id
 
-    # Try to load from query params first
-    if "uid" in st.query_params:
+    # Check query params first
+    if "uid" in st.query_params and st.query_params["uid"]:
         st.session_state.user_id = st.query_params["uid"]
         return st.session_state.user_id
 
-    # Generate new one and inject into localStorage + redirect
+    # Create new ID and push to browser
     new_id = str(uuid.uuid4())
     st.session_state.user_id = new_id
 
     components.html(
         f"""
         <script>
-            const existing = localStorage.getItem('prebart_uid');
-            if (existing) {{
-                const url = new URL(window.parent.location.href);
-                url.searchParams.set('uid', existing);
-                window.parent.location.href = url.toString();
-            }} else {{
-                localStorage.setItem('prebart_uid', '{new_id}');
-                const url = new URL(window.parent.location.href);
-                url.searchParams.set('uid', '{new_id}');
-                window.parent.location.href = url.toString();
+            let uid = localStorage.getItem('prebart_uid_v4');
+            if (!uid) {{
+                uid = '{new_id}';
+                localStorage.setItem('prebart_uid_v4', uid);
+            }}
+            // Always force the correct UID into the URL
+            const url = new URL(window.parent.location.href);
+            if (url.searchParams.get('uid') !== uid) {{
+                url.searchParams.set('uid', uid);
+                window.parent.location.replace(url.toString());
             }}
         </script>
         """,
@@ -100,38 +100,42 @@ def get_or_create_user_id():
     )
     return new_id
 
-def load_watchlist_from_supabase(user_id: str):
+user_id = get_user_id()
+
+def load_watchlist_from_db():
     if not supabase or not user_id:
         return []
     try:
-        res = supabase.table("user_watchlists").select("watchlist").eq("user_id", user_id).execute()
-        if res.data and len(res.data) > 0:
-            return res.data[0]["watchlist"] or []
-        return []
-    except Exception as e:
-        return []
+        res = supabase.table("user_watchlists")\
+            .select("watchlist")\
+            .eq("user_id", user_id)\
+            .maybe_single()\
+            .execute()
+        if res.data and isinstance(res.data.get("watchlist"), list):
+            return res.data["watchlist"]
+    except Exception:
+        pass
+    return []
 
-def save_watchlist_to_supabase(user_id: str, watchlist: list):
+def save_watchlist_to_db():
     if not supabase or not user_id:
         return
     try:
         supabase.table("user_watchlists").upsert({
             "user_id": user_id,
-            "watchlist": watchlist,
+            "watchlist": st.session_state.watchlist,
             "updated_at": datetime.now(timezone.utc).isoformat()
         }).execute()
     except Exception as e:
+        # Silent fail for now
         pass
 
-# Initialize user_id and watchlist
-user_id = get_or_create_user_id()
-
+# Load watchlist once
 if "watchlist" not in st.session_state:
-    st.session_state.watchlist = load_watchlist_from_supabase(user_id)
+    st.session_state.watchlist = load_watchlist_from_db()
 
 def save_watchlist():
-    """Save current watchlist to Supabase"""
-    save_watchlist_to_supabase(user_id, st.session_state.watchlist)
+    save_watchlist_to_db()
 
 # ========== SESSION STATE ==========
 if "selected_coin" not in st.session_state:
@@ -193,7 +197,7 @@ def update_history(cid, score, history_dict):
 if "score_history" not in st.session_state:
     st.session_state.score_history = load_history()
 
-# ========== SUPABASE SNAPSHOTS (unchanged) ==========
+# ========== SUPABASE SNAPSHOTS ==========
 def save_vibe_snapshot(coin_id, symbol, price, score, label, change_24h, range_pos, vs_btc, prev_score, sub_signals):
     if not supabase: return
     now = datetime.now(timezone.utc)
