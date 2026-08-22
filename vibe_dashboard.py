@@ -206,7 +206,6 @@ def get_bucket_stats(min_n=5):
         if not rows: return None
         df = pd.DataFrame(rows)
         
-        # Overall average 1h return (for Edge calculation)
         overall_avg_1h = df["return_1h"].mean() if len(df) > 0 else 0
         
         def bucket(s):
@@ -805,16 +804,13 @@ with side_col:
         if weakest: st.markdown(f"💀 **{weakest['tick']}** {weakest['score']}")
     st.write("")
     
-    # ===== FIXED TOP MOVERS =====
     with st.container(border=True):
         st.markdown("**🔥 Top Movers**")
         tf = st.radio("Timeframe", ["1h", "24h"], horizontal=True, key="movers_tf_radio", label_visibility="collapsed")
         st.session_state.movers_tf = tf
         key = "ch1" if tf == "1h" else "ch24"
 
-        # Top 3 Gainers
         gainers = sorted(vibe_data, key=lambda x: x[key], reverse=True)[:3]
-        # Top 3 Losers
         losers = sorted(vibe_data, key=lambda x: x[key])[:3]
 
         st.caption("Gainers")
@@ -1031,7 +1027,6 @@ st.caption("Historical forward returns across **all tracked coins**.")
 
 bucket_stats = get_bucket_stats(min_n=5)
 if bucket_stats:
-    # Create styled dataframe
     table_data = []
     for s in bucket_stats:
         if not s["ready"]:
@@ -1065,24 +1060,11 @@ if bucket_stats:
     
     df_display = pd.DataFrame(table_data)
     
-    # Style function for colors
-    def color_cells(val):
-        if val == "—":
-            return ""
-        try:
-            # Win rates
-            if "%" in str(val) and "Win" not in str(val):  # this is rough, better to style by column
-                pass
-        except:
-            pass
-        return ""
-    
-    # Better styling with Styler
     def style_win(val):
         if val == "—":
             return ""
         try:
-            num = float(val.replace("%", ""))
+            num = float(str(val).replace("%", ""))
             if num >= 80:
                 return "background-color: #1b5e20; color: white; font-weight: 600"
             elif num >= 65:
@@ -1099,7 +1081,7 @@ if bucket_stats:
         if val == "—":
             return ""
         try:
-            num = float(val.replace("%", "").replace("+", ""))
+            num = float(str(val).replace("%", "").replace("+", ""))
             if num >= 3:
                 return "background-color: #1b5e20; color: white; font-weight: 600"
             elif num >= 1:
@@ -1116,7 +1098,7 @@ if bucket_stats:
         if val == "—":
             return ""
         try:
-            num = float(val.replace("%", "").replace("+", ""))
+            num = float(str(val).replace("%", "").replace("+", ""))
             if num >= 5:
                 return "background-color: #1b5e20; color: white; font-weight: 700"
             elif num >= 2:
@@ -1128,9 +1110,9 @@ if bucket_stats:
         return ""
     
     styler = df_display.style\
-        .applymap(style_win, subset=["Win 30m", "Win 1h", "Win 4h", "Win 24h"])\
-        .applymap(style_avg, subset=["Avg 30m", "Avg 1h", "Avg 4h", "Avg 24h"])\
-        .applymap(style_edge, subset=["Edge (1h)"])
+        .map(style_win, subset=["Win 30m", "Win 1h", "Win 4h", "Win 24h"])\
+        .map(style_avg, subset=["Avg 30m", "Avg 1h", "Avg 4h", "Avg 24h"])\
+        .map(style_edge, subset=["Edge (1h)"])
     
     st.dataframe(styler, use_container_width=True, hide_index=True)
     
