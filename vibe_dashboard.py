@@ -42,16 +42,14 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ========== THEME STATE ==========
-if "theme" not in st.session_state:
-    st.session_state.theme = "dark"
-
-# ========== CSS ==========
-dark_css = """
+# ========== FIXED DARK THEME ==========
+st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
     
-    html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+    html, body, [class*="css"] {
+        font-family: 'Inter', sans-serif;
+    }
     
     .stApp {
         background-color: #0e1117;
@@ -60,133 +58,38 @@ dark_css = """
     
     .block-container {
         max-width: 100% !important;
-        padding-top: 0.7rem !important;
-        padding-bottom: 1.5rem !important;
-        padding-left: 1.3rem !important;
-        padding-right: 1.3rem !important;
+        padding-top: 0.8rem !important;
+        padding-bottom: 1.8rem !important;
+        padding-left: 1.4rem !important;
+        padding-right: 1.4rem !important;
     }
     
-    h1, h2, h3, h4, h5, h6, p, span, div, label {
-        color: #fafafa !important;
+    h1 {
+        font-weight: 700 !important;
+        letter-spacing: -0.5px;
+        color: #ffffff !important;
     }
     
+    h2, h3, h4, h5 {
+        color: #f0f0f0 !important;
+    }
+    
+    /* Metrics */
     .stMetric {
         background-color: #1a1d24;
         border-radius: 12px;
-        padding: 8px 12px;
-        height: 110px !important;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
+        padding: 12px 16px;
+        border: 1px solid #2a2d35;
     }
     
-    div[data-testid="stMetricValue"] { font-size: 1.3rem !important; font-weight: 600; color: #fafafa !important; }
-    div[data-testid="stMetricLabel"] { color: #a0a0a0 !important; }
-    
-    div.stButton > button {
-        width: 100%;
-        border-radius: 10px;
+    div[data-testid="stMetricValue"] {
+        font-size: 1.35rem !important;
         font-weight: 600;
-        background-color: #262730;
-        color: #fafafa;
-        border: 1px solid #3a3b45;
-    }
-    div.stButton > button:hover {
-        background-color: #32333d;
-        border-color: #4a4b55;
+        color: #ffffff !important;
     }
     
-    .live-badge {
-        display: inline-flex; align-items: center; gap: 6px;
-        background: rgba(0, 200, 83, 0.15); color: #00c853;
-        font-size: 12px; font-weight: 600; padding: 3px 10px;
-        border-radius: 20px; margin-left: 10px;
-    }
-    .live-dot {
-        width: 7px; height: 7px; background: #00c853; border-radius: 50%;
-        animation: pulse 1.5s infinite;
-    }
-    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
-    
-    div[data-testid="stVerticalBlock"] > div { gap: 0.55rem !important; }
-    hr { margin: 0.7rem 0 !important; border-color: #2a2b35; }
-    
-    div[data-testid="stVerticalBlockBorderWrapper"] {
-        background-color: #16181d;
-        border: 1px solid #2a2b35 !important;
-        border-radius: 12px;
-    }
-    
-    .stTextInput > div > div > input,
-    .stSelectbox > div > div {
-        background-color: #1a1d24 !important;
-        color: #fafafa !important;
-        border-color: #3a3b45 !important;
-    }
-    
-    .stCodeBlock {
-        background-color: #1a1d24 !important;
-    }
-    
-    @media (max-width: 768px) {
-        .block-container {
-            padding-left: 0.7rem !important;
-            padding-right: 0.7rem !important;
-        }
-    }
-</style>
-"""
-
-light_css = """
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-    
-    html, body, [class*="css"] { 
-        font-family: 'Inter', sans-serif; 
-        color: #1a1a1a !important;
-    }
-    
-    .stApp {
-        background-color: #ffffff !important;
-        color: #1a1a1a !important;
-    }
-    
-    .block-container {
-        max-width: 100% !important;
-        padding-top: 0.7rem !important;
-        padding-bottom: 1.5rem !important;
-        padding-left: 1.3rem !important;
-        padding-right: 1.3rem !important;
-    }
-    
-    /* Force all text to be dark */
-    h1, h2, h3, h4, h5, h6, p, span, div, label, 
-    .stMarkdown, .stCaption, .stText, 
-    div[data-testid="stMarkdownContainer"] {
-        color: #1a1a1a !important;
-    }
-    
-    /* Metrics - even height */
-    .stMetric {
-        background-color: #f8f9fa !important;
-        border-radius: 12px;
-        padding: 8px 12px;
-        border: 1px solid #e9ecef;
-        height: 110px !important;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-    }
-    div[data-testid="stMetricValue"] { 
-        font-size: 1.3rem !important; 
-        font-weight: 600; 
-        color: #1a1a1a !important; 
-    }
-    div[data-testid="stMetricLabel"] { 
-        color: #6c757d !important; 
-    }
-    div[data-testid="stMetricDelta"] {
-        color: #1a1a1a !important;
+    div[data-testid="stMetricLabel"] {
+        color: #a0a0a0 !important;
     }
     
     /* Buttons */
@@ -194,109 +97,91 @@ light_css = """
         width: 100%;
         border-radius: 10px;
         font-weight: 600;
-        background-color: #f1f3f5 !important;
-        color: #1a1a1a !important;
-        border: 1px solid #dee2e6 !important;
+        background-color: #262730;
+        color: #fafafa;
+        border: 1px solid #3a3b45;
+        transition: all 0.2s ease;
     }
+    
     div.stButton > button:hover {
-        background-color: #e9ecef !important;
-        border-color: #ced4da !important;
+        background-color: #32333d;
+        border-color: #4a4b55;
+        transform: translateY(-1px);
     }
     
     /* Live badge */
     .live-badge {
-        display: inline-flex; align-items: center; gap: 6px;
-        background: rgba(0, 200, 83, 0.12); 
-        color: #00c853 !important;
-        font-size: 12px; font-weight: 600; padding: 3px 10px;
-        border-radius: 20px; margin-left: 10px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(0, 200, 83, 0.15);
+        color: #00c853;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 4px 12px;
+        border-radius: 20px;
+        margin-left: 12px;
     }
+    
     .live-dot {
-        width: 7px; height: 7px; background: #00c853; border-radius: 50%;
+        width: 7px;
+        height: 7px;
+        background: #00c853;
+        border-radius: 50%;
         animation: pulse 1.5s infinite;
     }
-    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
     
-    /* Cards / containers */
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.4; }
+        100% { opacity: 1; }
+    }
+    
+    /* Cards */
     div[data-testid="stVerticalBlockBorderWrapper"] {
-        background-color: #ffffff !important;
-        border: 1px solid #e9ecef !important;
+        background-color: #16181d;
+        border: 1px solid #2a2b35 !important;
         border-radius: 12px;
     }
     
-    /* ========== VERY AGGRESSIVE DROPDOWN FIX ========== */
-    .stSelectbox [data-baseweb="select"],
-    .stSelectbox [data-baseweb="select"] > div,
-    .stSelectbox [data-baseweb="select"] span {
-        background-color: #ffffff !important;
-        color: #1a1a1a !important;
-        border-color: #ced4da !important;
-    }
-
-    /* Open dropdown portal */
-    div[data-baseweb="popover"],
-    div[data-baseweb="popover"] > div,
-    div[data-baseweb="menu"],
-    ul[role="listbox"],
-    li[role="option"],
-    div[role="listbox"],
-    div[role="option"] {
-        background-color: #ffffff !important;
-        color: #1a1a1a !important;
-    }
-
-    /* Force every single text element inside the menu */
-    div[data-baseweb="popover"] *,
-    div[data-baseweb="menu"] *,
-    ul[role="listbox"] *,
-    li[role="option"] * {
-        color: #1a1a1a !important;
-        background-color: transparent !important;
-    }
-
-    /* Hover and selected states */
-    li[role="option"]:hover,
-    li[aria-selected="true"],
-    div[role="option"]:hover {
-        background-color: #e9ecef !important;
-        color: #1a1a1a !important;
+    /* Inputs & Selectboxes */
+    .stTextInput > div > div > input,
+    .stSelectbox > div > div,
+    .stSelectbox [data-baseweb="select"] {
+        background-color: #1a1d24 !important;
+        color: #fafafa !important;
+        border-color: #3a3b45 !important;
     }
     
-    /* Code block */
-    .stCodeBlock, pre {
-        background-color: #f8f9fa !important;
-        color: #1a1a1a !important;
+    /* Code blocks */
+    .stCodeBlock {
+        background-color: #1a1d24 !important;
     }
     
     /* Dividers */
     hr {
-        margin: 0.7rem 0 !important;
-        border-color: #e9ecef !important;
+        margin: 1rem 0 !important;
+        border-color: #2a2b35 !important;
     }
     
     /* Captions */
-    .stCaption, small {
-        color: #6c757d !important;
+    .stCaption {
+        color: #888 !important;
     }
     
-    div[data-testid="stVerticalBlock"] > div { 
-        gap: 0.55rem !important; 
+    /* Better spacing */
+    div[data-testid="stVerticalBlock"] > div {
+        gap: 0.6rem !important;
     }
     
     @media (max-width: 768px) {
         .block-container {
-            padding-left: 0.7rem !important;
-            padding-right: 0.7rem !important;
+            padding-left: 0.8rem !important;
+            padding-right: 0.8rem !important;
         }
     }
 </style>
-"""
-
-# Apply the current theme
-if st.session_state.theme == "dark":
-    st.markdown(dark_css, unsafe_allow_html=True)
-else:
-    st.markdown(light_css, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 # ========== SESSION STATE ==========
 if "watchlist" not in st.session_state:
@@ -684,7 +569,7 @@ def colored_progress(score: int, height: int = 10):
     elif score >= 45: color = "linear-gradient(90deg, #ffd600, #ffab00)"
     else: color = "linear-gradient(90deg, #ff5252, #d50000)"
     return f"""
-    <div style="background:#e0e0e0;border-radius:10px;height:{height}px;overflow:hidden;margin:4px 0 6px 0;">
+    <div style="background:#2a2d35;border-radius:10px;height:{height}px;overflow:hidden;margin:6px 0 8px 0;">
         <div style="width:{score}%;height:100%;background:{color};border-radius:10px;"></div>
     </div>
     """
@@ -766,30 +651,25 @@ def fetch_single_coin_vibe(cid, btc_change, fg_value):
         return None
 
 # ========== HEADER ==========
-col_title, col_theme, col_refresh = st.columns([5.5, 1.2, 1.3])
+col_title, col_refresh = st.columns([6, 1])
 
 with col_title:
     st.markdown("""
-    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 4px;">
+    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 6px;">
         <h1 style="margin: 0; padding: 0;">🚀 Pre-Bart Vibe Dashboard</h1>
         <span class="live-badge"><span class="live-dot"></span> LIVE</span>
     </div>
     """, unsafe_allow_html=True)
+    
     st.markdown("""
-    <div style="font-size: 1.05rem; color: #888; margin-bottom: 2px; line-height: 1.45;">
-        Real-time Vibe Scores for the market’s top coins.<br>
-        Spot strength, catch weakness, and stay ahead of the noise — all in one clean number.
+    <div style="font-size: 1.08rem; color: #a0a0a0; margin-bottom: 4px; line-height: 1.5;">
+        Live strength & structure scores for the market’s top coins.<br>
+        Spot momentum early, catch weakness, and stay ahead of the noise.
     </div>
     """, unsafe_allow_html=True)
 
-with col_theme:
-    st.write("")
-    if st.button("🌙 Dark" if st.session_state.theme == "light" else "☀️ Light", 
-                 use_container_width=True, key="theme_toggle"):
-        st.session_state.theme = "light" if st.session_state.theme == "dark" else "dark"
-        st.rerun()
-
 with col_refresh:
+    st.write("")
     st.write("")
     if st.button("🔄 Refresh", use_container_width=True):
         st.cache_data.clear()
@@ -801,6 +681,7 @@ st.caption(f"Last refresh: {st.session_state.last_refresh.strftime('%H:%M:%S')} 
 # ========== MARKET CONTEXT ==========
 fg_value, fg_label = get_fear_greed()
 global_data = get_global()
+
 ctx1, ctx2, ctx3, ctx4 = st.columns(4)
 with ctx1:
     st.metric("Fear & Greed", f"{fg_value} {'🟢' if fg_value and fg_value >= 55 else '🟡' if fg_value and fg_value >= 40 else '🔴'}" if fg_value else "—", fg_label)
@@ -863,6 +744,7 @@ vibe_data_sorted = sorted(vibe_data, key=lambda x: x["score"], reverse=True)
 avg_vibe = sum(v["score"] for v in vibe_data) / len(vibe_data) if vibe_data else 50
 funding = get_funding_rates()
 avg_funding = sum(funding.values()) / len(funding) if funding else 0
+
 if avg_vibe >= 65 and avg_funding >= 0.01:
     bias = "🟢 Strongly Bullish"
 elif avg_vibe >= 58 or avg_funding > 0.005:
@@ -873,6 +755,7 @@ elif avg_vibe <= 38:
     bias = "🔴 Strongly Bearish"
 else:
     bias = "🟡 Neutral"
+
 strongest = vibe_data_sorted[0] if vibe_data_sorted else None
 weakest = vibe_data_sorted[-1] if vibe_data_sorted else None
 
@@ -969,7 +852,7 @@ with main_col:
                         vs_btc = item["ch24"] - btc_change
                         direction = get_direction(item["cid"], item["score"])
                         st.markdown(
-                            f"<div style='font-size:11px;color:#aaa;height:32px;line-height:1.3;overflow:hidden;'>"
+                            f"<div style='font-size:11px;color:#888;height:32px;line-height:1.3;overflow:hidden;'>"
                             f"Range {item['range_pos']:.0f}% · vsBTC {vs_btc:+.1f}% · CQ {item['candle_quality']:+.1f}<br>"
                             f"1h {item['ch1']:+.2f}% · {direction}"
                             f"</div>",
@@ -1036,9 +919,10 @@ with main_col:
 
 with side_col:
     st.markdown("### ⚡ Market Pulse")
+    
     with st.container(border=True):
         st.markdown("**📊 Market Bias**")
-        st.markdown(f"<div style='font-size:1.1rem;font-weight:600;margin:4px 0;'>{bias}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='font-size:1.15rem;font-weight:600;margin:6px 0;'>{bias}</div>", unsafe_allow_html=True)
         st.caption(f"Avg Vibe: {avg_vibe:.1f} • Avg Funding: {avg_funding:+.4f}%")
     
     with st.container(border=True):
@@ -1059,7 +943,7 @@ with side_col:
         for m in gainers:
             ch = m[key]
             st.markdown(
-                f"<div style='display:flex;justify-content:space-between;font-size:12.5px;padding:1px 0;'>"
+                f"<div style='display:flex;justify-content:space-between;font-size:13px;padding:2px 0;'>"
                 f"<span><b>{m['tick']}</b></span>"
                 f"<span style='color:#00c853;font-weight:600'>{ch:+.2f}%</span></div>",
                 unsafe_allow_html=True
@@ -1069,7 +953,7 @@ with side_col:
         for m in losers:
             ch = m[key]
             st.markdown(
-                f"<div style='display:flex;justify-content:space-between;font-size:12.5px;padding:1px 0;'>"
+                f"<div style='display:flex;justify-content:space-between;font-size:13px;padding:2px 0;'>"
                 f"<span><b>{m['tick']}</b></span>"
                 f"<span style='color:#ff5252;font-weight:600'>{ch:+.2f}%</span></div>",
                 unsafe_allow_html=True
@@ -1083,7 +967,12 @@ with side_col:
                 if sym in funding:
                     rate = funding[sym]
                     color = "#00c853" if rate >= 0 else "#ff5252"
-                    st.markdown(f"<div style='display:flex;justify-content:space-between;font-size:12.5px;padding:1px 0;'><span>{sym}</span><span style='color:{color};font-weight:600'>{rate:+.4f}%</span></div>", unsafe_allow_html=True)
+                    st.markdown(
+                        f"<div style='display:flex;justify-content:space-between;font-size:13px;padding:2px 0;'>"
+                        f"<span>{sym}</span>"
+                        f"<span style='color:{color};font-weight:600'>{rate:+.4f}%</span></div>",
+                        unsafe_allow_html=True
+                    )
         else:
             st.caption("Loading…")
     
@@ -1097,7 +986,12 @@ with side_col:
                     d = oi_data[sym]
                     oi_usd = d["oi_usd"]
                     oi_str = f"${oi_usd/1e9:.2f}B" if oi_usd >= 1e9 else f"${oi_usd/1e6:.0f}M" if oi_usd >= 1e6 else f"${oi_usd/1e3:.0f}K"
-                    st.markdown(f"<div style='display:flex;justify-content:space-between;font-size:12.5px;padding:1px 0;'><span>{sym}</span><span style='font-weight:600'>{oi_str}</span></div>", unsafe_allow_html=True)
+                    st.markdown(
+                        f"<div style='display:flex;justify-content:space-between;font-size:13px;padding:2px 0;'>"
+                        f"<span>{sym}</span>"
+                        f"<span style='font-weight:600'>{oi_str}</span></div>",
+                        unsafe_allow_html=True
+                    )
         else:
             st.caption("Loading…")
 
@@ -1298,11 +1192,13 @@ if isinstance(ohlc_data, list) and len(ohlc_data) > 0:
         fig.add_trace(go.Bar(x=df["time"], y=df["volume"], marker_color=colors, opacity=0.65, name="Volume"), row=2, col=1)
     fig.update_layout(
         height=480, 
-        template="plotly_white" if st.session_state.theme == "light" else "plotly_dark",
+        template="plotly_dark",
         margin=dict(l=0,r=0,t=15,b=0),
         xaxis_rangeslider_visible=False, 
         showlegend=False, 
-        hovermode="x unified"
+        hovermode="x unified",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)"
     )
     st.plotly_chart(fig, use_container_width=True)
 else:
