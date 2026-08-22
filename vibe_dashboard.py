@@ -29,9 +29,9 @@ MODEL_VERSION = "v2.5-breakout"
 MIN_SNAPSHOT_INTERVAL = 300
 FILL_INTERVAL_SECONDS = 60
 
-# ========== SECURE API KEY ==========
-API_KEY = st.secrets.get("COINGECKO_API_KEY", "")
-HEADERS = {"x-cg-demo-api-key": API_KEY} if API_KEY else {}
+# ========== API KEY (with temporary fallback so site works) ==========
+API_KEY = st.secrets.get("COINGECKO_API_KEY", "CG-h61Dg6UoB2gVfCSUJQDj4dLa")
+HEADERS = {"x-cg-demo-api-key": API_KEY}
 HISTORY_FILE = "vibe_history.json"
 
 st.set_page_config(
@@ -47,7 +47,6 @@ st.markdown("""
     
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     
-    /* ===== FULL WIDTH FIX ===== */
     .block-container {
         max-width: 100% !important;
         padding-top: 1.1rem !important;
@@ -1009,7 +1008,7 @@ else:
 with st.expander("🤔 Why this score?"):
     for r in reasons: st.write(f"• {r}")
 
-# ========== SHARE SECTION (FIXED FOR IFRAME) ==========
+# ========== SHARE SECTION (FIXED) ==========
 st.markdown("### 📤 Share this vibe")
 st.caption("Copy the text below to share")
 
