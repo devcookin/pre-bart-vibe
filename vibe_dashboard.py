@@ -7,6 +7,7 @@ from plotly.subplots import make_subplots
 from urllib.parse import quote
 import json
 import os
+import uuid
 from supabase import create_client, Client
 import streamlit.components.v1 as components
 
@@ -33,8 +34,6 @@ FILL_INTERVAL_SECONDS = 60
 API_KEY = "CG-h61Dg6UoB2gVfCSUJQDj4dLa"
 HEADERS = {"x-cg-demo-api-key": API_KEY}
 HISTORY_FILE = "vibe_history.json"
-
-USER_ID = "prebart_main"   # Fixed for reliable persistence
 
 st.set_page_config(
     page_title="Pre-Bart Vibe Dashboard",
@@ -65,6 +64,42 @@ st.markdown("""
     @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
 </style>
 """, unsafe_allow_html=True)
+
+# ========== PER-BROWSER USER ID (anonymous + persistent) ==========
+def get_or_create_user_id():
+    """Persistent anonymous ID stored in the browser's localStorage."""
+    js_code = """
+    <script>
+        const key = "prebart_vibe_user_id";
+        let id = localStorage.getItem(key);
+        if (!id) {
+            id = (self.crypto && self.crypto.randomUUID)
+                ? self.crypto.randomUUID()
+                : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                    const r = Math.random() * 16 | 0;
+                    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+                    return v.toString(16);
+                });
+            localStorage.setItem(key, id);
+        }
+        window.parent.postMessage({
+            isStreamlitMessage: true,
+            type: "streamlit:setComponentValue",
+            value: id
+        }, "*");
+    </script>
+    """
+    result = components.html(js_code, height=0, width=0)
+
+    if result and isinstance(result, str) and len(result) > 10:
+        return result
+
+    # Fallback for the very first render or rare cases
+    if "fallback_user_id" not in st.session_state:
+        st.session_state.fallback_user_id = str(uuid.uuid4())
+    return st.session_state.fallback_user_id
+
+USER_ID = get_or_create_user_id()
 
 # ========== SUPABASE WATCHLIST ==========
 def load_watchlist():
