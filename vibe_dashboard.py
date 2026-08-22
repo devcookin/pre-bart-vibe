@@ -65,39 +65,48 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ========== PER-BROWSER USER ID (anonymous + persistent) ==========
+# ========== PER-BROWSER USER ID (robust version) ==========
 def get_or_create_user_id():
-    """Persistent anonymous ID stored in the browser's localStorage."""
-    js_code = """
+    # 1. Already have a stable ID for this session → use it
+    if "persistent_user_id" in st.session_state:
+        return st.session_state.persistent_user_id
+
+    # 2. Ask the browser for the ID stored in localStorage
+    js = """
     <script>
-        const key = "prebart_vibe_user_id";
-        let id = localStorage.getItem(key);
-        if (!id) {
-            id = (self.crypto && self.crypto.randomUUID)
-                ? self.crypto.randomUUID()
-                : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-                    const r = Math.random() * 16 | 0;
-                    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-                    return v.toString(16);
-                });
-            localStorage.setItem(key, id);
-        }
-        window.parent.postMessage({
-            isStreamlitMessage: true,
-            type: "streamlit:setComponentValue",
-            value: id
-        }, "*");
+    const KEY = "prebart_vibe_user_id";
+    let id = localStorage.getItem(KEY);
+    if (!id) {
+        id = (self.crypto && self.crypto.randomUUID)
+            ? self.crypto.randomUUID()
+            : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+                const r = Math.random()*16|0;
+                const v = c === 'x' ? r : (r&0x3|0x8);
+                return v.toString(16);
+              });
+        localStorage.setItem(KEY, id);
+    }
+    // Send it back to Streamlit
+    window.parent.postMessage({
+        isStreamlitMessage: true,
+        type: "streamlit:setComponentValue",
+        value: id
+    }, "*");
     </script>
     """
-    result = components.html(js_code, height=0, width=0)
+    browser_id = components.html(js, height=0, width=0)
 
-    if result and isinstance(result, str) and len(result) > 10:
-        return result
+    # 3. Browser gave us a good ID → store it permanently for this session
+    if browser_id and isinstance(browser_id, str) and len(browser_id) > 10:
+        st.session_state.persistent_user_id = browser_id
+        # Force a clean re-run so load_watchlist() uses the real ID
+        st.rerun()
 
-    # Fallback for the very first render or rare cases
-    if "fallback_user_id" not in st.session_state:
-        st.session_state.fallback_user_id = str(uuid.uuid4())
-    return st.session_state.fallback_user_id
+    # 4. First-ever render (or component still loading) → temporary ID
+    #    (will be replaced on the next run when browser_id arrives)
+    temp_id = str(uuid.uuid4())
+    st.session_state.persistent_user_id = temp_id
+    return temp_id
 
 USER_ID = get_or_create_user_id()
 
@@ -757,7 +766,6 @@ with main_col:
             for i, item in enumerate(watch_items):
                 with cols[i % 3]:
                     with st.container(border=True):
-                        # Top section - fixed structure
                         if item["image_url"]:
                             st.image(item["image_url"], width=26)
                         st.markdown(f"**{item['tick']}**")
@@ -774,7 +782,6 @@ with main_col:
                             unsafe_allow_html=True
                         )
                         
-                        # Sparkline
                         if len(item.get("history", [])) >= 3:
                             fig = make_sparkline(item["history"], height=80)
                             if fig:
@@ -782,7 +789,6 @@ with main_col:
                         else:
                             st.markdown("<div style='height:80px;'></div>", unsafe_allow_html=True)
                         
-                        # Stats - fixed height
                         vs_btc = item["ch24"] - btc_change
                         direction = get_direction(item["cid"], item["score"])
                         st.markdown(
