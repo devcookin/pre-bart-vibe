@@ -392,7 +392,7 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
         if fg_value < 25: base -= 1.5
         elif fg_value > 75: base += 1.0
 
-    # Conservative breakout rules (rolled back)
+    # Conservative breakout rules
     if range_pos >= 95 and change_1h >= 0.5 and candle_quality > 0.15:
         base += 5
         reasons.append("Clear breakout in progress")
@@ -513,15 +513,16 @@ for name, cid, tick in COIN_ORDER:
     hist = st.session_state.score_history.get(cid, [])
     prev_score = hist[-2][1] if len(hist) >= 2 else None
 
+    # ===== CLEAN MULTI-COIN NOTIFICATIONS =====
     if prev_score is not None:
         if score >= 80 and prev_score < 80:
-            st.toast(f"🔥 {tick} Vibe crossed 80!", icon="🔥")
+            st.toast(f"{tick} Vibe crossed 80!", icon="🔥")
         elif score >= 70 and prev_score < 70:
-            st.toast(f"🚀 {tick} Vibe crossed 70!", icon="🚀")
+            st.toast(f"{tick} Vibe crossed 70!", icon="🚀")
         elif score <= 30 and prev_score > 30:
-            st.toast(f"🐻 {tick} Vibe dropped below 30", icon="🐻")
+            st.toast(f"{tick} Vibe dropped below 30", icon="🐻")
         elif score <= 40 and prev_score > 40:
-            st.toast(f"⚠️ {tick} Vibe dropped below 40", icon="⚠️")
+            st.toast(f"{tick} Vibe dropped below 40", icon="⚠️")
 
     vs_btc_val = ch24 - btc_change
     save_vibe_snapshot(cid, tick, price, score, meme, ch24, range_pos, vs_btc_val, prev_score, {"reasons": reasons, "candle_quality": cq})
@@ -636,10 +637,7 @@ else:
     low = c.get("low_24h", price)
     image_url = item["image_url"]
 
-if st.session_state.last_score is not None:
-    if score >= 70 and st.session_state.last_score < 70: st.toast(f"🚀 {tick} Vibe crossed 70!", icon="🚀")
-    elif score <= 30 and st.session_state.last_score > 30: st.toast(f"🐻 {tick} Vibe dropped below 30", icon="🐻")
-st.session_state.last_score = score
+# (Old detailed-view notification block completely removed)
 
 vs_btc = ch24 - (btc_change or 0)
 price_text = f"${price:,.4f}" if price < 10 else f"${price:,.2f}"
