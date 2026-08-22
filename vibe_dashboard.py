@@ -43,11 +43,73 @@ st.set_page_config(
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-    html, body, [class*="css"]  { font-family: 'Inter', sans-serif; }
-    h1 { font-weight: 700 !important; }
-    .stMetric { border-radius: 14px; padding: 12px 16px; }
-    div[data-testid="stMetricValue"] { font-size: 1.45rem !important; font-weight: 600; }
-    div.stButton > button { width: 100%; border-radius: 10px; font-weight: 600; }
+    
+    html, body, [class*="css"]  { 
+        font-family: 'Inter', sans-serif; 
+    }
+    
+    h1 { 
+        font-weight: 700 !important; 
+        letter-spacing: -0.5px;
+    }
+    
+    .stMetric { 
+        border-radius: 14px; 
+        padding: 12px 16px; 
+    }
+    
+    div[data-testid="stMetricValue"] { 
+        font-size: 1.45rem !important; 
+        font-weight: 600; 
+    }
+    
+    div.stButton > button { 
+        width: 100%; 
+        border-radius: 10px; 
+        font-weight: 600; 
+        transition: all 0.2s ease;
+    }
+    
+    div.stButton > button:hover {
+        transform: translateY(-1px);
+    }
+    
+    /* Sleek header styling */
+    .main-header {
+        background: linear-gradient(90deg, rgba(15,12,41,0.03), rgba(48,43,99,0.03));
+        border-radius: 16px;
+        padding: 18px 24px 14px 24px;
+        margin-bottom: 8px;
+    }
+    
+    .live-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(0, 200, 83, 0.12);
+        color: #00c853;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 3px 10px;
+        border-radius: 20px;
+        margin-left: 10px;
+        vertical-align: middle;
+    }
+    
+    .live-dot {
+        width: 7px;
+        height: 7px;
+        background: #00c853;
+        border-radius: 50%;
+        display: inline-block;
+        animation: pulse 1.5s infinite;
+    }
+    
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.4; }
+        100% { opacity: 1; }
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -450,19 +512,37 @@ def make_sparkline(history):
     )
     return fig
 
-# ========== HEADER ==========
-col_title, col_refresh = st.columns([5, 1])
+# ========== HEADER (Sleeker + Explanation) ==========
+col_title, col_refresh = st.columns([6, 1])
+
 with col_title:
-    st.title("🚀 Pre-Bart Vibe Dashboard")
-    st.markdown("##### Live crypto vibes + meme feedback")
+    st.markdown("""
+    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 4px;">
+        <h1 style="margin: 0; padding: 0;">🚀 Pre-Bart Vibe Dashboard</h1>
+        <span class="live-badge">
+            <span class="live-dot"></span> LIVE
+        </span>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("""
+    <div style="font-size: 1.05rem; color: #666; margin-bottom: 6px; line-height: 1.5;">
+        Real-time crypto health scores powered by candle structure, short-term momentum, 
+        daily range position, relative strength vs Bitcoin, and a touch of Fear & Greed.
+        <br>
+        <span style="opacity: 0.85;">One clean number. No black boxes. Just pure vibes.</span>
+    </div>
+    """, unsafe_allow_html=True)
+
 with col_refresh:
+    st.write("")
     st.write("")
     if st.button("🔄 Refresh Now", use_container_width=True):
         st.cache_data.clear()
         st.session_state.last_refresh = datetime.now()
         st.rerun()
 
-st.caption(f"Last refresh: {st.session_state.last_refresh.strftime('%H:%M:%S')} • Model: {MODEL_VERSION}")
+st.caption(f"Last refresh: {st.session_state.last_refresh.strftime('%H:%M:%S')}  •  Model: {MODEL_VERSION}")
 
 # ========== MARKET CONTEXT ==========
 fg_value, fg_label = get_fear_greed()
@@ -636,8 +716,6 @@ else:
     high = c.get("high_24h", price)
     low = c.get("low_24h", price)
     image_url = item["image_url"]
-
-# (Old detailed-view notification block completely removed)
 
 vs_btc = ch24 - (btc_change or 0)
 price_text = f"${price:,.4f}" if price < 10 else f"${price:,.2f}"
