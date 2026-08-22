@@ -1,4 +1,4 @@
-=import streamlit as st
+import streamlit as st
 import requests
 from datetime import datetime, timedelta, timezone
 import pandas as pd
