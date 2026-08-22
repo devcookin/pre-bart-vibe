@@ -31,9 +31,13 @@ MIN_SNAPSHOT_INTERVAL = 300
 FILL_INTERVAL_SECONDS = 60
 
 # ========== API KEY ==========
-API_KEY = st.secrets.get("COINGECKO_API_KEY", "CG-h61Dg6UoB2gVfCSUJQDj4dLa")
+API_KEY = st.secrets.get("COINGECKO_API_KEY")
+
+if not API_KEY:
+    st.error("⚠️ CoinGecko API key is missing. Please add it in Streamlit secrets.")
+    st.stop()
+
 HEADERS = {"x-cg-demo-api-key": API_KEY}
-HISTORY_FILE = "vibe_history.json"
 
 st.set_page_config(
     page_title="Pre-Bart Vibe Dashboard",
