@@ -359,7 +359,6 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
     reasons = []
     base = 54.0
 
-    # Dampened candle quality
     structure_boost = candle_quality * 9.0
     base += structure_boost
     if candle_quality > 1.0: reasons.append("Excellent bullish structure")
@@ -374,7 +373,6 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
     elif range_pos < 18: reasons.append("Building from lows" if candle_quality > 0.15 else "Near bottom of range")
     elif range_pos < 32: reasons.append("Lower half of range")
 
-    # Dampened 1h momentum
     base += change_1h * 3.3
     if change_1h > 2.0: reasons.append("Very strong 1h momentum")
     elif change_1h > 0.7: reasons.append("Strong 1h momentum")
@@ -394,8 +392,8 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
         if fg_value < 25: base -= 1.5
         elif fg_value > 75: base += 1.0
 
-    # Breakout bonuses kept strong
-    if range_pos >= 87 and change_1h >= 0.6 and candle_quality > 0.15:
+    # Improved breakout detection (more responsive to clear new highs)
+    if range_pos >= 95 and (change_1h >= 0.3 or candle_quality > 0.1):
         base += 5
         reasons.append("Clear breakout in progress")
     elif range_pos >= 82 and change_1h >= 1.0:
@@ -407,7 +405,6 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
 
     score = max(min(int(round(base)), 98), 16)
 
-    # New descriptive phrases
     if score >= 90: meme = "🔥 Explosive strength + clear breakout"
     elif score >= 80: meme = "🚀 Strong structure + solid momentum"
     elif score >= 70: meme = "📈 Constructive structure, building strength"
