@@ -8,6 +8,7 @@ from urllib.parse import quote
 import json
 import os
 from supabase import create_client, Client
+import streamlit.components.v1 as components
 
 try:
     from streamlit_autorefresh import st_autorefresh
@@ -29,7 +30,7 @@ MODEL_VERSION = "v2.5-breakout"
 MIN_SNAPSHOT_INTERVAL = 300
 FILL_INTERVAL_SECONDS = 60
 
-# ========== API KEY (with temporary fallback so site works) ==========
+# ========== API KEY ==========
 API_KEY = st.secrets.get("COINGECKO_API_KEY", "CG-h61Dg6UoB2gVfCSUJQDj4dLa")
 HEADERS = {"x-cg-demo-api-key": API_KEY}
 HISTORY_FILE = "vibe_history.json"
@@ -47,22 +48,24 @@ st.markdown("""
     
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     
+    /* ===== COMPACT + FULL WIDTH ===== */
     .block-container {
         max-width: 100% !important;
-        padding-top: 1.1rem !important;
-        padding-bottom: 2rem !important;
-        padding-left: 1.4rem !important;
-        padding-right: 1.4rem !important;
+        padding-top: 0.7rem !important;
+        padding-bottom: 1.5rem !important;
+        padding-left: 1.3rem !important;
+        padding-right: 1.3rem !important;
     }
     
     .main .block-container {
-        padding-top: 0.9rem !important;
+        padding-top: 0.5rem !important;
     }
     
-    h1 { font-weight: 700 !important; letter-spacing: -0.5px; }
+    h1 { font-weight: 700 !important; letter-spacing: -0.5px; margin-bottom: 0.2rem !important; }
+    h2, h3 { margin-top: 0.6rem !important; margin-bottom: 0.4rem !important; }
     
-    .stMetric { border-radius: 12px; padding: 10px 14px; }
-    div[data-testid="stMetricValue"] { font-size: 1.35rem !important; font-weight: 600; }
+    .stMetric { border-radius: 12px; padding: 8px 12px; }
+    div[data-testid="stMetricValue"] { font-size: 1.3rem !important; font-weight: 600; }
     
     div.stButton > button {
         width: 100%;
@@ -84,14 +87,24 @@ st.markdown("""
     }
     @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
     
-    div[data-testid="stHorizontalBlock"] > div {
-        gap: 0.9rem !important;
+    /* Tighter vertical spacing */
+    div[data-testid="stVerticalBlock"] > div {
+        gap: 0.55rem !important;
+    }
+    
+    hr {
+        margin: 0.7rem 0 !important;
+    }
+    
+    /* Reduce extra space from containers */
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        margin-bottom: 0.4rem !important;
     }
     
     @media (max-width: 768px) {
         .block-container {
-            padding-left: 0.75rem !important;
-            padding-right: 0.75rem !important;
+            padding-left: 0.7rem !important;
+            padding-right: 0.7rem !important;
         }
         div[data-testid="column"] {
             width: 100% !important;
@@ -487,12 +500,12 @@ def colored_progress(score: int, height: int = 10):
     elif score >= 45: color = "linear-gradient(90deg, #ffd600, #ffab00)"
     else: color = "linear-gradient(90deg, #ff5252, #d50000)"
     return f"""
-    <div style="background:#e0e0e0;border-radius:10px;height:{height}px;overflow:hidden;margin:6px 0 8px 0;">
+    <div style="background:#e0e0e0;border-radius:10px;height:{height}px;overflow:hidden;margin:4px 0 6px 0;">
         <div style="width:{score}%;height:100%;background:{color};border-radius:10px;"></div>
     </div>
     """
 
-def make_sparkline(history, height=85):
+def make_sparkline(history, height=80):
     if not history or len(history) < 2: return None
     times = [h[0] for h in history]
     scores = [h[1] for h in history]
@@ -572,19 +585,18 @@ def fetch_single_coin_vibe(cid, btc_change, fg_value):
 col_title, col_refresh = st.columns([6, 1])
 with col_title:
     st.markdown("""
-    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 6px;">
+    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 4px;">
         <h1 style="margin: 0; padding: 0;">🚀 Pre-Bart Vibe Dashboard</h1>
         <span class="live-badge"><span class="live-dot"></span> LIVE</span>
     </div>
     """, unsafe_allow_html=True)
     st.markdown("""
-    <div style="font-size: 1.08rem; color: #555; margin-bottom: 4px; line-height: 1.55;">
+    <div style="font-size: 1.05rem; color: #555; margin-bottom: 2px; line-height: 1.45;">
         Real-time Vibe Scores for the market’s top coins.<br>
         Spot strength, catch weakness, and stay ahead of the noise — all in one clean number.
     </div>
     """, unsafe_allow_html=True)
 with col_refresh:
-    st.write("")
     st.write("")
     if st.button("🔄 Refresh Now", use_container_width=True):
         st.cache_data.clear()
@@ -672,7 +684,7 @@ strongest = vibe_data_sorted[0] if vibe_data_sorted else None
 weakest = vibe_data_sorted[-1] if vibe_data_sorted else None
 
 # ========== MAIN + SIDE PANEL ==========
-main_col, side_col = st.columns([4.2, 1], gap="large")
+main_col, side_col = st.columns([4.2, 1], gap="medium")
 
 with main_col:
     st.subheader("🌐 Multi-Coin Vibe Overview")
@@ -739,39 +751,39 @@ with main_col:
                 with cols[i % 3]:
                     with st.container(border=True):
                         if item["image_url"]:
-                            st.image(item["image_url"], width=26)
+                            st.image(item["image_url"], width=24)
                         st.markdown(f"**{item['tick']}**")
                         
                         price_str = f"${item['price']:,.0f}" if item["price"] >= 1000 else f"${item['price']:,.2f}" if item["price"] >= 1 else f"${item['price']:.4f}"
-                        st.markdown(f"<div style='font-size:1.25rem;font-weight:700;height:28px;line-height:28px;overflow:hidden;'>{price_str}</div>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='font-size:1.2rem;font-weight:700;height:26px;line-height:26px;overflow:hidden;'>{price_str}</div>", unsafe_allow_html=True)
                         
                         arrow = get_score_arrow(item["cid"], item["score"])
                         ch_color = "#00c853" if item["ch24"] >= 0 else "#ff5252"
                         st.markdown(
-                            f"<div style='font-size:13px;height:22px;line-height:22px;overflow:hidden;'>"
+                            f"<div style='font-size:12.5px;height:20px;line-height:20px;overflow:hidden;'>"
                             f"<span style='color:{ch_color};font-weight:600'>{item['ch24']:+.2f}%</span> • Vibe {item['score']}{arrow}"
                             f"</div>",
                             unsafe_allow_html=True
                         )
                         
                         if len(item.get("history", [])) >= 3:
-                            fig = make_sparkline(item["history"], height=80)
+                            fig = make_sparkline(item["history"], height=70)
                             if fig:
                                 st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
                         else:
-                            st.markdown("<div style='height:80px;'></div>", unsafe_allow_html=True)
+                            st.markdown("<div style='height:70px;'></div>", unsafe_allow_html=True)
                         
                         vs_btc = item["ch24"] - btc_change
                         direction = get_direction(item["cid"], item["score"])
                         st.markdown(
-                            f"<div style='font-size:11.5px;color:#aaa;height:36px;line-height:1.35;overflow:hidden;'>"
+                            f"<div style='font-size:11px;color:#aaa;height:32px;line-height:1.3;overflow:hidden;'>"
                             f"Range {item['range_pos']:.0f}% · vsBTC {vs_btc:+.1f}% · CQ {item['candle_quality']:+.1f}<br>"
                             f"1h {item['ch1']:+.2f}% · {direction}"
                             f"</div>",
                             unsafe_allow_html=True
                         )
                         
-                        st.markdown(colored_progress(item["score"], height=7), unsafe_allow_html=True)
+                        st.markdown(colored_progress(item["score"], height=6), unsafe_allow_html=True)
                         
                         if st.button("Unpin", key=f"unpin_{item['cid']}", use_container_width=True):
                             st.session_state.watchlist.remove(item["cid"])
@@ -788,27 +800,27 @@ with main_col:
                 with cols[i]:
                     with st.container(border=True):
                         if item["image_url"]:
-                            st.image(item["image_url"], width=26)
+                            st.image(item["image_url"], width=24)
                         else:
-                            st.markdown("<div style='height:26px;'></div>", unsafe_allow_html=True)
+                            st.markdown("<div style='height:24px;'></div>", unsafe_allow_html=True)
                         
                         st.markdown(f"**{item['tick']}**")
                         
                         price_str = f"${item['price']:,.0f}" if item["price"]>=1000 else f"${item['price']:,.2f}" if item["price"]>=1 else f"${item['price']:.4f}"
-                        st.markdown(f"<div style='font-size:1.2rem;font-weight:600;height:28px;line-height:28px;overflow:hidden;'>{price_str}</div>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='font-size:1.15rem;font-weight:600;height:26px;line-height:26px;overflow:hidden;'>{price_str}</div>", unsafe_allow_html=True)
                         
                         arrow = get_score_arrow(item["cid"], item["score"])
                         st.markdown(
-                            f"<div style='font-size:12.5px;color:#888;height:20px;line-height:20px;overflow:hidden;'>"
+                            f"<div style='font-size:12px;color:#888;height:18px;line-height:18px;overflow:hidden;'>"
                             f"{item['ch24']:+.2f}% • Vibe {item['score']}{arrow}"
                             f"</div>",
                             unsafe_allow_html=True
                         )
                         
-                        st.markdown(colored_progress(item["score"], height=8), unsafe_allow_html=True)
+                        st.markdown(colored_progress(item["score"], height=7), unsafe_allow_html=True)
                         
                         st.markdown(
-                            f"<div style='height:40px;font-size:12.5px;color:#888;line-height:1.3;overflow:hidden;'>"
+                            f"<div style='height:36px;font-size:12px;color:#888;line-height:1.25;overflow:hidden;'>"
                             f"{item['meme']}</div>",
                             unsafe_allow_html=True
                         )
@@ -833,14 +845,13 @@ with side_col:
     st.markdown("### ⚡ Market Pulse")
     with st.container(border=True):
         st.markdown("**📊 Market Bias**")
-        st.markdown(f"<div style='font-size:1.15rem;font-weight:600;margin:6px 0;'>{bias}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='font-size:1.1rem;font-weight:600;margin:4px 0;'>{bias}</div>", unsafe_allow_html=True)
         st.caption(f"Avg Vibe: {avg_vibe:.1f} • Avg Funding: {avg_funding:+.4f}%")
-    st.write("")
+    
     with st.container(border=True):
         st.markdown("**🏆 Strongest / Weakest**")
         if strongest: st.markdown(f"🔥 **{strongest['tick']}** {strongest['score']}")
         if weakest: st.markdown(f"💀 **{weakest['tick']}** {weakest['score']}")
-    st.write("")
     
     with st.container(border=True):
         st.markdown("**🔥 Top Movers**")
@@ -855,7 +866,7 @@ with side_col:
         for m in gainers:
             ch = m[key]
             st.markdown(
-                f"<div style='display:flex;justify-content:space-between;font-size:13px;padding:2px 0;'>"
+                f"<div style='display:flex;justify-content:space-between;font-size:12.5px;padding:1px 0;'>"
                 f"<span><b>{m['tick']}</b></span>"
                 f"<span style='color:#00c853;font-weight:600'>{ch:+.2f}%</span></div>",
                 unsafe_allow_html=True
@@ -865,13 +876,12 @@ with side_col:
         for m in losers:
             ch = m[key]
             st.markdown(
-                f"<div style='display:flex;justify-content:space-between;font-size:13px;padding:2px 0;'>"
+                f"<div style='display:flex;justify-content:space-between;font-size:12.5px;padding:1px 0;'>"
                 f"<span><b>{m['tick']}</b></span>"
                 f"<span style='color:#ff5252;font-weight:600'>{ch:+.2f}%</span></div>",
                 unsafe_allow_html=True
             )
     
-    st.write("")
     with st.container(border=True):
         st.markdown("**💰 Funding Rates**")
         st.caption("Xoomar • Bybit/Binance")
@@ -880,10 +890,10 @@ with side_col:
                 if sym in funding:
                     rate = funding[sym]
                     color = "#00c853" if rate >= 0 else "#ff5252"
-                    st.markdown(f"<div style='display:flex;justify-content:space-between;font-size:13px;padding:2px 0;'><span>{sym}</span><span style='color:{color};font-weight:600'>{rate:+.4f}%</span></div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='display:flex;justify-content:space-between;font-size:12.5px;padding:1px 0;'><span>{sym}</span><span style='color:{color};font-weight:600'>{rate:+.4f}%</span></div>", unsafe_allow_html=True)
         else:
             st.caption("Loading…")
-    st.write("")
+    
     with st.container(border=True):
         st.markdown("**📊 Open Interest**")
         st.caption("Xoomar • current value")
@@ -894,7 +904,7 @@ with side_col:
                     d = oi_data[sym]
                     oi_usd = d["oi_usd"]
                     oi_str = f"${oi_usd/1e9:.2f}B" if oi_usd >= 1e9 else f"${oi_usd/1e6:.0f}M" if oi_usd >= 1e6 else f"${oi_usd/1e3:.0f}K"
-                    st.markdown(f"<div style='display:flex;justify-content:space-between;font-size:13px;padding:2px 0;'><span>{sym}</span><span style='font-weight:600'>{oi_str}</span></div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='display:flex;justify-content:space-between;font-size:12.5px;padding:1px 0;'><span>{sym}</span><span style='font-weight:600'>{oi_str}</span></div>", unsafe_allow_html=True)
         else:
             st.caption("Loading…")
 
@@ -979,7 +989,7 @@ c5.metric("vs BTC (24h)", f"{vs_btc:+.2f}%")
 
 arrow = get_score_arrow(cid, score)
 st.markdown(f"**Vibe Score: {score}/100{arrow}**", unsafe_allow_html=True)
-st.markdown(colored_progress(score, height=14), unsafe_allow_html=True)
+st.markdown(colored_progress(score, height=12), unsafe_allow_html=True)
 
 is_watched = cid in st.session_state.watchlist
 if st.button("★ Remove from Watchlist" if is_watched else "☆ Add to Watchlist", key="detail_watch"):
@@ -999,7 +1009,7 @@ else: st.info(meme)
 
 st.markdown("##### Vibe Score History")
 if history and len(history) >= 2:
-    fig = make_sparkline(history, height=160)
+    fig = make_sparkline(history, height=140)
     if fig: st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
     st.caption(f"Showing last {len(history)} readings")
 else:
@@ -1008,9 +1018,8 @@ else:
 with st.expander("🤔 Why this score?"):
     for r in reasons: st.write(f"• {r}")
 
-# ========== SHARE SECTION (FIXED) ==========
+# ========== SHARE SECTION (CLEAN + WORKING) ==========
 st.markdown("### 📤 Share this vibe")
-st.caption("Copy the text below to share")
 
 share_text = (
     f"{tick} Vibe Score: {score}/100 – {meme}\n"
@@ -1020,44 +1029,52 @@ share_text = (
 
 st.code(share_text, language=None)
 
-st.markdown(f"""
-<div style="margin-top: -10px; margin-bottom: 15px;">
-    <button onclick="
-        navigator.clipboard.writeText(`{share_text}`).then(() => {{
-            this.innerText = 'Copied!';
-            setTimeout(() => this.innerText = '📋 Copy to Clipboard', 2000);
-        }}).catch(() => {{
-            const textarea = document.createElement('textarea');
-            textarea.value = `{share_text}`;
-            document.body.appendChild(textarea);
-            textarea.select();
-            document.execCommand('copy');
-            document.body.removeChild(textarea);
-            this.innerText = 'Copied!';
-            setTimeout(() => this.innerText = '📋 Copy to Clipboard', 2000);
-        }});
-    " 
-    style="
+components.html(f"""
+<div style="margin-top:6px;">
+    <button id="copyBtn" style="
         background: linear-gradient(90deg, #1da1f2, #0d8ecf);
         color: white;
         border: none;
-        padding: 8px 18px;
+        padding: 9px 18px;
         border-radius: 20px;
         font-weight: 600;
         cursor: pointer;
-        font-size: 14px;
+        font-size: 13.5px;
+        font-family: Inter, sans-serif;
     ">
         📋 Copy to Clipboard
     </button>
 </div>
-""", unsafe_allow_html=True)
+
+<script>
+    const btn = document.getElementById('copyBtn');
+    const textToCopy = `{share_text}`;
+
+    btn.addEventListener('click', async () => {{
+        try {{
+            await navigator.clipboard.writeText(textToCopy);
+            btn.innerText = '✅ Copied!';
+            setTimeout(() => btn.innerText = '📋 Copy to Clipboard', 2000);
+        }} catch (err) {{
+            const textarea = document.createElement('textarea');
+            textarea.value = textToCopy;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            btn.innerText = '✅ Copied!';
+            setTimeout(() => btn.innerText = '📋 Copy to Clipboard', 2000);
+        }}
+    }});
+</script>
+""", height=55)
 
 st.markdown(f"""
-<div style="display:flex;flex-wrap:wrap;gap:10px;margin:12px 0;">
+<div style="display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 6px 0;">
     <a href="https://x.com/search?q=%24{tick}&src=typed_query&f=live" target="_blank"
-       style="background:linear-gradient(90deg,#1da1f2,#0d8ecf);color:white;padding:8px 16px;border-radius:20px;text-decoration:none;font-weight:600;">${tick} Live</a>
+       style="background:linear-gradient(90deg,#1da1f2,#0d8ecf);color:white;padding:7px 14px;border-radius:18px;text-decoration:none;font-weight:600;font-size:13px;">${tick} Live</a>
     <a href="https://x.com/search?q={quote(name + ' crypto')}&src=typed_query&f=live" target="_blank"
-       style="background:linear-gradient(90deg,#1da1f2,#0d8ecf);color:white;padding:8px 16px;border-radius:20px;text-decoration:none;font-weight:600;">{name} Crypto</a>
+       style="background:linear-gradient(90deg,#1da1f2,#0d8ecf);color:white;padding:7px 14px;border-radius:18px;text-decoration:none;font-weight:600;font-size:13px;">{name} Crypto</a>
 </div>
 """, unsafe_allow_html=True)
 
@@ -1086,10 +1103,9 @@ if isinstance(ohlc_data, list) and len(ohlc_data) > 0:
     if has_volume:
         colors = ["#00c853" if r["close"] >= r["open"] else "#ff5252" for _, r in df.iterrows()]
         fig.add_trace(go.Bar(x=df["time"], y=df["volume"], marker_color=colors, opacity=0.65, name="Volume"), row=2, col=1)
-    fig.update_layout(height=520, template="plotly_white", margin=dict(l=0,r=0,t=20,b=0),
+    fig.update_layout(height=480, template="plotly_white", margin=dict(l=0,r=0,t=15,b=0),
                       xaxis_rangeslider_visible=False, showlegend=False, hovermode="x unified")
     st.plotly_chart(fig, use_container_width=True)
-    if days == "1": st.caption("30-minute candles (best available on free API)")
 else:
     st.info("Chart temporarily unavailable.")
 
