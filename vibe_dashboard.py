@@ -7,6 +7,7 @@ from plotly.subplots import make_subplots
 from urllib.parse import quote
 import json
 import os
+import uuid
 from supabase import create_client, Client
 import streamlit.components.v1 as components
 
@@ -64,49 +65,73 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ========== IMPROVED PERSISTENT WATCHLIST ==========
-WATCHLIST_KEY = "prebart_watchlist_v2"
+# ========== SUPABASE WATCHLIST PERSISTENCE ==========
+def get_or_create_user_id():
+    """Get persistent user_id from localStorage or create a new one"""
+    if "user_id" in st.session_state:
+        return st.session_state.user_id
 
-def save_watchlist():
-    """Save current watchlist to localStorage"""
+    # Try to load from query params first
+    if "uid" in st.query_params:
+        st.session_state.user_id = st.query_params["uid"]
+        return st.session_state.user_id
+
+    # Generate new one and inject into localStorage + redirect
+    new_id = str(uuid.uuid4())
+    st.session_state.user_id = new_id
+
     components.html(
         f"""
         <script>
-            localStorage.setItem('{WATCHLIST_KEY}', JSON.stringify({json.dumps(st.session_state.watchlist)}));
-        </script>
-        """,
-        height=0,
-    )
-
-# Load from query params first (most reliable)
-if "wl" in st.query_params:
-    try:
-        loaded = json.loads(st.query_params["wl"])
-        if isinstance(loaded, list):
-            st.session_state.watchlist = loaded
-    except:
-        pass
-
-# Initialize
-if "watchlist" not in st.session_state:
-    st.session_state.watchlist = []
-
-# One-time load from localStorage
-if "wl_loaded" not in st.session_state:
-    st.session_state.wl_loaded = True
-    components.html(
-        f"""
-        <script>
-            const stored = localStorage.getItem('{WATCHLIST_KEY}');
-            if (stored) {{
+            const existing = localStorage.getItem('prebart_uid');
+            if (existing) {{
                 const url = new URL(window.parent.location.href);
-                url.searchParams.set('wl', stored);
+                url.searchParams.set('uid', existing);
+                window.parent.location.href = url.toString();
+            }} else {{
+                localStorage.setItem('prebart_uid', '{new_id}');
+                const url = new URL(window.parent.location.href);
+                url.searchParams.set('uid', '{new_id}');
                 window.parent.location.href = url.toString();
             }}
         </script>
         """,
         height=0,
     )
+    return new_id
+
+def load_watchlist_from_supabase(user_id: str):
+    if not supabase or not user_id:
+        return []
+    try:
+        res = supabase.table("user_watchlists").select("watchlist").eq("user_id", user_id).execute()
+        if res.data and len(res.data) > 0:
+            return res.data[0]["watchlist"] or []
+        return []
+    except Exception as e:
+        return []
+
+def save_watchlist_to_supabase(user_id: str, watchlist: list):
+    if not supabase or not user_id:
+        return
+    try:
+        supabase.table("user_watchlists").upsert({
+            "user_id": user_id,
+            "watchlist": watchlist,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }).execute()
+    except Exception as e:
+        pass
+
+# Initialize user_id and watchlist
+user_id = get_or_create_user_id()
+
+if "watchlist" not in st.session_state:
+    st.session_state.watchlist = load_watchlist_from_supabase(user_id)
+
+def save_watchlist():
+    """Save current watchlist to Supabase"""
+    save_watchlist_to_supabase(user_id, st.session_state.watchlist)
 
 # ========== SESSION STATE ==========
 if "selected_coin" not in st.session_state:
@@ -168,7 +193,7 @@ def update_history(cid, score, history_dict):
 if "score_history" not in st.session_state:
     st.session_state.score_history = load_history()
 
-# ========== SUPABASE (same as before) ==========
+# ========== SUPABASE SNAPSHOTS (unchanged) ==========
 def save_vibe_snapshot(coin_id, symbol, price, score, label, change_24h, range_pos, vs_btc, prev_score, sub_signals):
     if not supabase: return
     now = datetime.now(timezone.utc)
@@ -515,7 +540,6 @@ def make_sparkline(history, height=115):
     return fig
 
 def get_score_arrow(cid, current_score):
-    """More aggressive arrow - shows as soon as we have 2 readings"""
     hist = st.session_state.score_history.get(cid, [])
     if len(hist) < 2:
         return ""
@@ -746,7 +770,6 @@ with main_col:
                             price_str = f"${item['price']:,.0f}" if item["price"] >= 1000 else f"${item['price']:,.2f}" if item["price"] >= 1 else f"${item['price']:.4f}"
                             st.markdown(f"<div style='font-size:1.35rem;font-weight:700;margin:2px 0;'>{price_str}</div>", unsafe_allow_html=True)
                             
-                            # Arrow is back and stronger
                             arrow = get_score_arrow(item["cid"], item["score"])
                             ch_color = "#00c853" if item["ch24"] >= 0 else "#ff5252"
                             st.markdown(
