@@ -26,8 +26,8 @@ if SUPABASE_URL and SUPABASE_KEY:
         pass
 
 MODEL_VERSION = "v2.1-breakout"
-MIN_SNAPSHOT_INTERVAL = 180
-FILL_INTERVAL_SECONDS = 60          # ← more aggressive
+MIN_SNAPSHOT_INTERVAL = 300          # ← loosened to 5 minutes
+FILL_INTERVAL_SECONDS = 60
 
 API_KEY = "CG-h61Dg6UoB2gVfCSUJQDj4dLa"
 HEADERS = {"x-cg-demo-api-key": API_KEY}
@@ -116,9 +116,9 @@ def save_vibe_snapshot(coin_id, symbol, price, score, label, change_24h, range_p
     now = datetime.now(timezone.utc)
     last_time = st.session_state.last_snapshot_time.get(coin_id)
     
+    # Simple reliable throttle: write at most once every 5 minutes
     if last_time and (now - last_time).total_seconds() < MIN_SNAPSHOT_INTERVAL:
-        if prev_score is not None and abs(score - prev_score) < 2:
-            return
+        return
     
     direction = None
     if prev_score is not None:
@@ -648,8 +648,6 @@ st.markdown(colored_progress(score, height=14), unsafe_allow_html=True)
 perf = get_coin_performance(cid)
 if perf and perf.get("ready"):
     st.caption(f"Historical 1h win rate: **{perf['win_1h']}%** • Avg 1h return: **{perf['avg_1h']:+.2f}%** • n = {perf['n']}")
-else:
-    st.caption("Collecting performance data — not enough observations yet.")
 
 if score >= 80: st.success(meme)
 elif score <= 30: st.error(meme)
@@ -730,7 +728,7 @@ st.divider()
 st.subheader("📊 Vibe Performance (Global)")
 st.caption("Historical forward returns across **all tracked coins**. This shows how the Vibe Score model has performed overall — not specific to the coin you are viewing. Averages and win rates only appear when a bucket has enough data.")
 
-bucket_stats = get_bucket_stats(min_n=5)          # ← lowered so you can see numbers sooner
+bucket_stats = get_bucket_stats(min_n=5)
 if bucket_stats:
     table_data = []
     for s in bucket_stats:
