@@ -216,13 +216,39 @@ light_css = """
         border-radius: 12px;
     }
     
-    /* Inputs & selectboxes */
+    /* ========== FIXED DROPDOWNS ========== */
     .stTextInput > div > div > input,
     .stSelectbox > div > div,
-    .stSelectbox [data-baseweb="select"] {
+    .stSelectbox [data-baseweb="select"],
+    .stSelectbox [data-baseweb="select"] > div,
+    .stSelectbox [data-baseweb="popover"],
+    div[data-baseweb="select"] > div {
         background-color: #ffffff !important;
         color: #1a1a1a !important;
         border-color: #ced4da !important;
+    }
+
+    /* Dropdown menu items */
+    div[data-baseweb="menu"] {
+        background-color: #ffffff !important;
+        color: #1a1a1a !important;
+        border: 1px solid #ced4da !important;
+    }
+
+    div[data-baseweb="menu"] li,
+    div[data-baseweb="menu"] div,
+    div[data-baseweb="popover"] * {
+        color: #1a1a1a !important;
+        background-color: #ffffff !important;
+    }
+
+    div[data-baseweb="menu"] li:hover {
+        background-color: #f1f3f5 !important;
+    }
+
+    /* Selected value text */
+    .stSelectbox [data-baseweb="select"] span {
+        color: #1a1a1a !important;
     }
     
     /* Code block */
