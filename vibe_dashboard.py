@@ -7,7 +7,6 @@ from plotly.subplots import make_subplots
 from urllib.parse import quote
 import json
 import os
-import uuid
 from supabase import create_client, Client
 import streamlit.components.v1 as components
 
@@ -34,6 +33,9 @@ FILL_INTERVAL_SECONDS = 60
 API_KEY = "CG-h61Dg6UoB2gVfCSUJQDj4dLa"
 HEADERS = {"x-cg-demo-api-key": API_KEY}
 HISTORY_FILE = "vibe_history.json"
+
+# Fixed user ID for reliable personal persistence
+USER_ID = "prebart_main"
 
 st.set_page_config(
     page_title="Pre-Bart Vibe Dashboard",
@@ -65,77 +67,37 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ========== ROBUST SUPABASE WATCHLIST ==========
-def get_user_id():
-    """Reliable persistent user ID"""
-    if "user_id" in st.session_state:
-        return st.session_state.user_id
-
-    # Check query params first
-    if "uid" in st.query_params and st.query_params["uid"]:
-        st.session_state.user_id = st.query_params["uid"]
-        return st.session_state.user_id
-
-    # Create new ID and push to browser
-    new_id = str(uuid.uuid4())
-    st.session_state.user_id = new_id
-
-    components.html(
-        f"""
-        <script>
-            let uid = localStorage.getItem('prebart_uid_v4');
-            if (!uid) {{
-                uid = '{new_id}';
-                localStorage.setItem('prebart_uid_v4', uid);
-            }}
-            // Always force the correct UID into the URL
-            const url = new URL(window.parent.location.href);
-            if (url.searchParams.get('uid') !== uid) {{
-                url.searchParams.set('uid', uid);
-                window.parent.location.replace(url.toString());
-            }}
-        </script>
-        """,
-        height=0,
-    )
-    return new_id
-
-user_id = get_user_id()
-
-def load_watchlist_from_db():
-    if not supabase or not user_id:
+# ========== SUPABASE WATCHLIST (FIXED USER ID) ==========
+def load_watchlist():
+    if not supabase:
         return []
     try:
         res = supabase.table("user_watchlists")\
             .select("watchlist")\
-            .eq("user_id", user_id)\
+            .eq("user_id", USER_ID)\
             .maybe_single()\
             .execute()
         if res.data and isinstance(res.data.get("watchlist"), list):
             return res.data["watchlist"]
-    except Exception:
+    except:
         pass
     return []
 
-def save_watchlist_to_db():
-    if not supabase or not user_id:
+def save_watchlist():
+    if not supabase:
         return
     try:
         supabase.table("user_watchlists").upsert({
-            "user_id": user_id,
+            "user_id": USER_ID,
             "watchlist": st.session_state.watchlist,
             "updated_at": datetime.now(timezone.utc).isoformat()
         }).execute()
-    except Exception as e:
-        # Silent fail for now
+    except:
         pass
 
-# Load watchlist once
+# Load watchlist on start
 if "watchlist" not in st.session_state:
-    st.session_state.watchlist = load_watchlist_from_db()
-
-def save_watchlist():
-    save_watchlist_to_db()
+    st.session_state.watchlist = load_watchlist()
 
 # ========== SESSION STATE ==========
 if "selected_coin" not in st.session_state:
@@ -516,7 +478,7 @@ def colored_progress(score: int, height: int = 12):
     </div>
     """
 
-def make_sparkline(history, height=115):
+def make_sparkline(history, height=100):
     if not history or len(history) < 2: return None
     times = [h[0] for h in history]
     scores = [h[1] for h in history]
@@ -534,7 +496,7 @@ def make_sparkline(history, height=115):
     ))
     fig.update_layout(
         height=height,
-        margin=dict(l=0, r=0, t=5, b=5),
+        margin=dict(l=0, r=0, t=4, b=4),
         xaxis=dict(showgrid=False, showticklabels=False, zeroline=False),
         yaxis=dict(showgrid=False, showticklabels=False, zeroline=False, range=[y_min, y_max]),
         plot_bgcolor="rgba(0,0,0,0)",
@@ -549,9 +511,9 @@ def get_score_arrow(cid, current_score):
         return ""
     prev = hist[-2][1]
     if current_score > prev:
-        return ' <span style="color:#00c853;font-weight:800;font-size:16px;">↑</span>'
+        return ' <span style="color:#00c853;font-weight:800;font-size:15px;">↑</span>'
     elif current_score < prev:
-        return ' <span style="color:#ff5252;font-weight:800;font-size:16px;">↓</span>'
+        return ' <span style="color:#ff5252;font-weight:800;font-size:15px;">↓</span>'
     return ""
 
 def get_direction(cid, current_score):
@@ -744,7 +706,7 @@ with main_col:
 
     st.caption(f"Showing {len(display_data)} of {len(filtered)} coins")
 
-    # ===== WATCHLIST =====
+    # ===== WATCHLIST - FIXED EVEN CARDS =====
     if st.session_state.watchlist:
         st.markdown("##### ⭐ Your Watchlist")
         watch_items = []
@@ -758,50 +720,49 @@ with main_col:
         watch_items = sorted(watch_items, key=lambda x: x["score"], reverse=True)
         
         if watch_items:
-            n_cols = min(3, len(watch_items))
-            cols = st.columns(n_cols)
+            # Always use 3 columns for even layout
+            cols = st.columns(3)
             
-            for i, item in enumerate(watch_items[:n_cols*2]):
-                with cols[i % n_cols]:
+            for i, item in enumerate(watch_items):
+                with cols[i % 3]:
                     with st.container(border=True):
-                        left, right = st.columns([1, 1.6])
-                        
-                        with left:
+                        # Header row
+                        h1, h2 = st.columns([1, 1.4])
+                        with h1:
                             if item["image_url"]:
-                                st.image(item["image_url"], width=28)
+                                st.image(item["image_url"], width=26)
                             st.markdown(f"**{item['tick']}**")
                             
                             price_str = f"${item['price']:,.0f}" if item["price"] >= 1000 else f"${item['price']:,.2f}" if item["price"] >= 1 else f"${item['price']:.4f}"
-                            st.markdown(f"<div style='font-size:1.35rem;font-weight:700;margin:2px 0;'>{price_str}</div>", unsafe_allow_html=True)
+                            st.markdown(f"<div style='font-size:1.25rem;font-weight:700;margin:2px 0;'>{price_str}</div>", unsafe_allow_html=True)
                             
                             arrow = get_score_arrow(item["cid"], item["score"])
                             ch_color = "#00c853" if item["ch24"] >= 0 else "#ff5252"
                             st.markdown(
-                                f"<div style='font-size:14px;margin:3px 0 6px 0;'>"
+                                f"<div style='font-size:13px;margin:2px 0 4px 0;'>"
                                 f"<span style='color:{ch_color};font-weight:600'>{item['ch24']:+.2f}%</span> • Vibe {item['score']}{arrow}"
                                 f"</div>",
                                 unsafe_allow_html=True
                             )
-                            
-                            vs_btc = item["ch24"] - btc_change
-                            direction = get_direction(item["cid"], item["score"])
-                            st.markdown(
-                                f"<div style='font-size:12.5px;color:#bbb;line-height:1.45;'>"
-                                f"Range {item['range_pos']:.0f}% · vsBTC {vs_btc:+.1f}% · CQ {item['candle_quality']:+.1f}<br>"
-                                f"1h {item['ch1']:+.2f}% · {direction}"
-                                f"</div>",
-                                unsafe_allow_html=True
-                            )
                         
-                        with right:
+                        with h2:
                             if len(item.get("history", [])) >= 3:
-                                fig = make_sparkline(item["history"], height=120)
+                                fig = make_sparkline(item["history"], height=90)
                                 if fig:
                                     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-                            else:
-                                st.caption("Building…")
                         
-                        st.markdown(colored_progress(item["score"], height=8), unsafe_allow_html=True)
+                        # Compact stats
+                        vs_btc = item["ch24"] - btc_change
+                        direction = get_direction(item["cid"], item["score"])
+                        st.markdown(
+                            f"<div style='font-size:11.5px;color:#aaa;line-height:1.4;margin-bottom:4px;'>"
+                            f"Range {item['range_pos']:.0f}% · vsBTC {vs_btc:+.1f}% · CQ {item['candle_quality']:+.1f}<br>"
+                            f"1h {item['ch1']:+.2f}% · {direction}"
+                            f"</div>",
+                            unsafe_allow_html=True
+                        )
+                        
+                        st.markdown(colored_progress(item["score"], height=7), unsafe_allow_html=True)
                         
                         if st.button("Unpin", key=f"unpin_{item['cid']}", use_container_width=True):
                             st.session_state.watchlist.remove(item["cid"])
