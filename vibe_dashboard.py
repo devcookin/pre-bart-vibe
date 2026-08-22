@@ -482,7 +482,7 @@ def colored_progress(score: int, height: int = 12):
     </div>
     """
 
-def make_sparkline(history, height=110):
+def make_sparkline(history, height=115):
     if not history or len(history) < 2: return None
     times = [h[0] for h in history]
     scores = [h[1] for h in history]
@@ -710,7 +710,7 @@ with main_col:
 
     st.caption(f"Showing {len(display_data)} of {len(filtered)} coins")
 
-    # ===== WATCHLIST - WIDER SPARKLINE =====
+    # ===== WATCHLIST - LARGER FONTS ON LEFT =====
     if st.session_state.watchlist:
         st.markdown("##### ⭐ Your Watchlist")
         watch_items = []
@@ -730,31 +730,32 @@ with main_col:
             for i, item in enumerate(watch_items[:n_cols*2]):
                 with cols[i % n_cols]:
                     with st.container(border=True):
-                        # Give more width to the sparkline (left 1 : right 1.6)
                         left, right = st.columns([1, 1.6])
                         
                         with left:
                             if item["image_url"]:
-                                st.image(item["image_url"], width=26)
+                                st.image(item["image_url"], width=28)
                             st.markdown(f"**{item['tick']}**")
                             
+                            # Larger price
                             price_str = f"${item['price']:,.0f}" if item["price"] >= 1000 else f"${item['price']:,.2f}" if item["price"] >= 1 else f"${item['price']:.4f}"
-                            st.markdown(f"<div style='font-size:1.1rem;font-weight:600;'>{price_str}</div>", unsafe_allow_html=True)
+                            st.markdown(f"<div style='font-size:1.35rem;font-weight:700;margin:2px 0;'>{price_str}</div>", unsafe_allow_html=True)
                             
+                            # Larger 24h + Vibe
                             arrow = get_score_arrow(item["cid"], item["score"])
                             ch_color = "#00c853" if item["ch24"] >= 0 else "#ff5252"
                             st.markdown(
-                                f"<div style='font-size:12px;margin:2px 0 4px 0;'>"
-                                f"<span style='color:{ch_color}'>{item['ch24']:+.2f}%</span> • Vibe {item['score']}{arrow}"
+                                f"<div style='font-size:14px;margin:3px 0 6px 0;'>"
+                                f"<span style='color:{ch_color};font-weight:600'>{item['ch24']:+.2f}%</span> • Vibe {item['score']}{arrow}"
                                 f"</div>",
                                 unsafe_allow_html=True
                             )
                             
-                            # Stats above progress bar
+                            # Larger stats
                             vs_btc = item["ch24"] - btc_change
                             direction = get_direction(item["cid"], item["score"])
                             st.markdown(
-                                f"<div style='font-size:11px;color:#aaa;line-height:1.4;margin-bottom:4px;'>"
+                                f"<div style='font-size:12.5px;color:#bbb;line-height:1.45;'>"
                                 f"Range {item['range_pos']:.0f}% · vsBTC {vs_btc:+.1f}% · CQ {item['candle_quality']:+.1f}<br>"
                                 f"1h {item['ch1']:+.2f}% · {direction}"
                                 f"</div>",
@@ -763,7 +764,7 @@ with main_col:
                         
                         with right:
                             if len(item.get("history", [])) >= 3:
-                                fig = make_sparkline(item["history"], height=115)
+                                fig = make_sparkline(item["history"], height=120)
                                 if fig:
                                     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
                             else:
