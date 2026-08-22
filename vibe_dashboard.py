@@ -38,7 +38,7 @@ if not API_KEY:
     st.stop()
 
 HEADERS = {"x-cg-pro-api-key": API_KEY}
-HISTORY_FILE = "vibe_history.json"
+HISTORY_FILE = "vibe_history.json"   # kept only as fallback name, no longer used
 
 st.set_page_config(
     page_title="Pre-Bart Vibe Dashboard",
@@ -79,7 +79,6 @@ st.markdown("""
         color: #f0f0f0 !important;
     }
     
-    /* Metrics - equal height */
     .stMetric {
         background-color: #1a1d24;
         border-radius: 12px;
@@ -102,7 +101,6 @@ st.markdown("""
         color: #a0a0a0 !important;
     }
     
-    /* Buttons */
     div.stButton > button {
         width: 100%;
         border-radius: 10px;
@@ -119,7 +117,6 @@ st.markdown("""
         transform: translateY(-1px);
     }
     
-    /* Live badge */
     .live-badge {
         display: inline-flex;
         align-items: center;
@@ -147,14 +144,12 @@ st.markdown("""
         100% { opacity: 1; }
     }
     
-    /* Cards */
     div[data-testid="stVerticalBlockBorderWrapper"] {
         background-color: #16181d;
         border: 1px solid #2a2b35 !important;
         border-radius: 12px;
     }
     
-    /* Inputs & Selectboxes */
     .stTextInput > div > div > input,
     .stSelectbox > div > div,
     .stSelectbox [data-baseweb="select"] {
@@ -163,23 +158,19 @@ st.markdown("""
         border-color: #3a3b45 !important;
     }
     
-    /* Code blocks */
     .stCodeBlock {
         background-color: #1a1d24 !important;
     }
     
-    /* Dividers */
     hr {
         margin: 1rem 0 !important;
         border-color: #2a2b35 !important;
     }
     
-    /* Captions */
     .stCaption {
         color: #888 !important;
     }
     
-    /* Better spacing */
     div[data-testid="stVerticalBlock"] > div {
         gap: 0.6rem !important;
     }
@@ -213,43 +204,70 @@ if "movers_tf" not in st.session_state:
 if "quick_filter" not in st.session_state:
     st.session_state.quick_filter = "All"
 
-# ========== LOCAL HISTORY ==========
+# ========== HISTORY (Supabase) ==========
 def load_history():
-    if os.path.exists(HISTORY_FILE):
-        try:
-            with open(HISTORY_FILE, "r") as f:
-                data = json.load(f)
-                for cid in data:
-                    data[cid] = [(datetime.fromisoformat(t), s) for t, s in data[cid]]
-                return data
-        except:
-            return {}
-    return {}
-
-def save_history(history):
+    """Load recent score history for all coins from Supabase."""
+    if not supabase:
+        return {}
     try:
-        serializable = {cid: [(t.isoformat(), s) for t, s in entries] for cid, entries in history.items()}
-        with open(HISTORY_FILE, "w") as f:
-            json.dump(serializable, f)
+        result = supabase.table("vibe_score_history")\
+            .select("coin_id, timestamp, score")\
+            .order("timestamp", desc=True)\
+            .limit(2000)\
+            .execute()
+        
+        rows = result.data or []
+        history = {}
+        for row in rows:
+            cid = row["coin_id"]
+            ts = datetime.fromisoformat(row["timestamp"].replace("Z", "+00:00"))
+            score = row["score"]
+            if cid not in history:
+                history[cid] = []
+            history[cid].append((ts, score))
+        
+        for cid in history:
+            history[cid] = sorted(history[cid], key=lambda x: x[0])[-150:]
+        return history
+    except Exception as e:
+        return {}
+
+def save_history_point(cid: str, score: int):
+    """Insert a single new score point into Supabase."""
+    if not supabase:
+        return
+    try:
+        supabase.table("vibe_score_history").insert({
+            "coin_id": cid,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "score": int(score)
+        }).execute()
     except:
         pass
 
 def update_history(cid, score, history_dict):
-    now = datetime.now()
+    """Update in-memory history + save to Supabase when needed."""
+    now = datetime.now(timezone.utc)
     if cid not in history_dict:
         history_dict[cid] = []
+    
     entries = history_dict[cid]
     should_add = False
+    
     if not entries:
         should_add = True
     else:
         last_time, last_score = entries[-1]
+        if last_time.tzinfo is None:
+            last_time = last_time.replace(tzinfo=timezone.utc)
         if score != last_score or (now - last_time) > timedelta(minutes=2):
             should_add = True
+    
     if should_add:
         entries.append((now, score))
         history_dict[cid] = entries[-150:]
-        save_history(history_dict)
+        save_history_point(cid, score)
+    
     return history_dict
 
 if "score_history" not in st.session_state:
@@ -871,7 +889,6 @@ with main_col:
                         
                         st.markdown(colored_progress(item["score"], height=6), unsafe_allow_html=True)
                         
-                        # View + Unpin buttons (even layout)
                         b1, b2 = st.columns(2)
                         with b1:
                             if st.button("View", key=f"watch_view_{item['cid']}", use_container_width=True):
