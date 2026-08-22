@@ -510,14 +510,15 @@ def make_sparkline(history, height=115):
     return fig
 
 def get_score_arrow(cid, current_score):
+    """More reliable arrow"""
     hist = st.session_state.score_history.get(cid, [])
     if len(hist) < 2:
         return ""
     prev = hist[-2][1]
     if current_score > prev:
-        return " <span style='color:#00c853;font-weight:700;'>↑</span>"
+        return " <span style='color:#00c853;font-weight:700;font-size:15px;'>↑</span>"
     elif current_score < prev:
-        return " <span style='color:#ff5252;font-weight:700;'>↓</span>"
+        return " <span style='color:#ff5252;font-weight:700;font-size:15px;'>↓</span>"
     return ""
 
 def get_direction(cid, current_score):
@@ -710,7 +711,7 @@ with main_col:
 
     st.caption(f"Showing {len(display_data)} of {len(filtered)} coins")
 
-    # ===== WATCHLIST - LARGER FONTS ON LEFT =====
+    # ===== WATCHLIST =====
     if st.session_state.watchlist:
         st.markdown("##### ⭐ Your Watchlist")
         watch_items = []
@@ -737,11 +738,10 @@ with main_col:
                                 st.image(item["image_url"], width=28)
                             st.markdown(f"**{item['tick']}**")
                             
-                            # Larger price
                             price_str = f"${item['price']:,.0f}" if item["price"] >= 1000 else f"${item['price']:,.2f}" if item["price"] >= 1 else f"${item['price']:.4f}"
                             st.markdown(f"<div style='font-size:1.35rem;font-weight:700;margin:2px 0;'>{price_str}</div>", unsafe_allow_html=True)
                             
-                            # Larger 24h + Vibe
+                            # Arrow is back and more visible
                             arrow = get_score_arrow(item["cid"], item["score"])
                             ch_color = "#00c853" if item["ch24"] >= 0 else "#ff5252"
                             st.markdown(
@@ -751,7 +751,6 @@ with main_col:
                                 unsafe_allow_html=True
                             )
                             
-                            # Larger stats
                             vs_btc = item["ch24"] - btc_change
                             direction = get_direction(item["cid"], item["score"])
                             st.markdown(
@@ -770,7 +769,6 @@ with main_col:
                             else:
                                 st.caption("Building…")
                         
-                        # Full-width progress bar
                         st.markdown(colored_progress(item["score"], height=8), unsafe_allow_html=True)
                         
                         if st.button("Unpin", key=f"unpin_{item['cid']}", use_container_width=True):
