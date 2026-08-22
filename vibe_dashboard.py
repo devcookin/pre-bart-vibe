@@ -74,6 +74,10 @@ dark_css = """
         background-color: #1a1d24;
         border-radius: 12px;
         padding: 8px 12px;
+        height: 110px !important;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
     }
     
     div[data-testid="stMetricValue"] { font-size: 1.3rem !important; font-weight: 600; color: #fafafa !important; }
@@ -162,12 +166,16 @@ light_css = """
         color: #1a1a1a !important;
     }
     
-    /* Metrics */
+    /* Metrics - even height */
     .stMetric {
         background-color: #f8f9fa !important;
         border-radius: 12px;
         padding: 8px 12px;
         border: 1px solid #e9ecef;
+        height: 110px !important;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
     }
     div[data-testid="stMetricValue"] { 
         font-size: 1.3rem !important; 
@@ -216,38 +224,37 @@ light_css = """
         border-radius: 12px;
     }
     
-    /* ========== FIXED DROPDOWNS ========== */
-    .stTextInput > div > div > input,
-    .stSelectbox > div > div,
+    /* ========== STRONGER DROPDOWN FIX ========== */
     .stSelectbox [data-baseweb="select"],
     .stSelectbox [data-baseweb="select"] > div,
-    .stSelectbox [data-baseweb="popover"],
-    div[data-baseweb="select"] > div {
+    .stSelectbox [data-baseweb="select"] span,
+    .stSelectbox [data-baseweb="select"] svg {
         background-color: #ffffff !important;
         color: #1a1a1a !important;
         border-color: #ced4da !important;
     }
 
-    /* Dropdown menu items */
-    div[data-baseweb="menu"] {
+    /* The actual open dropdown menu */
+    div[data-baseweb="popover"] > div,
+    div[data-baseweb="menu"],
+    ul[role="listbox"],
+    li[role="option"] {
         background-color: #ffffff !important;
         color: #1a1a1a !important;
-        border: 1px solid #ced4da !important;
     }
 
-    div[data-baseweb="menu"] li,
-    div[data-baseweb="menu"] div,
-    div[data-baseweb="popover"] * {
+    li[role="option"] {
         color: #1a1a1a !important;
-        background-color: #ffffff !important;
     }
 
-    div[data-baseweb="menu"] li:hover {
+    li[role="option"]:hover,
+    li[aria-selected="true"] {
         background-color: #f1f3f5 !important;
+        color: #1a1a1a !important;
     }
 
-    /* Selected value text */
-    .stSelectbox [data-baseweb="select"] span {
+    /* Force text color on all menu items */
+    div[data-baseweb="menu"] * {
         color: #1a1a1a !important;
     }
     
