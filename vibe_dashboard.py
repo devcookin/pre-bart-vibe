@@ -41,7 +41,8 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed"
 )
-
+st.write("Secrets keys:", list(st.secrets.keys()))
+st.write("Has COINGECKO key:", "COINGECKO_API_KEY" in st.secrets)
 # ========== FIXED DARK THEME ==========
 st.markdown("""
 <style>
