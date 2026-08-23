@@ -52,13 +52,21 @@ st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
     
+    html {
+        color-scheme: dark !important;
+        background-color: #0e1117 !important;
+    }
+
     html, body, [class*="css"] {
         font-family: 'Inter', sans-serif;
     }
-    
-    .stApp {
-        background-color: #0e1117;
-        color: #fafafa;
+
+    body,
+    .stApp,
+    [data-testid="stAppViewContainer"],
+    [data-testid="stMain"] {
+        background-color: #0e1117 !important;
+        color: #fafafa !important;
     }
     
     .block-container {
@@ -176,9 +184,39 @@ st.markdown("""
     }
     
     @media (max-width: 768px) {
-        .block-container {
+        html,
+        body,
+        .stApp,
+        [data-testid="stAppViewContainer"],
+        [data-testid="stMain"] {
+            background-color: #0e1117 !important;
+            color: #fafafa !important;
+        }
+
+        .block-container,
+        [data-testid="stMainBlockContainer"] {
+            background-color: #0e1117 !important;
             padding-left: 0.8rem !important;
             padding-right: 0.8rem !important;
+        }
+
+        div[data-testid="stVerticalBlockBorderWrapper"] {
+            background-color: #16181d !important;
+            border-color: #2a2b35 !important;
+            box-shadow: none !important;
+        }
+
+        .stMetric {
+            background-color: #1a1d24 !important;
+            border-color: #2a2d35 !important;
+            box-shadow: none !important;
+        }
+
+        .stTextInput > div > div > input,
+        .stSelectbox > div > div,
+        .stSelectbox [data-baseweb="select"] {
+            background-color: #1a1d24 !important;
+            color: #fafafa !important;
         }
     }
 </style>
