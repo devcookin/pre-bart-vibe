@@ -9,6 +9,7 @@ import json
 import os
 from supabase import create_client, Client
 import streamlit.components.v1 as components
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 try:
     from streamlit_autorefresh import st_autorefresh
@@ -467,6 +468,55 @@ def save_vibe_snapshot(coin_id, symbol, price, score, label, change_24h, range_p
     except:
         pass
 
+def save_vibe_snapshots_batch(snapshot_rows):
+    """Insert all due top-coin snapshots in one Supabase request.
+
+    This preserves the existing 5-minute snapshot cadence while avoiding up to
+    30 separate network round-trips during a collection cycle.
+    """
+    if not supabase or not snapshot_rows:
+        return
+    try:
+        supabase.table("vibe_snapshots").insert([row["data"] for row in snapshot_rows]).execute()
+        for row in snapshot_rows:
+            st.session_state.last_snapshot_time[row["coin_id"]] = row["timestamp"]
+    except:
+        # Fall back to the original per-coin insert behavior so collection is
+        # never lost just because a batch request fails.
+        for row in snapshot_rows:
+            try:
+                supabase.table("vibe_snapshots").insert(row["data"]).execute()
+                st.session_state.last_snapshot_time[row["coin_id"]] = row["timestamp"]
+            except:
+                pass
+
+def queue_vibe_snapshot(snapshot_rows, coin_id, symbol, price, score, label, change_24h, range_pos, vs_btc, prev_score, sub_signals):
+    """Queue a snapshot only when the same interval rules as save_vibe_snapshot allow it."""
+    if not supabase:
+        return
+    now = datetime.now(timezone.utc)
+    last_time = st.session_state.last_snapshot_time.get(coin_id)
+    if last_time and (now - last_time).total_seconds() < MIN_SNAPSHOT_INTERVAL:
+        return
+    direction = None
+    if prev_score is not None:
+        if score > prev_score + 2:
+            direction = "rising"
+        elif score < prev_score - 2:
+            direction = "falling"
+        else:
+            direction = "flat"
+    data = {
+        "timestamp": now.isoformat(), "coin_id": coin_id, "symbol": symbol,
+        "price": float(price), "score": int(score), "label": label,
+        "change_24h": float(change_24h) if change_24h is not None else None,
+        "range_pos": float(range_pos) if range_pos is not None else None,
+        "vs_btc": float(vs_btc) if vs_btc is not None else None,
+        "prev_score": int(prev_score) if prev_score is not None else None,
+        "direction": direction, "sub_signals": sub_signals, "model_version": MODEL_VERSION,
+    }
+    snapshot_rows.append({"coin_id": coin_id, "timestamp": now, "data": data})
+
 def fill_pending_returns():
     """Improved version: only fills the next pending horizon (shortest first)
     so that 30m / 1h / 4h / 24h get different values."""
@@ -643,6 +693,38 @@ def get_ohlc(coin_id, days="1"):
         return r.json() if r.status_code == 200 else []
     except:
         return []
+
+@st.cache_data(ttl=300)
+def get_ohlc_batch(coin_ids, days="1"):
+    """Fetch OHLC for many coins concurrently.
+
+    Call count is unchanged; wall-clock load time is lower because a handful of
+    CoinGecko requests run in parallel instead of all 30 running serially.
+    """
+    ids = list(coin_ids)
+    if not ids:
+        return {}
+
+    def _fetch(cid):
+        try:
+            r = requests.get(
+                f"https://pro-api.coingecko.com/api/v3/coins/{cid}/ohlc",
+                headers=HEADERS,
+                params={"vs_currency":"usd","days":days},
+                timeout=10
+            )
+            return cid, (r.json() if r.status_code == 200 else [])
+        except:
+            return cid, []
+
+    results = {}
+    # A modest worker count speeds cold loads without creating an excessive API burst.
+    with ThreadPoolExecutor(max_workers=min(4, len(ids))) as executor:
+        futures = [executor.submit(_fetch, cid) for cid in ids]
+        for future in as_completed(futures):
+            cid, data = future.result()
+            results[cid] = data
+    return results
 
 @st.cache_data(ttl=300)
 def get_market_chart(coin_id, days="1"):
@@ -865,7 +947,7 @@ def fetch_single_coin_vibe(cid, btc_change, fg_value):
         high, low = c["high_24h"], c["low_24h"]
         ch1 = c.get("price_change_percentage_1h_in_currency") or 0
         ch24 = c.get("price_change_percentage_24h") or 0
-        ohlc = get_ohlc(cid, "1")
+        ohlc = top_ohlc_map.get(cid) if cid in top_ohlc_map else get_ohlc(cid, "1")
         cq = analyze_candles(ohlc)
         score, meme, range_pos, reasons = calc_vibe(price, high, low, ch1, ch24, fg_value, btc_change, cq)
         st.session_state.score_history = update_history(cid, score, st.session_state.score_history)
@@ -941,7 +1023,12 @@ for c in top_coins:
 
 btc_change = next((c.get("price_change_percentage_24h") or 0 for c in top_coins if c["id"] == "bitcoin"), 0)
 
+# Fetch the 1-day OHLC inputs concurrently. This keeps every coin's Vibe
+# calculation and snapshot collection intact while cutting cold-load latency.
+top_ohlc_map = get_ohlc_batch(tuple(cid for _, cid, _ in COIN_ORDER), "1")
+
 vibe_data = []
+pending_snapshot_rows = []
 for name, cid, tick in COIN_ORDER:
     c = coin_map.get(cid)
     if not c: continue
@@ -950,7 +1037,7 @@ for name, cid, tick in COIN_ORDER:
     ch1 = c.get("price_change_percentage_1h_in_currency") or 0
     ch24 = c.get("price_change_percentage_24h") or 0
     image_url = c.get("image", "")
-    ohlc = get_ohlc(cid, "1")
+    ohlc = top_ohlc_map.get(cid) or get_ohlc(cid, "1")
     cq = analyze_candles(ohlc)
     score, meme, range_pos, reasons = calc_vibe(price, high, low, ch1, ch24, fg_value, btc_change, cq)
     st.session_state.score_history = update_history(cid, score, st.session_state.score_history)
@@ -962,13 +1049,16 @@ for name, cid, tick in COIN_ORDER:
         elif score <= 30 and prev_score > 30: st.toast(f"{tick} Vibe dropped below 30", icon="🐻")
         elif score <= 40 and prev_score > 40: st.toast(f"{tick} Vibe dropped below 40", icon="⚠️")
     vs_btc_val = ch24 - btc_change
-    save_vibe_snapshot(cid, tick, price, score, meme, ch24, range_pos, vs_btc_val, prev_score, {"reasons": reasons, "candle_quality": cq})
+    queue_vibe_snapshot(pending_snapshot_rows, cid, tick, price, score, meme, ch24, range_pos, vs_btc_val, prev_score, {"reasons": reasons, "candle_quality": cq})
     vibe_data.append({
         "name": name, "cid": cid, "tick": tick, "price": price, "ch24": ch24, "ch1": ch1,
         "score": score, "meme": meme, "image_url": image_url, "candle_quality": cq,
         "range_pos": range_pos, "reasons": reasons, "history": st.session_state.score_history.get(cid, []),
         "prev_score": prev_score
     })
+
+# One Supabase insert per collection cycle instead of one insert per coin.
+save_vibe_snapshots_batch(pending_snapshot_rows)
 
 vibe_data_sorted = sorted(vibe_data, key=lambda x: x["score"], reverse=True)
 
@@ -1267,7 +1357,7 @@ if st.session_state.search_coin:
         price, high, low = c["current_price"], c["high_24h"], c["low_24h"]
         ch1 = c.get("price_change_percentage_1h_in_currency") or 0
         ch24 = c.get("price_change_percentage_24h") or 0
-        ohlc = get_ohlc(cid, "1")
+        ohlc = top_ohlc_map.get(cid) if cid in top_ohlc_map else get_ohlc(cid, "1")
         cq = analyze_candles(ohlc)
         score, meme, range_pos, reasons = calc_vibe(price, high, low, ch1, ch24, fg_value, btc_change, cq)
         volume, market_cap = c["total_volume"], c["market_cap"]
@@ -1401,7 +1491,7 @@ st.markdown(f"""
 st.divider()
 st.subheader(f"{name} • Chart")
 days = "1" if "1 Day" in timeframe else "7" if "7 Days" in timeframe else "30"
-ohlc_data = get_ohlc(cid, days)
+ohlc_data = top_ohlc_map.get(cid) if days == "1" and cid in top_ohlc_map else get_ohlc(cid, days)
 volume_data = get_market_chart(cid, days)
 if isinstance(ohlc_data, list) and len(ohlc_data) > 0:
     df = pd.DataFrame(ohlc_data, columns=["timestamp","open","high","low","close"])
