@@ -12,7 +12,7 @@ import streamlit.components.v1 as components
 
 try:
     from streamlit_autorefresh import st_autorefresh
-    st_autorefresh(interval=45 * 1000, key="datarefresh")
+    st_autorefresh(interval=120 * 1000, key="datarefresh")
 except:
     pass
 
@@ -447,7 +447,7 @@ def get_fear_greed():
     except:
         return None, None
 
-@st.cache_data(ttl=45)
+@st.cache_data(ttl=120)
 def get_global():
     try:
         r = requests.get("https://pro-api.coingecko.com/api/v3/global", headers=HEADERS, timeout=10)
@@ -455,7 +455,7 @@ def get_global():
     except:
         return None
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=120)
 def get_top_coins(limit=30):
     try:
         r = requests.get("https://pro-api.coingecko.com/api/v3/coins/markets", headers=HEADERS,
@@ -465,7 +465,7 @@ def get_top_coins(limit=30):
     except:
         return []
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=300)
 def get_ohlc(coin_id, days="1"):
     try:
         r = requests.get(f"https://pro-api.coingecko.com/api/v3/coins/{coin_id}/ohlc", headers=HEADERS,
@@ -474,7 +474,7 @@ def get_ohlc(coin_id, days="1"):
     except:
         return []
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=300)
 def get_market_chart(coin_id, days="1"):
     try:
         r = requests.get(f"https://pro-api.coingecko.com/api/v3/coins/{coin_id}/market_chart", headers=HEADERS,
@@ -483,7 +483,7 @@ def get_market_chart(coin_id, days="1"):
     except:
         return {}
 
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=300)
 def search_coins(query):
     if not query or len(query) < 2: return []
     try:
@@ -671,12 +671,24 @@ def get_direction(cid, current_score):
         return "↓ Falling"
     return "→ Flat"
 
+@st.cache_data(ttl=120)
+def get_single_coin_market(cid):
+    try:
+        r = requests.get(
+            "https://pro-api.coingecko.com/api/v3/coins/markets",
+            headers=HEADERS,
+            params={"vs_currency":"usd","ids":cid,"price_change_percentage":"1h,24h"},
+            timeout=8
+        )
+        if r.status_code != 200:
+            return []
+        return r.json()
+    except:
+        return []
+
 def fetch_single_coin_vibe(cid, btc_change, fg_value):
     try:
-        r = requests.get("https://pro-api.coingecko.com/api/v3/coins/markets", headers=HEADERS,
-            params={"vs_currency":"usd","ids":cid,"price_change_percentage":"1h,24h"}, timeout=8)
-        if r.status_code != 200: return None
-        data = r.json()
+        data = get_single_coin_market(cid)
         if not data: return None
         c = data[0]
         price = c["current_price"]
@@ -720,7 +732,8 @@ with col_refresh:
     st.write("")
     st.write("")
     if st.button("🔄 Refresh", use_container_width=True):
-        st.cache_data.clear()
+        # Rerun the UI without destroying expensive CoinGecko caches.
+        # Cached market data refreshes automatically according to each function's TTL.
         st.session_state.last_refresh = datetime.now()
         st.rerun()
 
@@ -1077,12 +1090,7 @@ with col_time:
     timeframe = st.selectbox("Timeframe", ["Last 1 Day (30 min)", "Last 7 Days", "Last 30 Days"])
 
 if st.session_state.search_coin:
-    try:
-        r = requests.get("https://pro-api.coingecko.com/api/v3/coins/markets", headers=HEADERS,
-            params={"vs_currency":"usd","ids":st.session_state.search_coin,"price_change_percentage":"1h,24h"}, timeout=10)
-        single = r.json() if r.status_code == 200 else []
-    except:
-        single = []
+    single = get_single_coin_market(st.session_state.search_coin)
     if single:
         c = single[0]
         name, cid, tick = c["name"], c["id"], c["symbol"].upper()
