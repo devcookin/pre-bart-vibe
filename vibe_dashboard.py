@@ -218,6 +218,106 @@ st.markdown("""
             background-color: #1a1d24 !important;
             color: #fafafa !important;
         }
+
+        /* Mobile Safari/Chrome can partially apply a light component theme even
+           when the page itself is dark. Force the foreground/background colors
+           on Streamlit widgets without changing layout or app logic. */
+        [data-testid="stWidgetLabel"],
+        [data-testid="stWidgetLabel"] p,
+        [data-testid="stWidgetLabel"] span,
+        label,
+        .stTextInput label,
+        .stSelectbox label {
+            color: #f0f0f0 !important;
+            -webkit-text-fill-color: #f0f0f0 !important;
+            opacity: 1 !important;
+        }
+
+        .stTextInput input,
+        .stTextInput input::placeholder,
+        [data-baseweb="input"] input {
+            color: #fafafa !important;
+            -webkit-text-fill-color: #fafafa !important;
+            caret-color: #fafafa !important;
+            opacity: 1 !important;
+        }
+
+        .stSelectbox [data-baseweb="select"],
+        .stSelectbox [data-baseweb="select"] > div,
+        .stSelectbox [data-baseweb="select"] span,
+        .stSelectbox [data-baseweb="select"] svg {
+            color: #fafafa !important;
+            -webkit-text-fill-color: #fafafa !important;
+            fill: #fafafa !important;
+            opacity: 1 !important;
+        }
+
+        div[data-testid="stMetricLabel"],
+        div[data-testid="stMetricLabel"] p,
+        div[data-testid="stMetricLabel"] span {
+            color: #a0a0a0 !important;
+            -webkit-text-fill-color: #a0a0a0 !important;
+            opacity: 1 !important;
+        }
+
+        div[data-testid="stMetricValue"],
+        div[data-testid="stMetricValue"] * {
+            color: #ffffff !important;
+            -webkit-text-fill-color: #ffffff !important;
+            opacity: 1 !important;
+        }
+
+        [data-testid="stCaptionContainer"],
+        [data-testid="stCaptionContainer"] p,
+        .stCaption,
+        .stCaption p {
+            color: #9a9a9a !important;
+            -webkit-text-fill-color: #9a9a9a !important;
+            opacity: 1 !important;
+        }
+
+        [data-testid="stExpander"] details,
+        [data-testid="stExpander"] summary {
+            background-color: #0e1117 !important;
+            color: #f0f0f0 !important;
+            border-color: #2a2d35 !important;
+        }
+
+        [data-testid="stExpander"] summary *,
+        [data-testid="stExpander"] details * {
+            color: inherit;
+        }
+
+        [data-testid="stCodeBlock"],
+        [data-testid="stCodeBlock"] pre,
+        [data-testid="stCodeBlock"] code,
+        .stCodeBlock,
+        .stCodeBlock pre,
+        .stCodeBlock code {
+            background-color: #1a1d24 !important;
+            color: #fafafa !important;
+            -webkit-text-fill-color: #fafafa !important;
+            border-color: #2a2d35 !important;
+        }
+
+        div.stButton > button,
+        div.stButton > button * {
+            color: #fafafa !important;
+            -webkit-text-fill-color: #fafafa !important;
+        }
+
+        /* Dataframe host surface. Styled cells retain their own green/orange
+           backgrounds; this forces the unstyled base/header surface dark. */
+        [data-testid="stDataFrame"],
+        [data-testid="stDataFrame"] > div {
+            background-color: #0e1117 !important;
+            color: #fafafa !important;
+            --gdg-bg-cell: #0e1117;
+            --gdg-bg-header: #1a1d24;
+            --gdg-text-dark: #fafafa;
+            --gdg-text-medium: #b8b8b8;
+            --gdg-border-color: #2a2d35;
+        }
     }
 </style>
 """, unsafe_allow_html=True)
