@@ -38,7 +38,7 @@ if not API_KEY:
     st.stop()
 
 HEADERS = {"x-cg-pro-api-key": API_KEY}
-HISTORY_FILE = "vibe_history.json"   # kept only as fallback name, no longer used
+HISTORY_FILE = "vibe_history.json"
 
 st.set_page_config(
     page_title="Pre-Bart Vibe Dashboard",
@@ -206,7 +206,6 @@ if "quick_filter" not in st.session_state:
 
 # ========== HISTORY (Supabase) ==========
 def load_history():
-    """Load recent score history for all coins from Supabase."""
     if not supabase:
         return {}
     try:
@@ -229,11 +228,10 @@ def load_history():
         for cid in history:
             history[cid] = sorted(history[cid], key=lambda x: x[0])[-150:]
         return history
-    except Exception as e:
+    except:
         return {}
 
 def save_history_point(cid: str, score: int):
-    """Insert a single new score point into Supabase."""
     if not supabase:
         return
     try:
@@ -246,7 +244,6 @@ def save_history_point(cid: str, score: int):
         pass
 
 def update_history(cid, score, history_dict):
-    """Update in-memory history + save to Supabase when needed."""
     now = datetime.now(timezone.utc)
     if cid not in history_dict:
         history_dict[cid] = []
@@ -301,44 +298,67 @@ def save_vibe_snapshot(coin_id, symbol, price, score, label, change_24h, range_p
         pass
 
 def fill_pending_returns():
+    """Improved version: only fills the next pending horizon (shortest first)
+    so that 30m / 1h / 4h / 24h get different values."""
     if not supabase: return
     now = datetime.now(timezone.utc)
     last_fill = st.session_state.last_fill_time
     if last_fill and (now - last_fill).total_seconds() < FILL_INTERVAL_SECONDS:
         return
+
     try:
         result = supabase.table("vibe_snapshots")\
             .select("id, timestamp, coin_id, price, return_30m, return_1h, return_4h, return_24h")\
-            .is_("return_24h", "null").order("timestamp", desc=False).limit(100).execute()
+            .is_("return_24h", "null")\
+            .order("timestamp", desc=False)\
+            .limit(80)\
+            .execute()
+        
         rows = result.data or []
         if not rows:
             st.session_state.last_fill_time = now
             return
+
         coin_ids = list(set(r["coin_id"] for r in rows))
         try:
-            r = requests.get("https://pro-api.coingecko.com/api/v3/simple/price", headers=HEADERS,
-                             params={"ids": ",".join(coin_ids), "vs_currencies": "usd"}, timeout=8)
+            r = requests.get(
+                "https://pro-api.coingecko.com/api/v3/simple/price",
+                headers=HEADERS,
+                params={"ids": ",".join(coin_ids), "vs_currencies": "usd"},
+                timeout=8
+            )
             prices = r.json() if r.status_code == 200 else {}
         except:
             prices = {}
+
         for row in rows:
             ts = datetime.fromisoformat(row["timestamp"].replace("Z", "+00:00"))
             age = (now - ts).total_seconds()
             original = row["price"]
             current = prices.get(row["coin_id"], {}).get("usd")
-            if not current or original <= 0: continue
+            if not current or original <= 0:
+                continue
+
             ret = ((current - original) / original) * 100
             updates = {}
-            if age >= 1800 and row.get("return_30m") is None: updates["return_30m"] = round(ret, 4)
-            if age >= 3600 and row.get("return_1h") is None: updates["return_1h"] = round(ret, 4)
-            if age >= 14400 and row.get("return_4h") is None: updates["return_4h"] = round(ret, 4)
-            if age >= 86400 and row.get("return_24h") is None: updates["return_24h"] = round(ret, 4)
+
+            # Only fill the *next* missing horizon (shortest first)
+            if age >= 1800 and row.get("return_30m") is None:
+                updates["return_30m"] = round(ret, 4)
+            elif age >= 3600 and row.get("return_1h") is None:
+                updates["return_1h"] = round(ret, 4)
+            elif age >= 14400 and row.get("return_4h") is None:
+                updates["return_4h"] = round(ret, 4)
+            elif age >= 86400 and row.get("return_24h") is None:
+                updates["return_24h"] = round(ret, 4)
+
             if updates:
                 updates["filled_at"] = now.isoformat()
                 try:
                     supabase.table("vibe_snapshots").update(updates).eq("id", row["id"]).execute()
                 except:
                     pass
+
         st.session_state.last_fill_time = now
     except:
         pass
