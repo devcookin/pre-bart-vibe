@@ -318,6 +318,38 @@ st.markdown("""
             --gdg-text-medium: #b8b8b8;
             --gdg-border-color: #2a2d35;
         }
+
+        /* BaseWeb select menus are rendered in a portal outside .stSelectbox.
+           Target the portal itself so iOS cannot fall back to light-theme text/menu colors. */
+        [data-baseweb="popover"],
+        [data-baseweb="menu"],
+        [role="listbox"],
+        [data-baseweb="popover"] > div,
+        [data-baseweb="menu"] > div {
+            background: #1a1d24 !important;
+            color: #fafafa !important;
+        }
+
+        [role="option"],
+        [role="option"] *,
+        [data-baseweb="menu"] li,
+        [data-baseweb="menu"] li * {
+            color: #fafafa !important;
+            -webkit-text-fill-color: #fafafa !important;
+        }
+
+        [role="option"][aria-selected="true"] {
+            background: #262a33 !important;
+        }
+
+        /* Current selected value lives inside BaseWeb's value container on iOS. */
+        [data-baseweb="select"] [data-testid="stMarkdownContainer"],
+        [data-baseweb="select"] div,
+        [data-baseweb="select"] span {
+            color: #fafafa !important;
+            -webkit-text-fill-color: #fafafa !important;
+            opacity: 1 !important;
+        }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -1477,6 +1509,15 @@ if bucket_stats:
         except: return ""
     
     styler = df_display.style\
+        .set_properties(**{
+            "background-color": "#0e1117",
+            "color": "#fafafa",
+            "border-color": "#2a2d35"
+        })\
+        .set_table_styles([
+            {"selector": "th", "props": [("background-color", "#1a1d24"), ("color", "#b8b8b8"), ("border-color", "#2a2d35")]},
+            {"selector": "td", "props": [("border-color", "#2a2d35")]},
+        ])\
         .map(style_win, subset=["Win 30m", "Win 1h", "Win 4h", "Win 24h"])\
         .map(style_avg, subset=["Avg 30m", "Avg 1h", "Avg 4h", "Avg 24h"])\
         .map(style_edge, subset=["Edge (1h)"])
