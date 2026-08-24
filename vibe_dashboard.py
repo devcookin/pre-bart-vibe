@@ -747,13 +747,10 @@ def queue_vibe_snapshot(snapshot_rows, coin_id, symbol, price, score, label, cha
     snapshot_rows.append({"coin_id": coin_id, "timestamp": now, "data": data})
 
 def fill_pending_returns():
-    """Fill forward returns only near their actual maturity time.
+    """Fill each forward-return horizon from snapshots near its own maturity time.
 
-    IMPORTANT: Older app versions used one "current" price for snapshots that could
-    already be much older than the target horizon. That contaminated 30m/1h/4h/24h
-    with matching or near-matching returns. v2.6 only records a horizon when the
-    snapshot is close enough to that horizon, and performance stats are filtered to
-    this model version so legacy contaminated rows do not affect the table.
+    Each horizon is queried independently. This prevents the 24h-null backlog from
+    crowding 30m snapshots out of a shared LIMIT window (the cause of blank 30m stats).
     """
     if not supabase:
         return
@@ -763,16 +760,37 @@ def fill_pending_returns():
     if last_fill and (now - last_fill).total_seconds() < FILL_INTERVAL_SECONDS:
         return
 
-    try:
-        result = supabase.table("vibe_snapshots")\
-            .select("id, timestamp, coin_id, price, return_30m, return_1h, return_4h, return_24h")\
-            .eq("model_version", MODEL_VERSION)\
-            .is_("return_24h", "null")\
-            .order("timestamp", desc=False)\
-            .limit(120)\
-            .execute()
+    horizons = [
+        ("return_30m", 30 * 60, 12 * 60),
+        ("return_1h", 60 * 60, 15 * 60),
+        ("return_4h", 4 * 60 * 60, 30 * 60),
+        ("return_24h", 24 * 60 * 60, 90 * 60),
+    ]
 
-        rows = result.data or []
+    try:
+        # Pull only snapshots that are currently inside each horizon's valid fill
+        # window. A single shared query cannot do this safely because 24h-null rows
+        # vastly outnumber the snapshots eligible for the 30m window.
+        eligible = {}
+        for col, target_age, max_late in horizons:
+            oldest = (now - timedelta(seconds=target_age + max_late)).isoformat()
+            newest = (now - timedelta(seconds=target_age)).isoformat()
+            try:
+                result = supabase.table("vibe_snapshots")\
+                    .select("id, timestamp, coin_id, price, return_30m, return_1h, return_4h, return_24h")\
+                    .eq("model_version", MODEL_VERSION)\
+                    .is_(col, "null")\
+                    .gte("timestamp", oldest)\
+                    .lte("timestamp", newest)\
+                    .order("timestamp", desc=False)\
+                    .limit(1000)\
+                    .execute()
+                for row in (result.data or []):
+                    eligible[row["id"]] = row
+            except Exception:
+                continue
+
+        rows = list(eligible.values())
         if not rows:
             st.session_state.last_fill_time = now
             return
@@ -789,16 +807,6 @@ def fill_pending_returns():
         except Exception:
             prices = {}
 
-        # Maximum lateness we will tolerate when measuring each horizon.
-        # If the app was offline too long, leave that return NULL rather than
-        # silently substituting a 2h return for a 30m return, etc.
-        horizons = [
-            ("return_30m", 30 * 60, 12 * 60),
-            ("return_1h", 60 * 60, 15 * 60),
-            ("return_4h", 4 * 60 * 60, 30 * 60),
-            ("return_24h", 24 * 60 * 60, 90 * 60),
-        ]
-
         for row in rows:
             try:
                 ts = datetime.fromisoformat(row["timestamp"].replace("Z", "+00:00"))
@@ -810,7 +818,6 @@ def fill_pending_returns():
 
                 ret = ((float(current) - original) / original) * 100
                 updates = {}
-
                 for col, target_age, max_late in horizons:
                     if row.get(col) is None and target_age <= age <= target_age + max_late:
                         updates[col] = round(ret, 4)
@@ -824,6 +831,12 @@ def fill_pending_returns():
             except Exception:
                 continue
 
+        # Bucket stats are cached separately; clear them so newly matured returns
+        # can appear immediately instead of waiting up to five more minutes.
+        try:
+            get_bucket_stats.clear()
+        except Exception:
+            pass
         st.session_state.last_fill_time = now
     except Exception:
         pass
