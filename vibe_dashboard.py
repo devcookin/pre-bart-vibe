@@ -28,6 +28,7 @@ if SUPABASE_URL and SUPABASE_KEY:
         pass
 
 MODEL_VERSION = "v2.9-recovery-balanced"
+APP_VERSION = "v10.0-setup-intelligence"
 MIN_SNAPSHOT_INTERVAL = 300
 FILL_INTERVAL_SECONDS = 60
 
@@ -583,6 +584,45 @@ st.markdown("""
         .pb-mover-tabs { max-width:100%;margin-bottom:11px; }
         .pb-mover-tabs label { padding:7px 10px;font-size:.78rem; }
     }
+
+    /* v10 — Setup Intelligence */
+    .pb-intel-grid {
+        display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin:12px 0 10px 0;
+    }
+    .pb-intel-card {
+        border:1px solid #29313b;border-radius:14px;padding:13px 14px;
+        background:linear-gradient(180deg,#141a22,#10151b);min-height:92px;
+    }
+    .pb-intel-kicker { font-size:.68rem;color:#7e8794;text-transform:uppercase;letter-spacing:.075em;font-weight:800; }
+    .pb-intel-value { font-size:1.18rem;font-weight:820;color:#f5f7fa;letter-spacing:-.025em;margin-top:7px; }
+    .pb-intel-sub { color:#8f98a5;font-size:.74rem;line-height:1.45;margin-top:4px; }
+    .pb-setup-shell {
+        border:1px solid #29313b;border-radius:15px;background:linear-gradient(145deg,#131922,#10151b);
+        padding:15px 16px;margin:9px 0 13px 0;
+    }
+    .pb-setup-top { display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap; }
+    .pb-setup-title { font-size:.82rem;color:#8e97a3;text-transform:uppercase;letter-spacing:.075em;font-weight:800; }
+    .pb-setup-state { font-size:1.22rem;font-weight:840;letter-spacing:-.025em;margin-top:4px; }
+    .pb-setup-pill { display:inline-flex;align-items:center;border:1px solid;padding:4px 9px;border-radius:999px;font-size:.68rem;font-weight:850;letter-spacing:.055em;text-transform:uppercase; }
+    .pb-analog-grid { display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-top:13px; }
+    .pb-analog-stat { background:#0f141a;border:1px solid #252c35;border-radius:11px;padding:9px 10px; }
+    .pb-analog-label { color:#79828e;font-size:.64rem;text-transform:uppercase;letter-spacing:.06em;font-weight:760; }
+    .pb-analog-value { color:#f5f7fa;font-size:.94rem;font-weight:800;margin-top:3px; }
+    .pb-lead-note { margin-top:10px;color:#9ba4b0;font-size:.75rem;line-height:1.5; }
+    .pb-lead-dot { display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:1px; }
+
+    @media (max-width: 900px) {
+        .pb-intel-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+        .pb-analog-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    }
+    @media (max-width: 520px) {
+        .pb-intel-grid { grid-template-columns:1fr 1fr;gap:7px; }
+        .pb-intel-card { padding:11px 12px;min-height:84px; }
+        .pb-intel-value { font-size:1.02rem; }
+        .pb-setup-shell { padding:13px; }
+        .pb-analog-grid { grid-template-columns:1fr 1fr;gap:7px; }
+    }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -980,6 +1020,14 @@ def get_bucket_stats(min_n=5):
                 return None
             if metric == "avg":
                 return round(vals.mean(), 3)
+            if metric == "median":
+                return round(vals.median(), 3)
+            if metric == "avg_win":
+                winners = vals[vals > 0]
+                return round(winners.mean(), 3) if len(winners) else None
+            if metric == "avg_loss":
+                losers = vals[vals < 0]
+                return round(losers.mean(), 3) if len(losers) else None
             return round((vals > 0).mean() * 100, 1)
 
         stats = []
@@ -1011,6 +1059,9 @@ def get_bucket_stats(min_n=5):
                 "avg_30m": horizon_metric(b, "return_30m", "avg"),
                 "win_30m": horizon_metric(b, "return_30m", "win"),
                 "avg_1h": avg_1h,
+                "median_1h": horizon_metric(b, "return_1h", "median"),
+                "avg_win_1h": horizon_metric(b, "return_1h", "avg_win"),
+                "avg_loss_1h": horizon_metric(b, "return_1h", "avg_loss"),
                 "win_1h": horizon_metric(b, "return_1h", "win"),
                 "avg_4h": horizon_metric(b, "return_4h", "avg"),
                 "win_4h": horizon_metric(b, "return_4h", "win"),
@@ -1063,6 +1114,194 @@ def get_vibe_price_history(coin_id, limit=150):
         return sorted(rows, key=lambda r: r.get("timestamp", ""))
     except Exception:
         return []
+
+@st.cache_data(ttl=300)
+def get_setup_history(coin_id, limit=1200):
+    """Load a bounded recent snapshot history for setup/transition analytics.
+
+    This is intentionally per-coin and cached so v10 can study Vibe transitions
+    without turning every page load into a full-database scan.
+    """
+    if not supabase or not coin_id:
+        return []
+    try:
+        result = supabase.table("vibe_snapshots")\
+            .select("timestamp,price,score,prev_score,return_30m,return_1h,return_4h")\
+            .eq("coin_id", coin_id)\
+            .eq("model_version", MODEL_VERSION)\
+            .order("timestamp", desc=True)\
+            .limit(limit)\
+            .execute()
+        return sorted(result.data or [], key=lambda r: r.get("timestamp", ""))
+    except Exception:
+        return []
+
+def _score_bucket(score):
+    if score is None:
+        return None
+    score = float(score)
+    if score < 20: return "0-19"
+    if score < 40: return "20-39"
+    if score < 60: return "40-59"
+    if score < 70: return "60-69"
+    if score < 80: return "70-79"
+    if score < 90: return "80-89"
+    return "90-100"
+
+def _velocity_state(delta):
+    if delta is None or pd.isna(delta): return "Unknown"
+    if delta >= 8: return "Surging"
+    if delta >= 3: return "Improving"
+    if delta <= -8: return "Fading fast"
+    if delta <= -3: return "Weakening"
+    return "Stable"
+
+def _price_state(delta):
+    if delta is None or pd.isna(delta): return "Unknown"
+    if delta <= -0.50: return "Price lagging"
+    if delta < 0.50: return "Price flat"
+    if delta < 1.50: return "Price moving"
+    return "Price extended"
+
+def _prior_series(df, minutes, tolerance_minutes):
+    scores, prices = [], []
+    times = list(df["time"])
+    score_vals = list(df["score"])
+    price_vals = list(df["price"])
+    for i, t in enumerate(times):
+        target = t - pd.Timedelta(minutes=minutes)
+        # nearest historical reading to the target, never using a future row
+        candidates = []
+        for j in range(max(0, i-30), i):
+            diff = abs((times[j] - target).total_seconds())
+            if diff <= tolerance_minutes * 60:
+                candidates.append((diff, j))
+        if candidates:
+            _, j = min(candidates, key=lambda x: x[0])
+            scores.append(score_vals[j]); prices.append(price_vals[j])
+        else:
+            scores.append(None); prices.append(None)
+    return scores, prices
+
+def build_setup_analytics(rows, current_score, current_price):
+    """Derive Vibe velocity, price response, transition behavior and historical analogs."""
+    if not rows:
+        return None
+    df = pd.DataFrame(rows)
+    if df.empty:
+        return None
+    df["time"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
+    for col in ["price","score","prev_score","return_30m","return_1h","return_4h"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+    df = df.dropna(subset=["time","price","score"]).sort_values("time").reset_index(drop=True)
+    if df.empty:
+        return None
+
+    # Append a synthetic now-row so current Vibe/price is measured against persisted history.
+    now_row = {c: None for c in df.columns}
+    now_row.update({"time": pd.Timestamp.now(tz="UTC"), "price": float(current_price), "score": float(current_score)})
+    df = pd.concat([df, pd.DataFrame([now_row])], ignore_index=True)
+
+    p30_score, p30_price = _prior_series(df, 30, 12)
+    p60_score, p60_price = _prior_series(df, 60, 20)
+    df["prior_score_30m"] = p30_score
+    df["prior_price_30m"] = p30_price
+    df["prior_score_1h"] = p60_score
+    df["prior_price_1h"] = p60_price
+    df["dv_30m"] = df["score"] - pd.to_numeric(df["prior_score_30m"], errors="coerce")
+    df["dv_1h"] = df["score"] - pd.to_numeric(df["prior_score_1h"], errors="coerce")
+    df["px_30m"] = (df["price"] / pd.to_numeric(df["prior_price_30m"], errors="coerce") - 1.0) * 100
+    df["px_1h"] = (df["price"] / pd.to_numeric(df["prior_price_1h"], errors="coerce") - 1.0) * 100
+    df["bucket"] = df["score"].apply(_score_bucket)
+    df["velocity_state"] = df["dv_30m"].apply(_velocity_state)
+    df["price_state"] = df["px_30m"].apply(_price_state)
+
+    cur = df.iloc[-1]
+    dv30 = None if pd.isna(cur["dv_30m"]) else float(cur["dv_30m"])
+    dv1h = None if pd.isna(cur["dv_1h"]) else float(cur["dv_1h"])
+    px30 = None if pd.isna(cur["px_30m"]) else float(cur["px_30m"])
+    px1h = None if pd.isna(cur["px_1h"]) else float(cur["px_1h"])
+    velocity = _velocity_state(dv30)
+    pstate = _price_state(px30)
+
+    if dv30 is None:
+        setup_state, setup_color = "Building data", "#8b93a1"
+    elif dv30 <= -5:
+        setup_state, setup_color = "Cooling", "#ef5350"
+    elif current_score >= 75 and px30 is not None and px30 >= 1.50:
+        setup_state, setup_color = "Extended", "#f59e0b"
+    elif dv30 >= 6 and (px30 is None or px30 <= 0.50):
+        setup_state, setup_color = "Emerging", "#22c55e"
+    elif dv30 >= 3:
+        setup_state, setup_color = "Strengthening", "#14b8a6"
+    elif current_score >= 70:
+        setup_state, setup_color = "Confirmed", "#14b8a6"
+    else:
+        setup_state, setup_color = "Balanced", "#f59e0b"
+
+    if dv30 is not None and px30 is not None and dv30 >= 5 and px30 <= 0.35:
+        lead_label, lead_color = "Positive lead candidate", "#22c55e"
+    elif dv30 is not None and px30 is not None and dv30 <= -5 and px30 >= -0.35:
+        lead_label, lead_color = "Negative lead candidate", "#ef5350"
+    elif dv30 is not None and px30 is not None and ((dv30 > 1 and px30 > 0.25) or (dv30 < -1 and px30 < -0.25)):
+        lead_label, lead_color = "Confirming price", "#14b8a6"
+    else:
+        lead_label, lead_color = "No clear divergence", "#8b93a1"
+
+    hist = df.iloc[:-1].copy()
+    current_bucket = _score_bucket(current_score)
+    current_vel = _velocity_state(dv30)
+    current_px_state = _price_state(px30)
+
+    # Most specific analog set first; relax only if the sample is too small.
+    analog = hist[(hist["bucket"] == current_bucket) & (hist["velocity_state"] == current_vel) & (hist["price_state"] == current_px_state)]
+    match_basis = "same score band + Vibe velocity + price response"
+    if analog["return_1h"].notna().sum() < 15:
+        analog = hist[(hist["bucket"] == current_bucket) & (hist["velocity_state"] == current_vel)]
+        match_basis = "same score band + Vibe velocity"
+    if analog["return_1h"].notna().sum() < 15:
+        analog = hist[hist["bucket"] == current_bucket]
+        match_basis = "same score band"
+
+    def stats_for(col):
+        vals = pd.to_numeric(analog[col], errors="coerce").dropna() if col in analog.columns else pd.Series(dtype=float)
+        if len(vals) == 0:
+            return {"n":0,"avg":None,"median":None,"win":None,"avg_win":None,"avg_loss":None}
+        wins = vals[vals > 0]; losses = vals[vals < 0]
+        return {
+            "n": int(len(vals)), "avg": float(vals.mean()), "median": float(vals.median()),
+            "win": float((vals > 0).mean()*100),
+            "avg_win": float(wins.mean()) if len(wins) else None,
+            "avg_loss": float(losses.mean()) if len(losses) else None,
+        }
+
+    # Cross-bucket transition study, using the immediate persisted previous score.
+    trans = hist.dropna(subset=["prev_score"]).copy()
+    trans["from_bucket"] = trans["prev_score"].apply(_score_bucket)
+    trans["to_bucket"] = trans["score"].apply(_score_bucket)
+    trans = trans[trans["from_bucket"] != trans["to_bucket"]]
+    trans_rows = []
+    if not trans.empty:
+        trans["transition"] = trans["from_bucket"] + " → " + trans["to_bucket"]
+        for name, grp in trans.groupby("transition"):
+            vals = pd.to_numeric(grp["return_1h"], errors="coerce").dropna()
+            if len(vals):
+                trans_rows.append({
+                    "Transition": name, "n": int(len(vals)),
+                    "Avg 1h": float(vals.mean()), "Median 1h": float(vals.median()),
+                    "Win 1h": float((vals > 0).mean()*100),
+                })
+        trans_rows = sorted(trans_rows, key=lambda r: r["n"], reverse=True)[:12]
+
+    return {
+        "frame": df, "dv30": dv30, "dv1h": dv1h, "px30": px30, "px1h": px1h,
+        "velocity": velocity, "price_state": pstate, "setup_state": setup_state,
+        "setup_color": setup_color, "lead_label": lead_label, "lead_color": lead_color,
+        "analog_30m": stats_for("return_30m"), "analog_1h": stats_for("return_1h"),
+        "analog_4h": stats_for("return_4h"), "match_basis": match_basis,
+        "transitions": trans_rows,
+    }
 
 def sample_strength(n):
     """Plain-language sample maturity; descriptive rather than statistical certainty."""
@@ -1542,7 +1781,15 @@ for name, cid, tick in COIN_ORDER:
         elif score <= 30 and prev_score > 30: st.toast(f"{tick} Vibe dropped below 30", icon="🐻")
         elif score <= 40 and prev_score > 40: st.toast(f"{tick} Vibe dropped below 40", icon="⚠️")
     vs_btc_val = ch24 - btc_change
-    queue_vibe_snapshot(pending_snapshot_rows, cid, tick, price, score, meme, ch24, range_pos, vs_btc_val, prev_score, {"reasons": reasons, "candle_quality": cq})
+    queue_vibe_snapshot(
+        pending_snapshot_rows, cid, tick, price, score, meme, ch24, range_pos, vs_btc_val, prev_score,
+        {
+            "reasons": reasons, "candle_quality": cq, "change_1h": ch1,
+            "change_24h": ch24, "range_pos": range_pos, "vs_btc": vs_btc_val,
+            "score_delta": (score - prev_score) if prev_score is not None else None,
+            "app_version": APP_VERSION,
+        }
+    )
     vibe_data.append({
         "name": name, "cid": cid, "tick": tick, "price": price, "ch24": ch24, "ch1": ch1,
         "score": score, "meme": meme, "image_url": image_url, "candle_quality": cq,
@@ -1849,7 +2096,15 @@ if st.session_state.search_coin:
         st.session_state.score_history = update_history(cid, score, st.session_state.score_history)
         history = st.session_state.score_history.get(cid, [])
         prev_score = history[-2][1] if len(history) >= 2 else None
-        save_vibe_snapshot(cid, tick, price, score, meme, ch24, range_pos, ch24-btc_change, prev_score, {"reasons":reasons,"candle_quality":cq})
+        save_vibe_snapshot(
+            cid, tick, price, score, meme, ch24, range_pos, ch24-btc_change, prev_score,
+            {
+                "reasons": reasons, "candle_quality": cq, "change_1h": ch1,
+                "change_24h": ch24, "range_pos": range_pos, "vs_btc": ch24-btc_change,
+                "score_delta": (score - prev_score) if prev_score is not None else None,
+                "app_version": APP_VERSION,
+            }
+        )
     else:
         st.warning("Could not load coin data.")
         st.stop()
@@ -1997,6 +2252,57 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+# v10: separate "current strength" from "entry/setup context".
+setup_rows = get_setup_history(cid, limit=1200)
+setup = build_setup_analytics(setup_rows, score, price) if setup_rows else None
+
+def _fmt_delta(val, suffix=""):
+    return "—" if val is None else f"{val:+.1f}{suffix}"
+
+st.markdown(
+    """<div class="pb-section-head"><div><div class="pb-section-title">Setup Intelligence <span class="pb-global-pill">V10</span></div>
+    <div class="pb-section-sub">Separates current market strength from early-move context and historical analogs</div></div></div>""",
+    unsafe_allow_html=True
+)
+
+if setup:
+    dv30_color = "#22c55e" if (setup["dv30"] or 0) >= 3 else "#ef5350" if (setup["dv30"] or 0) <= -3 else "#f59e0b"
+    px30_color = "#22c55e" if (setup["px30"] or 0) > 0.35 else "#ef5350" if (setup["px30"] or 0) < -0.35 else "#f59e0b"
+    st.markdown(f"""
+    <div class="pb-intel-grid">
+      <div class="pb-intel-card"><div class="pb-intel-kicker">Current Strength</div><div class="pb-intel-value" style="color:{band_color}">{score} · {band_label}</div><div class="pb-intel-sub">Absolute Vibe describes the market state now.</div></div>
+      <div class="pb-intel-card"><div class="pb-intel-kicker">Vibe Velocity</div><div class="pb-intel-value" style="color:{dv30_color}">{_fmt_delta(setup['dv30'])} / 30m</div><div class="pb-intel-sub">{_fmt_delta(setup['dv1h'])} over 1h · {setup['velocity']}</div></div>
+      <div class="pb-intel-card"><div class="pb-intel-kicker">Price Response</div><div class="pb-intel-value" style="color:{px30_color}">{_fmt_delta(setup['px30'], '%')} / 30m</div><div class="pb-intel-sub">{_fmt_delta(setup['px1h'], '%')} over 1h · {setup['price_state']}</div></div>
+      <div class="pb-intel-card"><div class="pb-intel-kicker">Lead / Divergence</div><div class="pb-intel-value" style="color:{setup['lead_color']};font-size:1.02rem">{setup['lead_label']}</div><div class="pb-intel-sub">Looks for Vibe changing before price meaningfully follows.</div></div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    a1 = setup["analog_1h"]
+    conf_label, conf_color = sample_strength(a1["n"])
+    avg1 = "—" if a1["avg"] is None else f"{a1['avg']:+.2f}%"
+    med1 = "—" if a1["median"] is None else f"{a1['median']:+.2f}%"
+    win1 = "—" if a1["win"] is None else f"{a1['win']:.1f}%"
+    awin = "—" if a1["avg_win"] is None else f"{a1['avg_win']:+.2f}%"
+    aloss = "—" if a1["avg_loss"] is None else f"{a1['avg_loss']:+.2f}%"
+    st.markdown(f"""
+    <div class="pb-setup-shell">
+      <div class="pb-setup-top">
+        <div><div class="pb-setup-title">Setup Read</div><div class="pb-setup-state" style="color:{setup['setup_color']}">{setup['setup_state']}</div></div>
+        <span class="pb-setup-pill" style="color:{conf_color};border-color:{conf_color}66;background:{conf_color}14">{conf_label} sample · n={a1['n']}</span>
+      </div>
+      <div class="pb-analog-grid">
+        <div class="pb-analog-stat"><div class="pb-analog-label">Avg next 1h</div><div class="pb-analog-value">{avg1}</div></div>
+        <div class="pb-analog-stat"><div class="pb-analog-label">Median 1h</div><div class="pb-analog-value">{med1}</div></div>
+        <div class="pb-analog-stat"><div class="pb-analog-label">Win rate</div><div class="pb-analog-value">{win1}</div></div>
+        <div class="pb-analog-stat"><div class="pb-analog-label">Avg winner</div><div class="pb-analog-value" style="color:#22c55e">{awin}</div></div>
+        <div class="pb-analog-stat"><div class="pb-analog-label">Avg loser</div><div class="pb-analog-value" style="color:#ef5350">{aloss}</div></div>
+      </div>
+      <div class="pb-lead-note"><span class="pb-lead-dot" style="background:{setup['setup_color']}"></span>Comparable setups use {setup['match_basis']}. This is descriptive evidence, not a forecast.</div>
+    </div>
+    """, unsafe_allow_html=True)
+else:
+    st.caption("Setup Intelligence will populate as this coin builds persisted Vibe + price history.")
+
 is_watched = cid in st.session_state.watchlist
 if st.button("★ Remove from Watchlist" if is_watched else "☆ Add to Watchlist", key="detail_watch"):
     if is_watched:
@@ -2036,7 +2342,7 @@ if history and len(history) >= 2:
 else:
     st.info("History will start building after a few more refreshes...")
 
-# Vibe + price relationship: paired snapshots only, so the two lines share the same timestamps.
+# Vibe + price relationship — v10 adds lead-candidate markers without changing the score.
 vp_rows = get_vibe_price_history(cid, limit=150)
 if len(vp_rows) >= 3:
     vp = pd.DataFrame(vp_rows)
@@ -2046,19 +2352,45 @@ if len(vp_rows) >= 3:
     vp = vp.dropna(subset=["time", "price", "score"]).sort_values("time")
     if len(vp) >= 3:
         st.markdown("""
-        <div class="pb-section-head"><div><div class="pb-section-title">Vibe + Price</div><div class="pb-section-sub">See whether signal strength is moving with, ahead of, or against price</div></div></div>
+        <div class="pb-section-head"><div><div class="pb-section-title">Vibe + Price</div><div class="pb-section-sub">Visualize whether Vibe is confirming price or moving ahead of it</div></div></div>
         """, unsafe_allow_html=True)
         rel_fig = make_subplots(specs=[[{"secondary_y": True}]])
         rel_fig.add_trace(go.Scatter(x=vp["time"], y=vp["price"], name="Price", mode="lines", line=dict(color="#cbd5e1", width=2.0)), secondary_y=False)
-        rel_fig.add_trace(go.Scatter(x=vp["time"], y=vp["score"], name="Vibe", mode="lines", line=dict(color="#14b8a6", width=2.5)), secondary_y=True)
-        rel_fig.add_hrect(y0=65, y1=100, fillcolor="rgba(20,184,166,.035)", line_width=0, secondary_y=True)
-        rel_fig.add_hrect(y0=0, y1=45, fillcolor="rgba(239,83,80,.03)", line_width=0, secondary_y=True)
+        rel_fig.add_trace(go.Scatter(x=vp["time"], y=vp["score"], name="Vibe", mode="lines", line=dict(color="#14b8a6", width=2.6)), secondary_y=True)
+
+        # Mark recent positive lead candidates from the richer setup history.
+        if setup and isinstance(setup.get("frame"), pd.DataFrame):
+            sf = setup["frame"].iloc[:-1].copy()
+            leads = sf[(sf["dv_30m"] >= 5) & (sf["px_30m"] <= 0.35)].tail(12)
+            if not leads.empty:
+                rel_fig.add_trace(go.Scatter(
+                    x=leads["time"], y=leads["score"], name="Lead candidate", mode="markers",
+                    marker=dict(symbol="diamond", size=7, color="#22c55e", line=dict(width=1,color="#0e1117")),
+                    hovertemplate="Potential lead setup<br>Vibe %{y:.0f}<extra></extra>"
+                ), secondary_y=True)
+
+        rel_fig.add_hrect(y0=65, y1=100, fillcolor="rgba(20,184,166,.032)", line_width=0, secondary_y=True)
+        rel_fig.add_hrect(y0=0, y1=45, fillcolor="rgba(239,83,80,.026)", line_width=0, secondary_y=True)
         rel_fig.update_yaxes(title_text="Price", showgrid=True, gridcolor="rgba(148,163,184,.08)", tickfont=dict(color="#9aa3af", size=10), secondary_y=False)
         rel_fig.update_yaxes(title_text="Vibe", range=[0,100], showgrid=False, tickfont=dict(color="#14b8a6", size=10), secondary_y=True)
         rel_fig.update_xaxes(showgrid=False, tickfont=dict(color="#8b93a1", size=10))
-        rel_fig.update_layout(height=285, template="plotly_dark", margin=dict(l=8,r=8,t=10,b=8), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", hovermode="x unified", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(size=10)))
+        rel_fig.update_layout(height=300, template="plotly_dark", margin=dict(l=8,r=8,t=10,b=8), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", hovermode="x unified", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(size=10)))
         st.plotly_chart(rel_fig, use_container_width=True, config={"displayModeBar": False, "responsive": True})
-        st.caption("Vibe and price are shown together for visual context. Co-movement or apparent lead/lag is not proof of predictive power.")
+        st.caption("Green diamonds mark potential Vibe-lead moments (Vibe +5 or more over ~30m while price is still flat/lagging). They are research markers, not trade signals.")
+
+        if setup and setup.get("transitions"):
+            with st.expander("Transition Lab · how bucket changes performed", expanded=False):
+                tdf = pd.DataFrame(setup["transitions"])
+                tdf["Avg 1h"] = tdf["Avg 1h"].map(lambda x: f"{x:+.2f}%")
+                tdf["Median 1h"] = tdf["Median 1h"].map(lambda x: f"{x:+.2f}%")
+                tdf["Win 1h"] = tdf["Win 1h"].map(lambda x: f"{x:.1f}%")
+                st.dataframe(tdf, use_container_width=True, hide_index=True, column_config={
+                    "Transition": st.column_config.TextColumn("Transition", help="Score bucket crossed between consecutive persisted snapshots."),
+                    "n": st.column_config.NumberColumn("n", help="Matured 1h observations for this transition."),
+                    "Avg 1h": st.column_config.TextColumn("Avg 1h", help="Average forward return one hour after the transition."),
+                    "Median 1h": st.column_config.TextColumn("Median 1h", help="Median forward return, less sensitive to outliers than the average."),
+                    "Win 1h": st.column_config.TextColumn("Win 1h", help="Share of matured outcomes that were positive after one hour."),
+                })
 
 # ========== SHARE SECTION ==========
 st.markdown("""
@@ -2410,8 +2742,9 @@ if bucket_stats:
         if not s["ready"]:
             table_data.append({
                 "Bucket": s["bucket"], "n": s["n"], "Sample": sample_strength(0)[0],
-                "Avg 30m": "—", "Win 30m": "—", "Avg 1h": "—", "Win 1h": "—",
-                "Edge (1h)": "—", "Avg 4h": "—", "Win 4h": "—", "Avg 24h": "—", "Win 24h": "—"
+                "Avg 30m": "—", "Win 30m": "—", "Avg 1h": "—", "Median 1h": "—",
+                "Avg Winner": "—", "Avg Loser": "—", "Win 1h": "—", "Edge (1h)": "—",
+                "Avg 4h": "—", "Win 4h": "—", "Avg 24h": "—", "Win 24h": "—"
             })
         else:
             table_data.append({
@@ -2421,6 +2754,9 @@ if bucket_stats:
                 "Avg 30m": f"{s['avg_30m']:+.2f}%" if s['avg_30m'] is not None else "—",
                 "Win 30m": f"{s['win_30m']}%" if s['win_30m'] is not None else "—",
                 "Avg 1h": f"{s['avg_1h']:+.2f}%" if s['avg_1h'] is not None else "—",
+                "Median 1h": f"{s['median_1h']:+.2f}%" if s.get('median_1h') is not None else "—",
+                "Avg Winner": f"{s['avg_win_1h']:+.2f}%" if s.get('avg_win_1h') is not None else "—",
+                "Avg Loser": f"{s['avg_loss_1h']:+.2f}%" if s.get('avg_loss_1h') is not None else "—",
                 "Win 1h": f"{s['win_1h']}%" if s['win_1h'] is not None else "—",
                 "Edge (1h)": f"{s['edge']:+.2f}%" if s.get('edge') is not None else "—",
                 "Avg 4h": f"{s['avg_4h']:+.2f}%" if s['avg_4h'] is not None else "—",
@@ -2485,9 +2821,15 @@ if bucket_stats:
     st.dataframe(style_table(df_display[compact_cols], compact=True), use_container_width=True, hide_index=True)
 
     with st.expander("Show all timeframes", expanded=False):
-        st.dataframe(style_table(df_display), use_container_width=True, hide_index=True)
+        full_cols = ["Bucket","n","Sample","Avg 30m","Win 30m","Avg 1h","Win 1h","Edge (1h)","Avg 4h","Win 4h","Avg 24h","Win 24h"]
+        st.dataframe(style_table(df_display[full_cols]), use_container_width=True, hide_index=True)
 
-    st.caption("**Edge (1h)** = bucket average 1h return minus the tracked-market average 1h return. **Win 1h** = share of matured 1h observations with a positive return. **n** = recent score snapshots; Sample strength is based on matured 1h observations, so it can be lower than n.")
+    with st.expander("1h distribution · beyond win rate", expanded=False):
+        dist_cols = ["Bucket","n","Sample","Avg 1h","Median 1h","Win 1h","Avg Winner","Avg Loser"]
+        st.dataframe(style_table(df_display[dist_cols]), use_container_width=True, hide_index=True)
+        st.caption("Median reduces outlier influence. Avg Winner / Avg Loser show payoff size, so a signal is not judged on win rate alone.")
+
+    st.caption("**Edge (1h)** = bucket average 1h return minus the tracked-market average 1h return. **Win 1h** = share of matured 1h observations with a positive return. **n** = cumulative score snapshots for the current model version; Sample strength is based on matured 1h observations, so it can be lower than n.")
 else:
     st.info("Collecting performance data…")
 
@@ -2495,7 +2837,9 @@ else:
 with st.expander("About the Vibe Score & data disclaimer", expanded=False):
     st.markdown(
         """
-        **Vibe Score** is Pre Bart Vibes' 0–100 market-strength rating, designed to turn complex real-time market data into a simple snapshot of current market conditions.
+        **Vibe Score** is Pre Bart Vibes' 0–100 market-strength rating. In v10, Vibe remains a description of current market conditions rather than being presented as a direct entry probability.
+
+        **Setup Intelligence** studies Vibe velocity, price response, bucket transitions, and historically similar observations to separate current strength from early-move context. Comparable-set statistics are descriptive and can change as the dataset grows.
 
         **Historical performance** is based on tracked observations collected by Pre Bart Vibes. It is descriptive, not a prediction, and sample sizes can vary substantially by score bucket and timeframe.
 
