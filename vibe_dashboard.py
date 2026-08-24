@@ -2380,17 +2380,69 @@ if len(vp_rows) >= 3:
 
         if setup and setup.get("transitions"):
             with st.expander("Transition Lab · how bucket changes performed", expanded=False):
+                st.markdown(
+                    '<div class="pb-definition"><b>What this tells you:</b> when Vibe crosses from one score band into another, '
+                    'this table checks what price did over the following hour. It helps us learn whether a <i>change in Vibe</i> '
+                    'is more useful than the absolute score itself.</div>',
+                    unsafe_allow_html=True
+                )
+                st.caption("Quick read: Avg = typical result including outliers · Median = the middle outcome · Win = how often price finished higher 1h later.")
+
                 tdf = pd.DataFrame(setup["transitions"])
                 tdf["Avg 1h"] = tdf["Avg 1h"].map(lambda x: f"{x:+.2f}%")
                 tdf["Median 1h"] = tdf["Median 1h"].map(lambda x: f"{x:+.2f}%")
                 tdf["Win 1h"] = tdf["Win 1h"].map(lambda x: f"{x:.1f}%")
-                st.dataframe(tdf, use_container_width=True, hide_index=True, column_config={
+
+                def _transition_return_style(val):
+                    if val == "—": return ""
+                    try:
+                        num = float(str(val).replace("%", "").replace("+", ""))
+                        if num >= 1.0: return "background-color:#1b5e20;color:white;font-weight:700"
+                        if num >= 0.20: return "background-color:#0f766e;color:white;font-weight:600"
+                        if num >= 0: return "background-color:#f9a825;color:black"
+                        if num > -1.0: return "background-color:#ef6c00;color:white"
+                        return "background-color:#c62828;color:white"
+                    except Exception:
+                        return ""
+
+                def _transition_win_style(val):
+                    if val == "—": return ""
+                    try:
+                        num = float(str(val).replace("%", ""))
+                        if num >= 70: return "background-color:#1b5e20;color:white;font-weight:700"
+                        if num >= 55: return "background-color:#0f766e;color:white"
+                        if num >= 45: return "background-color:#f9a825;color:black"
+                        return "background-color:#c62828;color:white"
+                    except Exception:
+                        return ""
+
+                tstyle = (
+                    tdf.style
+                    .set_properties(**{
+                        "background-color": "#0e1117",
+                        "color": "#fafafa",
+                        "border-color": "#2a2d35",
+                    })
+                    .set_table_styles([
+                        {"selector": "th", "props": [
+                            ("background-color", "#1a1d24"),
+                            ("color", "#b8b8b8"),
+                            ("border-color", "#2a2d35"),
+                        ]},
+                        {"selector": "td", "props": [("border-color", "#2a2d35")]},
+                    ])
+                    .map(_transition_return_style, subset=["Avg 1h", "Median 1h"])
+                    .map(_transition_win_style, subset=["Win 1h"])
+                )
+
+                st.dataframe(tstyle, use_container_width=True, hide_index=True, column_config={
                     "Transition": st.column_config.TextColumn("Transition", help="Score bucket crossed between consecutive persisted snapshots."),
                     "n": st.column_config.NumberColumn("n", help="Matured 1h observations for this transition."),
                     "Avg 1h": st.column_config.TextColumn("Avg 1h", help="Average forward return one hour after the transition."),
                     "Median 1h": st.column_config.TextColumn("Median 1h", help="Median forward return, less sensitive to outliers than the average."),
                     "Win 1h": st.column_config.TextColumn("Win 1h", help="Share of matured outcomes that were positive after one hour."),
                 })
+                st.caption("Small transition samples can swing fast. Treat the early rows as clues, not conclusions.")
 
 # ========== SHARE SECTION ==========
 st.markdown("""
@@ -2733,7 +2785,7 @@ st.divider()
 st.markdown("""
 <div class="pb-section-head"><div><div class="pb-section-title">Vibe Performance <span class="pb-global-pill">GLOBAL</span></div><div class="pb-section-sub">How similar scores performed historically across tracked coins</div></div></div>
 """, unsafe_allow_html=True)
-st.caption("Start with the 1h view; expand for every timeframe.")
+st.caption("Historical forward returns grouped by the Vibe Score shown at the time of each snapshot.")
 
 bucket_stats = get_bucket_stats(min_n=5)
 if bucket_stats:
@@ -2808,28 +2860,42 @@ if bucket_stats:
         ])
         win_cols = [c for c in df.columns if c.startswith("Win ")]
         avg_cols = [c for c in df.columns if c.startswith("Avg ")]
+        median_cols = [c for c in df.columns if c.startswith("Median ")]
         if win_cols:
             styler = styler.map(style_win, subset=win_cols)
         if avg_cols:
             styler = styler.map(style_avg, subset=avg_cols)
+        if median_cols:
+            styler = styler.map(style_avg, subset=median_cols)
         if "Edge (1h)" in df.columns:
             styler = styler.map(style_edge, subset=["Edge (1h)"])
         return styler
 
-    # Default view: the five columns most useful for a quick decision.
-    compact_cols = ["Bucket", "n", "Sample", "Avg 1h", "Win 1h", "Edge (1h)"]
-    st.dataframe(style_table(df_display[compact_cols], compact=True), use_container_width=True, hide_index=True)
-
     with st.expander("Show all timeframes", expanded=False):
+        st.markdown(
+            '<div class="pb-definition"><b>What this tells you:</b> this is the main Vibe Performance study. '
+            'Pick a score band and see what price historically did 30 minutes, 1 hour, 4 hours, and 24 hours later. '
+            'Higher Vibe does <i>not</i> automatically mean better future returns — that is exactly what this table is testing.</div>',
+            unsafe_allow_html=True
+        )
+        st.caption("Quick read: Avg = average forward return · Win = % of outcomes above 0% · Edge = how that bucket did versus the tracked market.")
         full_cols = ["Bucket","n","Sample","Avg 30m","Win 30m","Avg 1h","Win 1h","Edge (1h)","Avg 4h","Win 4h","Avg 24h","Win 24h"]
         st.dataframe(style_table(df_display[full_cols]), use_container_width=True, hide_index=True)
+        st.caption("n counts cumulative Vibe snapshots for the current model version. Sample describes how mature the completed 1h outcome set is.")
 
     with st.expander("1h distribution · beyond win rate", expanded=False):
+        st.markdown(
+            '<div class="pb-definition"><b>Why this matters:</b> win rate alone can be misleading. '
+            'A setup can win less often and still be useful if the winners are much larger than the losers. '
+            'This view shows the shape of the 1-hour outcomes, not just how many finished green.</div>',
+            unsafe_allow_html=True
+        )
+        st.caption("Quick read: Median = middle result · Avg Winner = typical gain when right · Avg Loser = typical loss when wrong.")
         dist_cols = ["Bucket","n","Sample","Avg 1h","Median 1h","Win 1h","Avg Winner","Avg Loser"]
         st.dataframe(style_table(df_display[dist_cols]), use_container_width=True, hide_index=True)
-        st.caption("Median reduces outlier influence. Avg Winner / Avg Loser show payoff size, so a signal is not judged on win rate alone.")
+        st.caption("Use Avg + Median together: a large gap between them usually means a few outsized moves are pulling the average around.")
 
-    st.caption("**Edge (1h)** = bucket average 1h return minus the tracked-market average 1h return. **Win 1h** = share of matured 1h observations with a positive return. **n** = cumulative score snapshots for the current model version; Sample strength is based on matured 1h observations, so it can be lower than n.")
+    st.caption("Performance colors: green/teal = stronger historical outcome · yellow = mixed/near neutral · orange/red = weaker historical outcome. Historical results are descriptive, not guarantees.")
 else:
     st.info("Collecting performance data…")
 
