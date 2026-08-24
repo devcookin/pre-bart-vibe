@@ -27,7 +27,7 @@ if SUPABASE_URL and SUPABASE_KEY:
     except:
         pass
 
-MODEL_VERSION = "v2.6-returnfix"
+MODEL_VERSION = "v2.7-calibrated"
 MIN_SNAPSHOT_INTERVAL = 300
 FILL_INTERVAL_SECONDS = 60
 
@@ -923,49 +923,91 @@ def analyze_candles(ohlc_data):
     return max(min(quality, 1.8), -1.5)
 
 def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change=None, candle_quality=0):
+    """Balanced Vibe calibration.
+
+    v2.7 keeps the score responsive to bullish moves, but makes high readings rely
+    more on sustained structure than on a single impulse candle. No new API inputs
+    are required; this is purely a weighting/calibration change.
+    """
     if high != low:
         range_pos = ((price - low) / (high - low)) * 100
     else:
         range_pos = 50.0
+
     reasons = []
     base = 54.0
-    structure_boost = candle_quality * 9.0
+
+    # Structure still matters, but one candle should not dominate the whole score.
+    structure_boost = candle_quality * 7.5
     base += structure_boost
     if candle_quality > 1.0: reasons.append("Excellent bullish structure")
     elif candle_quality > 0.5: reasons.append("Solid constructive structure")
     elif candle_quality > 0.15: reasons.append("Mildly positive structure")
     elif candle_quality < -0.7: reasons.append("Weak structure / rejection")
     elif candle_quality < -0.25: reasons.append("Mixed structure")
-    base += (range_pos - 50) * 0.14
+
+    # Non-linear range positioning: the middle 40-60% is mostly neutral, while
+    # genuine upper/lower-range positioning matters progressively more.
+    if range_pos >= 80:
+        range_effect = 3.0 + (range_pos - 80) * 0.10       # +3.0 to +5.0
+    elif range_pos >= 60:
+        range_effect = 0.6 + (range_pos - 60) * 0.12      # +0.6 to +3.0
+    elif range_pos >= 40:
+        range_effect = (range_pos - 50) * 0.04            # -0.4 to +0.4
+    elif range_pos >= 20:
+        range_effect = -0.6 - (40 - range_pos) * 0.12     # -0.6 to -3.0
+    else:
+        range_effect = -3.0 - (20 - range_pos) * 0.10     # -3.0 to -5.0
+    base += range_effect
+
     if range_pos > 88: reasons.append("Near top of daily range")
     elif range_pos > 72: reasons.append("Upper half of range")
     elif range_pos < 18: reasons.append("Building from lows" if candle_quality > 0.15 else "Near bottom of range")
     elif range_pos < 32: reasons.append("Lower half of range")
-    base += change_1h * 3.3
+
+    # Keep short-term momentum important, but reduce the chance that one fast
+    # candle alone pushes a merely decent setup into the mid/high 70s.
+    base += change_1h * 2.7
     if change_1h > 2.0: reasons.append("Very strong 1h momentum")
     elif change_1h > 0.7: reasons.append("Strong 1h momentum")
     elif change_1h > 0.2: reasons.append("Positive 1h")
     elif change_1h < -1.5: reasons.append("Strong negative 1h")
     elif change_1h < -0.4: reasons.append("Mild negative 1h")
-    base += change_24h * 0.45
+
+    # 24h performance remains useful context without overpowering current setup.
+    base += change_24h * 0.35
+
+    # Relative strength remains meaningful for alts, just slightly less dominant.
     if btc_change is not None:
         vs_btc = change_24h - btc_change
-        base += vs_btc * 0.75
+        base += vs_btc * 0.60
         if vs_btc > 3.5: reasons.append("Clearly outperforming BTC")
         elif vs_btc > 1.2: reasons.append("Outperforming BTC")
         elif vs_btc < -3.5: reasons.append("Lagging BTC")
+
+    # Keep market context small so Vibe remains primarily coin-specific.
     if fg_value is not None:
-        if fg_value < 25: base -= 1.5
+        if fg_value < 25: base -= 1.25
         elif fg_value > 75: base += 1.0
+
+    # Breakout bonuses are intentionally smaller. High scores should be earned by
+    # structure + momentum + positioning together rather than by one impulse candle.
     if range_pos >= 95 and change_1h >= 0.5 and candle_quality > 0.15:
-        base += 5
+        base += 3.0
         reasons.append("Clear breakout in progress")
-    elif range_pos >= 88 and change_1h >= 0.9:
-        base += 3.5
+    elif range_pos >= 88 and change_1h >= 0.9 and candle_quality > 0.0:
+        base += 2.0
         reasons.append("Breaking higher with momentum")
     elif range_pos >= 80 and change_1h >= 0.4 and candle_quality > 0.25:
-        base += 2
+        base += 1.0
         reasons.append("Pushing into breakout territory")
+
+    # Small rejection penalty only when price is high in the range AND structure
+    # is clearly deteriorating. This avoids making the model overly bearish.
+    if range_pos >= 80 and candle_quality < -0.25:
+        base -= 0.75
+        reasons.append("Upper-range rejection risk")
+
     score = max(min(int(round(base)), 98), 16)
     if score >= 90: meme = "🔥 Explosive strength + clear breakout"
     elif score >= 80: meme = "🚀 Strong structure + solid momentum"
