@@ -895,11 +895,11 @@ def fill_pending_returns():
 
 @st.cache_data(ttl=300)
 def get_bucket_stats(min_n=5):
-    """Build bucket stats without letting sparse horizon rows fall out of one shared LIMIT.
+    """Cumulative bucket stats for the current model version.
 
-    Snapshot counts and each forward-return horizon are loaded independently. This
-    prevents valid 30m/1h/4h/24h observations from disappearing merely because the
-    generic 2,000-row snapshot window changed as new snapshots were inserted.
+    Uses paginated Supabase reads so historical observations never fall out of a
+    rolling LIMIT window. Each horizon is still queried independently so sparse
+    30m/1h/4h/24h maturity does not interfere with the others.
     """
     if not supabase:
         return None
@@ -915,16 +915,35 @@ def get_bucket_stats(min_n=5):
         if score < 90: return "80-89"
         return "90-100"
 
-    try:
-        # Keep n as a recent-snapshot count, but make the window deterministic.
-        count_result = supabase.table("vibe_snapshots")\
-            .select("score,timestamp")\
-            .eq("model_version", MODEL_VERSION)\
-            .order("timestamp", desc=True)\
-            .limit(2000)\
-            .execute()
+    def paged_rows(columns, extra_filter=None, page_size=1000):
+        """Read all matching rows in bounded pages.
 
-        count_rows = count_result.data or []
+        This avoids a single huge response while keeping cumulative statistics
+        exact for the current model version.
+        """
+        rows = []
+        offset = 0
+        while True:
+            q = (
+                supabase.table("vibe_snapshots")
+                .select(columns)
+                .eq("model_version", MODEL_VERSION)
+                .order("timestamp", desc=False)
+                .range(offset, offset + page_size - 1)
+            )
+            if extra_filter is not None:
+                q = extra_filter(q)
+            result = q.execute()
+            batch = result.data or []
+            rows.extend(batch)
+            if len(batch) < page_size:
+                break
+            offset += page_size
+        return rows
+
+    try:
+        # All-time count for the CURRENT model version.
+        count_rows = paged_rows("score,timestamp")
         if not count_rows:
             return None
 
@@ -932,20 +951,14 @@ def get_bucket_stats(min_n=5):
         count_df["bucket"] = count_df["score"].apply(bucket)
         counts = count_df["bucket"].value_counts().to_dict()
 
-        # Pull matured observations independently for every horizon. A valid 30m
-        # result can therefore never disappear just because newer null-30m rows
-        # displaced it from a shared generic LIMIT window.
+        # All completed observations for each forward horizon, independently paged.
         horizon_frames = {}
         for col in ["return_30m", "return_1h", "return_4h", "return_24h"]:
             try:
-                result = supabase.table("vibe_snapshots")\
-                    .select(f"score,{col},timestamp")\
-                    .eq("model_version", MODEL_VERSION)\
-                    .not_.is_(col, "null")\
-                    .order("timestamp", desc=True)\
-                    .limit(2000)\
-                    .execute()
-                rows = result.data or []
+                rows = paged_rows(
+                    f"score,{col},timestamp",
+                    extra_filter=lambda q, c=col: q.not_.is_(c, "null"),
+                )
                 if rows:
                     hdf = pd.DataFrame(rows)
                     hdf["bucket"] = hdf["score"].apply(bucket)
@@ -973,7 +986,15 @@ def get_bucket_stats(min_n=5):
         for b in bucket_order:
             n = int(counts.get(b, 0))
             if n < min_n:
-                stats.append({"bucket": b, "n": n, "ready": False})
+                stats.append({
+                    "bucket": b,
+                    "n": n,
+                    "ready": False,
+                    "n_30m": int((horizon_frames["return_30m"]["bucket"] == b).sum()),
+                    "n_1h": int((horizon_frames["return_1h"]["bucket"] == b).sum()),
+                    "n_4h": int((horizon_frames["return_4h"]["bucket"] == b).sum()),
+                    "n_24h": int((horizon_frames["return_24h"]["bucket"] == b).sum()),
+                })
                 continue
 
             avg_1h = horizon_metric(b, "return_1h", "avg")
@@ -997,6 +1018,7 @@ def get_bucket_stats(min_n=5):
                 "win_24h": horizon_metric(b, "return_24h", "win"),
                 "edge": edge,
             })
+
         return stats
     except Exception:
         return None
