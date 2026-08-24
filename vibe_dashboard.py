@@ -402,6 +402,56 @@ def load_history():
     except:
         return {}
 
+def load_coin_history(cid: str, limit: int = 150):
+    """Load recent persisted history for one coin.
+
+    The global history loader is intentionally capped for startup speed. If a
+    coin's rows fall outside that global window after a restart, this targeted
+    loader restores that coin's chart without fetching the whole table.
+    """
+    if not supabase or not cid:
+        return []
+    try:
+        result = supabase.table("vibe_score_history")\
+            .select("coin_id, timestamp, score")\
+            .eq("coin_id", cid)\
+            .order("timestamp", desc=True)\
+            .limit(limit)\
+            .execute()
+
+        rows = result.data or []
+        entries = []
+        for row in rows:
+            ts = datetime.fromisoformat(row["timestamp"].replace("Z", "+00:00"))
+            entries.append((ts, row["score"]))
+        return sorted(entries, key=lambda x: x[0])[-limit:]
+    except Exception:
+        return []
+
+def ensure_coin_history_loaded(cid: str, history_dict):
+    """Hydrate a coin's history from Supabase when the session has too little.
+
+    This fixes the case where load_history()'s global 2,000-row window does not
+    include the selected coin. Existing in-session points are merged and kept.
+    """
+    existing = history_dict.get(cid, [])
+    if len(existing) >= 2:
+        return history_dict
+
+    persisted = load_coin_history(cid, limit=150)
+    if not persisted:
+        return history_dict
+
+    combined = persisted + existing
+    deduped = {}
+    for ts, score in combined:
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        deduped[ts.isoformat()] = (ts, score)
+
+    history_dict[cid] = sorted(deduped.values(), key=lambda x: x[0])[-150:]
+    return history_dict
+
 def save_history_point(cid: str, score: int):
     if not supabase:
         return
@@ -1362,6 +1412,7 @@ if st.session_state.search_coin:
         score, meme, range_pos, reasons = calc_vibe(price, high, low, ch1, ch24, fg_value, btc_change, cq)
         volume, market_cap = c["total_volume"], c["market_cap"]
         image_url = c.get("image", "")
+        st.session_state.score_history = ensure_coin_history_loaded(cid, st.session_state.score_history)
         st.session_state.score_history = update_history(cid, score, st.session_state.score_history)
         history = st.session_state.score_history.get(cid, [])
         prev_score = history[-2][1] if len(history) >= 2 else None
@@ -1378,7 +1429,8 @@ else:
     price, ch24, ch1 = item["price"], item["ch24"], item["ch1"]
     score, meme = item["score"], item["meme"]
     range_pos, cq, reasons = item["range_pos"], item["candle_quality"], item["reasons"]
-    history = item["history"]
+    st.session_state.score_history = ensure_coin_history_loaded(cid, st.session_state.score_history)
+    history = st.session_state.score_history.get(cid, item["history"])
     c = coin_map.get(cid, {})
     volume = c.get("total_volume", 0)
     market_cap = c.get("market_cap", 0)
@@ -1620,3 +1672,25 @@ if bucket_stats:
     """)
 else:
     st.info("Collecting performance data…")
+
+st.divider()
+st.markdown(
+    """
+    <div style="
+        border: 1px solid #2a2d35;
+        border-radius: 14px;
+        padding: 22px 24px;
+        background: #0e1117;
+        margin-top: 6px;
+        margin-bottom: 18px;
+    ">
+        <div style="font-size: 1.35rem; font-weight: 700; color: #fafafa; margin-bottom: 8px;">✉️ Contact Us</div>
+        <div style="color: #a0a0a0; font-size: 1rem; line-height: 1.55;">
+            Questions, feedback, partnerships, or data inquiries?<br>
+            <a href="mailto:contact@prebartvibes.xyz" style="color: #29a3ef; text-decoration: none; font-weight: 600;">contact@prebartvibes.xyz</a>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
