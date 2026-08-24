@@ -835,12 +835,13 @@ def get_bucket_stats(min_n=5):
         result = supabase.table("vibe_snapshots")\
             .select("score, return_30m, return_1h, return_4h, return_24h")\
             .eq("model_version", MODEL_VERSION)\
-            .not_.is_("return_1h", "null").limit(2000).execute()
+            .limit(2000).execute()
         rows = result.data or []
         if not rows: return None
         df = pd.DataFrame(rows)
         
-        overall_avg_1h = df["return_1h"].mean() if len(df) > 0 else 0
+        overall_1h_vals = df["return_1h"].dropna()
+        overall_avg_1h = overall_1h_vals.mean() if len(overall_1h_vals) else 0
         
         def bucket(s):
             if s < 20: return "0-19"
