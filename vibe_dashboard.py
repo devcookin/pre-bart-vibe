@@ -552,15 +552,36 @@ st.markdown("""
     .pb-confidence { display:inline-flex;align-items:center;gap:5px;padding:2px 7px;border-radius:999px;font-size:.68rem;font-weight:750;border:1px solid #343b45;color:#aab1bc;background:#171c23; }
     .pb-definition { color:#8d95a1;font-size:.76rem;line-height:1.5; }
 
-    /* Make the 1h/24h mover radio read like a segmented control. */
-    div[role="radiogroup"] { gap:0 !important;background:#0d1117;border:1px solid #303741;border-radius:10px;padding:3px;width:100%; }
-    div[role="radiogroup"] label { flex:1;justify-content:center;margin:0 !important;padding:5px 8px !important;border-radius:7px; }
-    div[role="radiogroup"] label:has(input:checked) { background:#252c35 !important; }
+    /* Top Movers uses the same card language as Market Bias / Strongest-Weakest. */
+    .pb-movers-card { padding-bottom:13px; }
+    .pb-mover-tabs {
+        display:grid;grid-template-columns:1fr 1fr;gap:3px;
+        background:#0d1117;border:1px solid #303741;border-radius:10px;
+        padding:3px;margin:1px 0 13px 0;max-width:190px;
+    }
+    .pb-mover-tabs input { position:absolute;opacity:0;pointer-events:none; }
+    .pb-mover-tabs label {
+        display:flex;align-items:center;justify-content:center;
+        min-width:0;padding:6px 12px;border-radius:7px;
+        color:#929aa7;font-size:.76rem;font-weight:760;
+        line-height:1;white-space:nowrap;cursor:pointer;
+        transition:background .15s ease,color .15s ease;
+    }
+    .pb-mover-tabs label:hover { color:#f3f5f7; }
+    #pb-movers-1h:checked + label,
+    #pb-movers-24h:checked + label { background:#252c35;color:#f7f8fa; }
+    .pb-movers-panel { display:none; }
+    .pb-movers-card:has(#pb-movers-1h:checked) .pb-movers-panel-1h { display:block; }
+    .pb-movers-card:has(#pb-movers-24h:checked) .pb-movers-panel-24h { display:block; }
+    .pb-mover-section + .pb-mover-section { margin-top:13px; }
+    .pb-mover-head { margin:0 0 5px 0; }
 
     @media (max-width: 768px) {
         .pb-side-card { padding:13px 14px;margin-bottom:8px; }
         .pb-side-title { margin-bottom:8px; }
         .pb-mover-row { padding:5px 0; }
+        .pb-mover-tabs { max-width:100%;margin-bottom:11px; }
+        .pb-mover-tabs label { padding:7px 10px;font-size:.78rem; }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -1719,18 +1740,51 @@ with side_col:
         </div>
         """, unsafe_allow_html=True)
 
-    with st.container(border=True):
-        st.markdown("**Top Movers**")
-        tf = st.radio("Timeframe", ["1h", "24h"], horizontal=True, key="movers_tf", label_visibility="collapsed")
-        key = "ch1" if tf == "1h" else "ch24"
-        gainers = sorted(vibe_data, key=lambda x: x[key], reverse=True)[:3]
-        losers = sorted(vibe_data, key=lambda x: x[key])[:3]
-        st.markdown('<div class="pb-mover-head"><span>Gainers</span><span>Move</span></div>', unsafe_allow_html=True)
-        for m in gainers:
-            st.markdown(f'<div class="pb-mover-row"><span class="pb-mover-symbol">{m["tick"]}</span><span style="color:#22c55e;font-weight:700">{m[key]:+.2f}%</span></div>', unsafe_allow_html=True)
-        st.markdown('<div class="pb-mover-head"><span>Losers</span><span>Move</span></div>', unsafe_allow_html=True)
-        for m in losers:
-            st.markdown(f'<div class="pb-mover-row"><span class="pb-mover-symbol">{m["tick"]}</span><span style="color:#ef5350;font-weight:700">{m[key]:+.2f}%</span></div>', unsafe_allow_html=True)
+    # Top Movers: self-contained UI card so it exactly matches the two cards above.
+    # Both timeframes are already present in vibe_data, so switching tabs is client-side
+    # presentation only and adds no API calls or Streamlit reruns.
+    def _mover_panel(metric_key, panel_class):
+        gainers = sorted(vibe_data, key=lambda x: x[metric_key], reverse=True)[:3]
+        losers = sorted(vibe_data, key=lambda x: x[metric_key])[:3]
+        gain_rows = "".join(
+            f'<div class="pb-mover-row"><span class="pb-mover-symbol">{m["tick"]}</span>'
+            f'<span style="color:#22c55e;font-weight:700">{m[metric_key]:+.2f}%</span></div>'
+            for m in gainers
+        )
+        loss_rows = "".join(
+            f'<div class="pb-mover-row"><span class="pb-mover-symbol">{m["tick"]}</span>'
+            f'<span style="color:#ef5350;font-weight:700">{m[metric_key]:+.2f}%</span></div>'
+            for m in losers
+        )
+        return f"""
+        <div class="pb-movers-panel {panel_class}">
+          <div class="pb-mover-section">
+            <div class="pb-mover-head"><span>Gainers</span><span>Move</span></div>
+            {gain_rows}
+          </div>
+          <div class="pb-mover-section">
+            <div class="pb-mover-head"><span>Losers</span><span>Move</span></div>
+            {loss_rows}
+          </div>
+        </div>
+        """
+
+    movers_1h = _mover_panel("ch1", "pb-movers-panel-1h")
+    movers_24h = _mover_panel("ch24", "pb-movers-panel-24h")
+
+    st.markdown(f"""
+    <div class="pb-side-card pb-movers-card">
+      <div class="pb-side-title">Top Movers</div>
+      <div class="pb-mover-tabs">
+        <input type="radio" name="pb-movers-tf" id="pb-movers-1h" checked>
+        <label for="pb-movers-1h">1h</label>
+        <input type="radio" name="pb-movers-tf" id="pb-movers-24h">
+        <label for="pb-movers-24h">24h</label>
+      </div>
+      {movers_1h}
+      {movers_24h}
+    </div>
+    """, unsafe_allow_html=True)
 
 
 st.divider()
