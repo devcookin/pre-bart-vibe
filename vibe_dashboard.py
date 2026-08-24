@@ -806,6 +806,28 @@ def get_global():
     except:
         return None
 
+# Stablecoins are intentionally excluded from the Top Coins overview.
+# We filter them BEFORE OHLC/Vibe processing so they do not consume candle
+# requests, scoring work, or snapshot rows. Search still supports them normally.
+STABLECOIN_IDS = {
+    "tether", "usd-coin", "dai", "ethena-usde", "usds",
+    "first-digital-usd", "paypal-usd", "true-usd", "frax", "usdd",
+    "gemini-dollar", "liquity-usd", "pax-dollar", "ripple-usd",
+    "global-dollar", "world-liberty-financial-usd", "usual-usd",
+    "crvusd", "gho", "usd0",
+}
+
+STABLECOIN_SYMBOLS = {
+    "USDT", "USDC", "DAI", "USDE", "USDS", "FDUSD", "PYUSD",
+    "TUSD", "FRAX", "USDD", "GUSD", "LUSD", "USDP", "RLUSD",
+    "USDG", "USD1", "USD0", "CRVUSD", "GHO",
+}
+
+def is_stablecoin(coin):
+    cid = str(coin.get("id", "")).lower()
+    symbol = str(coin.get("symbol", "")).upper()
+    return cid in STABLECOIN_IDS or symbol in STABLECOIN_SYMBOLS
+
 @st.cache_data(ttl=120)
 def get_top_coins(limit=30):
     try:
@@ -1126,7 +1148,11 @@ st.divider()
 fill_pending_returns()
 
 # ========== TOP COINS ==========
-top_coins = get_top_coins(30)
+# Pull the market-cap Top 30 once, then remove stablecoins before any OHLC
+# requests are made. This intentionally leaves fewer than 30 cards when
+# stablecoins occupy Top-30 slots, which saves those unnecessary API calls.
+top_market_coins = get_top_coins(30)
+top_coins = [c for c in top_market_coins if not is_stablecoin(c)]
 if not top_coins:
     st.error("Could not load top coins.")
     st.stop()
