@@ -27,7 +27,7 @@ if SUPABASE_URL and SUPABASE_KEY:
     except:
         pass
 
-MODEL_VERSION = "v2.7-calibrated"
+MODEL_VERSION = "v2.8-balanced"
 MIN_SNAPSHOT_INTERVAL = 300
 FILL_INTERVAL_SECONDS = 60
 
@@ -925,8 +925,8 @@ def analyze_candles(ohlc_data):
 def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change=None, candle_quality=0):
     """Balanced Vibe calibration.
 
-    v2.7 keeps the score responsive to bullish moves, but makes high readings rely
-    more on sustained structure than on a single impulse candle. No new API inputs
+    v2.8 restores a neutral/constructive center while keeping high readings dependent
+    on sustained structure rather than a single impulse candle. No new API inputs
     are required; this is purely a weighting/calibration change.
     """
     if high != low:
@@ -935,10 +935,10 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
         range_pos = 50.0
 
     reasons = []
-    base = 54.0
+    base = 56.0
 
     # Structure still matters, but one candle should not dominate the whole score.
-    structure_boost = candle_quality * 7.5
+    structure_boost = candle_quality * 8.0
     base += structure_boost
     if candle_quality > 1.0: reasons.append("Excellent bullish structure")
     elif candle_quality > 0.5: reasons.append("Solid constructive structure")
@@ -955,9 +955,9 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
     elif range_pos >= 40:
         range_effect = (range_pos - 50) * 0.04            # -0.4 to +0.4
     elif range_pos >= 20:
-        range_effect = -0.6 - (40 - range_pos) * 0.12     # -0.6 to -3.0
+        range_effect = -0.4 - (40 - range_pos) * 0.09     # -0.4 to -2.2
     else:
-        range_effect = -3.0 - (20 - range_pos) * 0.10     # -3.0 to -5.0
+        range_effect = -2.2 - (20 - range_pos) * 0.09     # -2.2 to -4.0
     base += range_effect
 
     if range_pos > 88: reasons.append("Near top of daily range")
@@ -967,7 +967,7 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
 
     # Keep short-term momentum important, but reduce the chance that one fast
     # candle alone pushes a merely decent setup into the mid/high 70s.
-    base += change_1h * 2.7
+    base += change_1h * 2.9
     if change_1h > 2.0: reasons.append("Very strong 1h momentum")
     elif change_1h > 0.7: reasons.append("Strong 1h momentum")
     elif change_1h > 0.2: reasons.append("Positive 1h")
@@ -975,12 +975,12 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
     elif change_1h < -0.4: reasons.append("Mild negative 1h")
 
     # 24h performance remains useful context without overpowering current setup.
-    base += change_24h * 0.35
+    base += change_24h * 0.38
 
     # Relative strength remains meaningful for alts, just slightly less dominant.
     if btc_change is not None:
         vs_btc = change_24h - btc_change
-        base += vs_btc * 0.60
+        base += vs_btc * 0.62
         if vs_btc > 3.5: reasons.append("Clearly outperforming BTC")
         elif vs_btc > 1.2: reasons.append("Outperforming BTC")
         elif vs_btc < -3.5: reasons.append("Lagging BTC")
