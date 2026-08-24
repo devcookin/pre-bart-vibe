@@ -1148,11 +1148,11 @@ st.divider()
 fill_pending_returns()
 
 # ========== TOP COINS ==========
-# Pull the market-cap Top 30 once, then remove stablecoins before any OHLC
-# requests are made. This intentionally leaves fewer than 30 cards when
-# stablecoins occupy Top-30 slots, which saves those unnecessary API calls.
-top_market_coins = get_top_coins(30)
-top_coins = [c for c in top_market_coins if not is_stablecoin(c)]
+# Fetch a slightly wider market-cap list in the same single CoinGecko request,
+# remove stablecoins, then keep the first 30 non-stablecoins. OHLC/Vibe work is
+# still performed for only 30 coins, so stablecoins do not create extra OHLC calls.
+top_market_coins = get_top_coins(40)
+top_coins = [c for c in top_market_coins if not is_stablecoin(c)][:30]
 if not top_coins:
     st.error("Could not load top coins.")
     st.stop()
