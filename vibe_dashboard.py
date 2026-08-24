@@ -189,7 +189,7 @@ st.markdown("""
     .pb-title-row { display:flex;align-items:center;gap:12px;flex-wrap:wrap; }
     .pb-logo-mark {
         width:42px;height:42px;border-radius:13px;display:flex;align-items:center;justify-content:center;
-        font-size:.86rem;font-weight:800;letter-spacing:.05em;color:#dffcf4;
+        font-size:1.45rem;font-weight:800;letter-spacing:.05em;color:#dffcf4;
         background:linear-gradient(145deg,rgba(20,184,166,.28),rgba(0,230,118,.10));
         border:1px solid rgba(94,234,212,.28);box-shadow:0 8px 26px rgba(20,184,166,.09);
     }
@@ -1087,7 +1087,7 @@ with col_title:
     st.markdown("""
     <div class="pb-header">
         <div class="pb-title-row">
-            <div class="pb-logo-mark">PB</div>
+            <div class="pb-logo-mark">🚀</div>
             <div>
                 <div class="pb-title">Pre Bart Vibes</div>
                 <div class="pb-subtitle">Real-time market vibes for the coins that matter most.</div>
@@ -1571,7 +1571,6 @@ st.markdown(
           <span class="pb-updated">{updated_text}</span>
         </div>
         <div class="pb-context-copy">{context_copy}</div>
-        <div class="pb-meme-line">{meme}</div>
       </div>
       <div class="pb-price-panel">
         <div class="pb-eyebrow">Price</div>
@@ -1689,11 +1688,10 @@ components.html(f"""
 """, height=55)
 
 st.markdown(f"""
-<div style="display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 6px 0;">
+<div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:10px 0 6px 0;">
+    <span style="color:#737a85;font-size:12.5px;font-weight:600;">On X:</span>
     <a href="https://x.com/search?q=%24{tick}&src=typed_query&f=live" target="_blank"
-       style="background:linear-gradient(90deg,#1da1f2,#0d8ecf);color:white;padding:7px 14px;border-radius:18px;text-decoration:none;font-weight:600;font-size:13px;">${tick} Live</a>
-    <a href="https://x.com/search?q={quote(name + ' crypto')}&src=typed_query&f=live" target="_blank"
-       style="background:linear-gradient(90deg,#1da1f2,#0d8ecf);color:white;padding:7px 14px;border-radius:18px;text-decoration:none;font-weight:600;font-size:13px;">{name} Crypto</a>
+       style="background:#151a21;border:1px solid #2b313a;color:#d7dbe1;padding:6px 11px;border-radius:16px;text-decoration:none;font-weight:650;font-size:12.5px;">𝕏 ${tick}</a>
 </div>
 """, unsafe_allow_html=True)
 
