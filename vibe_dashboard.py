@@ -27,7 +27,7 @@ if SUPABASE_URL and SUPABASE_KEY:
     except:
         pass
 
-MODEL_VERSION = "v2.8-balanced"
+MODEL_VERSION = "v2.9-recovery-balanced"
 MIN_SNAPSHOT_INTERVAL = 300
 FILL_INTERVAL_SECONDS = 60
 
@@ -920,14 +920,28 @@ def analyze_candles(ohlc_data):
     if len(highs) >= 3 and highs[-1] > highs[-2] > highs[-3]: quality += 0.40
     if len(closes) >= 3 and closes[-1] > closes[-2] > closes[-3]: quality += 0.45
     elif len(closes) >= 2 and closes[-1] < closes[-2]: quality -= 0.20
+
+    # Recovery recognition: a strong latest close after choppy/weak candles should
+    # soften stale rejection pressure without being treated as a breakout.
+    last = df.iloc[-1]
+    last_range = last["high"] - last["low"]
+    if last_range > 0:
+        last_close_pos = (last["close"] - last["low"]) / last_range
+        last_body = abs(last["close"] - last["open"])
+        last_lower_wick = min(last["open"], last["close"]) - last["low"]
+        if last["close"] > last["open"] and last_close_pos >= 0.65:
+            quality += 0.35
+            if last_lower_wick > last_body * 0.8 and last_lower_wick / last_range >= 0.25:
+                quality += 0.15
+
     return max(min(quality, 1.8), -1.5)
 
 def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change=None, candle_quality=0):
     """Balanced Vibe calibration.
 
-    v2.8 restores a neutral/constructive center while keeping high readings dependent
-    on sustained structure rather than a single impulse candle. No new API inputs
-    are required; this is purely a weighting/calibration change.
+    v2.9 keeps the restrained breakout logic while making negative candle structure
+    asymmetric and recognizing genuine short-term recovery. No new API inputs are
+    required; this is purely a weighting/calibration change.
     """
     if high != low:
         range_pos = ((price - low) / (high - low)) * 100
@@ -937,13 +951,21 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
     reasons = []
     base = 56.0
 
-    # Structure still matters, but one candle should not dominate the whole score.
-    structure_boost = candle_quality * 8.0
+    # Positive structure can earn its full reward, while negative candle quality is
+    # intentionally less powerful. Crypto naturally wicks/chops, so rejection alone
+    # should not drag an otherwise neutral setup deeply bearish.
+    structure_boost = candle_quality * (8.0 if candle_quality >= 0 else 4.5)
     base += structure_boost
     if candle_quality > 1.0: reasons.append("Excellent bullish structure")
     elif candle_quality > 0.5: reasons.append("Solid constructive structure")
     elif candle_quality > 0.15: reasons.append("Mildly positive structure")
-    elif candle_quality < -0.7: reasons.append("Weak structure / rejection")
+    elif candle_quality < -0.7:
+        # Only call structure outright weak when another live signal confirms it.
+        vs_btc_now = (change_24h - btc_change) if btc_change is not None else 0.0
+        if change_1h < -0.4 or range_pos < 25 or vs_btc_now < -1.5:
+            reasons.append("Weak structure / rejection")
+        else:
+            reasons.append("Mixed structure / attempted recovery")
     elif candle_quality < -0.25: reasons.append("Mixed structure")
 
     # Non-linear range positioning: the middle 40-60% is mostly neutral, while
