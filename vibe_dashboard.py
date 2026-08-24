@@ -904,30 +904,50 @@ def colored_progress(score: int, height: int = 10):
     </div>
     """
 
-def make_sparkline(history, height=80):
-    if not history or len(history) < 2: return None
+def make_sparkline(history, height=190):
+    """Vibe history with a fixed 0-100 scale and subtle interpretation bands."""
+    if not history or len(history) < 2:
+        return None
+
     times = [h[0] for h in history]
     scores = [h[1] for h in history]
-    min_score, max_score = min(scores), max(scores)
-    padding = max(3, (max_score - min_score) * 0.2)
-    y_min = max(0, min_score - padding)
-    y_max = min(100, max_score + padding)
-    
+    line_color = "#00c853" if scores[-1] >= 60 else "#ffb300" if scores[-1] >= 40 else "#ff5252"
+
     fig = go.Figure()
+
+    # Very subtle score zones: Weak / Neutral / Constructive / Strong.
+    bands = [
+        (0, 40, "rgba(255,82,82,0.035)"),
+        (40, 60, "rgba(255,179,0,0.030)"),
+        (60, 80, "rgba(41,163,239,0.028)"),
+        (80, 100, "rgba(0,200,83,0.035)"),
+    ]
+    for y0, y1, color in bands:
+        fig.add_hrect(y0=y0, y1=y1, fillcolor=color, line_width=0, layer="below")
+
+    for y in (40, 60, 80):
+        fig.add_hline(y=y, line_width=1, line_dash="dot", line_color="rgba(160,160,160,0.18)")
+
     fig.add_trace(go.Scatter(
         x=times, y=scores, mode="lines",
-        line=dict(color="#00c853" if scores[-1] >= 60 else "#ff5252", width=2.2),
+        line=dict(color=line_color, width=2.4),
         fill="tozeroy",
-        fillcolor="rgba(0,200,83,0.15)" if scores[-1] >= 60 else "rgba(255,82,82,0.15)"
+        fillcolor="rgba(0,200,83,0.10)" if scores[-1] >= 60 else "rgba(255,179,0,0.08)" if scores[-1] >= 40 else "rgba(255,82,82,0.10)",
+        hovertemplate="Vibe %{y:.0f}<extra></extra>"
     ))
     fig.update_layout(
         height=height,
-        margin=dict(l=0, r=0, t=2, b=2),
-        xaxis=dict(showgrid=False, showticklabels=False, zeroline=False),
-        yaxis=dict(showgrid=False, showticklabels=False, zeroline=False, range=[y_min, y_max]),
+        margin=dict(l=42, r=8, t=8, b=22),
+        xaxis=dict(showgrid=False, showticklabels=True, tickfont=dict(size=10, color="#8b8f98"), zeroline=False),
+        yaxis=dict(
+            showgrid=False, showticklabels=True, zeroline=False, range=[0, 100],
+            tickmode="array", tickvals=[0, 20, 40, 60, 80, 100],
+            tickfont=dict(size=10, color="#8b8f98")
+        ),
         plot_bgcolor="rgba(0,0,0,0)",
         paper_bgcolor="rgba(0,0,0,0)",
-        showlegend=False
+        showlegend=False,
+        hovermode="x unified"
     )
     return fig
 
@@ -1385,18 +1405,70 @@ else:
 
 vs_btc = ch24 - (btc_change or 0)
 price_text = f"${price:,.4f}" if price < 10 else f"${price:,.2f}"
-st.metric(f"{name}", price_text, f"{ch24:+.2f}% (24h)  |  {ch1:+.2f}% (1h)")
-
-c1, c2, c3, c4, c5 = st.columns(5)
-c1.metric("24h Volume", f"${volume/1_000_000:,.1f}M")
-c2.metric("Market Cap", f"${market_cap/1_000_000_000:,.2f}B")
-c3.metric("Range Position", f"{range_pos:.0f}%")
-c4.metric("Candle Quality", f"{cq:+.1f}")
-c5.metric("vs BTC (24h)", f"{vs_btc:+.2f}%")
-
 arrow = get_score_arrow(cid, score)
-st.markdown(f"**Vibe Score: {score}/100{arrow}**", unsafe_allow_html=True)
-st.markdown(colored_progress(score, height=12), unsafe_allow_html=True)
+
+def vibe_band(score):
+    if score >= 80:
+        return "Strong", "#00c853"
+    if score >= 60:
+        return "Constructive", "#29a3ef"
+    if score >= 40:
+        return "Neutral", "#ffb300"
+    return "Weak", "#ff5252"
+
+band_label, band_color = vibe_band(score)
+
+# The Vibe Score is the product's primary signal, so make it the visual anchor.
+st.markdown(
+    f"""
+    <div style="
+        border:1px solid #2a2d35; border-radius:16px; padding:20px 22px;
+        background:#0e1117; margin-bottom:12px;
+        display:flex; justify-content:space-between; align-items:center; gap:18px; flex-wrap:wrap;
+    ">
+      <div>
+        <div style="font-size:.82rem;color:#8f949e;text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px;">{name} · {tick}</div>
+        <div style="display:flex;align-items:baseline;gap:10px;">
+          <span style="font-size:2.55rem;font-weight:800;line-height:1;color:#fafafa;">{score}</span>
+          <span style="font-size:1.05rem;color:#8f949e;">/ 100</span>
+          <span style="font-size:.92rem;font-weight:700;color:{band_color};">{band_label}</span>{arrow}
+        </div>
+        <div style="font-size:.98rem;color:#b3b7c0;margin-top:8px;">{meme}</div>
+      </div>
+      <div style="text-align:right;min-width:170px;">
+        <div style="font-size:.78rem;color:#8f949e;text-transform:uppercase;letter-spacing:.08em;">Price</div>
+        <div style="font-size:1.55rem;font-weight:750;color:#fafafa;">{price_text}</div>
+        <div style="font-size:.9rem;color:{'#00c853' if ch24 >= 0 else '#ff5252'};margin-top:3px;">{ch24:+.2f}% 24h &nbsp;·&nbsp; {ch1:+.2f}% 1h</div>
+      </div>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+st.markdown(colored_progress(score, height=10), unsafe_allow_html=True)
+
+# Compact supporting metrics instead of five equally heavy cards.
+st.markdown(
+    f"""
+    <div style="
+        display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px;
+        margin:10px 0 12px 0;
+    ">
+      <div style="border:1px solid #2a2d35;border-radius:11px;padding:10px 12px;background:#11151b;">
+        <div style="font-size:.72rem;color:#8f949e;">24h Volume</div><div style="font-weight:700;margin-top:2px;">${volume/1_000_000:,.1f}M</div>
+      </div>
+      <div style="border:1px solid #2a2d35;border-radius:11px;padding:10px 12px;background:#11151b;">
+        <div style="font-size:.72rem;color:#8f949e;">Range Position</div><div style="font-weight:700;margin-top:2px;">{range_pos:.0f}%</div>
+      </div>
+      <div style="border:1px solid #2a2d35;border-radius:11px;padding:10px 12px;background:#11151b;">
+        <div style="font-size:.72rem;color:#8f949e;">vs BTC · 24h</div><div style="font-weight:700;margin-top:2px;color:{'#00c853' if vs_btc >= 0 else '#ff5252'};">{vs_btc:+.2f}%</div>
+      </div>
+      <div style="border:1px solid #2a2d35;border-radius:11px;padding:10px 12px;background:#11151b;">
+        <div style="font-size:.72rem;color:#8f949e;">Market Cap</div><div style="font-weight:700;margin-top:2px;">${market_cap/1_000_000_000:,.2f}B</div>
+      </div>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
 is_watched = cid in st.session_state.watchlist
 if st.button("★ Remove from Watchlist" if is_watched else "☆ Add to Watchlist", key="detail_watch"):
@@ -1406,24 +1478,33 @@ if st.button("★ Remove from Watchlist" if is_watched else "☆ Add to Watchlis
         st.session_state.watchlist.append(cid)
     st.rerun()
 
-perf = get_coin_performance(cid)
-if perf and perf.get("ready"):
-    st.caption(f"Historical 1h win rate: **{perf['win_1h']}%** • Avg 1h return: **{perf['avg_1h']:+.2f}%** • n = {perf['n']}")
+# Keep secondary analytics available without competing with the core score.
+with st.expander("Score details", expanded=False):
+    d1, d2 = st.columns(2)
+    d1.metric("Candle Quality", f"{cq:+.1f}")
+    d2.metric("24h High / Low", f"${high:,.4f}" if high < 10 else f"${high:,.2f}", f"Low ${low:,.4f}" if low < 10 else f"Low ${low:,.2f}")
 
-if score >= 80: st.success(meme)
-elif score <= 30: st.error(meme)
-else: st.info(meme)
+    perf = get_coin_performance(cid)
+    if perf and perf.get("ready"):
+        st.caption(f"Historical 1h win rate: **{perf['win_1h']}%** · Avg 1h return: **{perf['avg_1h']:+.2f}%** · n = {perf['n']}")
+    else:
+        st.caption("Historical performance is still collecting for this coin.")
+
+with st.expander("🤔 Why this score?", expanded=False):
+    if reasons:
+        for r in reasons:
+            st.write(f"• {r}")
+    else:
+        st.caption("No additional score drivers available for this reading.")
 
 st.markdown("##### Vibe Score History")
 if history and len(history) >= 2:
-    fig = make_sparkline(history, height=140)
-    if fig: st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-    st.caption(f"Showing last {len(history)} readings")
+    fig = make_sparkline(history, height=190)
+    if fig:
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    st.caption(f"Showing last {len(history)} readings · 0–39 Weak · 40–59 Neutral · 60–79 Constructive · 80–100 Strong")
 else:
     st.info("History will start building after a few more refreshes...")
-
-with st.expander("🤔 Why this score?"):
-    for r in reasons: st.write(f"• {r}")
 
 # ========== SHARE SECTION ==========
 st.markdown("### 📤 Share this vibe")
@@ -1526,7 +1607,7 @@ else:
 
 st.divider()
 st.subheader("📊 Vibe Performance (Global)")
-st.caption("Historical forward returns across **all tracked coins**.")
+st.caption("Historical forward returns across **all tracked coins**. Start with the 1h view; expand for every timeframe.")
 
 bucket_stats = get_bucket_stats(min_n=5)
 if bucket_stats:
@@ -1534,17 +1615,9 @@ if bucket_stats:
     for s in bucket_stats:
         if not s["ready"]:
             table_data.append({
-                "Bucket": s["bucket"],
-                "n": s["n"],
-                "Avg 30m": "—",
-                "Win 30m": "—",
-                "Avg 1h": "—",
-                "Win 1h": "—",
-                "Edge (1h)": "—",
-                "Avg 4h": "—",
-                "Win 4h": "—",
-                "Avg 24h": "—",
-                "Win 24h": "—"
+                "Bucket": s["bucket"], "n": s["n"],
+                "Avg 30m": "—", "Win 30m": "—", "Avg 1h": "—", "Win 1h": "—",
+                "Edge (1h)": "—", "Avg 4h": "—", "Win 4h": "—", "Avg 24h": "—", "Win 24h": "—"
             })
         else:
             table_data.append({
@@ -1560,9 +1633,9 @@ if bucket_stats:
                 "Avg 24h": f"{s['avg_24h']:+.2f}%" if s['avg_24h'] is not None else "—",
                 "Win 24h": f"{s['win_24h']}%" if s['win_24h'] is not None else "—",
             })
-    
+
     df_display = pd.DataFrame(table_data)
-    
+
     def style_win(val):
         if val == "—": return ""
         try:
@@ -1572,7 +1645,7 @@ if bucket_stats:
             elif num >= 55: return "background-color: #f9a825; color: black"
             else: return "background-color: #c62828; color: white"
         except: return ""
-    
+
     def style_avg(val):
         if val == "—": return ""
         try:
@@ -1583,7 +1656,7 @@ if bucket_stats:
             elif num > -1.5: return "background-color: #ef6c00; color: white"
             else: return "background-color: #c62828; color: white"
         except: return ""
-    
+
     def style_edge(val):
         if val == "—": return ""
         try:
@@ -1594,46 +1667,62 @@ if bucket_stats:
             elif num > -2: return "background-color: #ef6c00; color: white"
             else: return "background-color: #c62828; color: white"
         except: return ""
-    
-    styler = df_display.style\
-        .set_properties(**{
-            "background-color": "#0e1117",
-            "color": "#fafafa",
-            "border-color": "#2a2d35"
-        })\
-        .set_table_styles([
+
+    def style_table(df, compact=False):
+        styler = df.style.set_properties(**{
+            "background-color": "#0e1117", "color": "#fafafa", "border-color": "#2a2d35"
+        }).set_table_styles([
             {"selector": "th", "props": [("background-color", "#1a1d24"), ("color", "#b8b8b8"), ("border-color", "#2a2d35")]},
             {"selector": "td", "props": [("border-color", "#2a2d35")]},
-        ])\
-        .map(style_win, subset=["Win 30m", "Win 1h", "Win 4h", "Win 24h"])\
-        .map(style_avg, subset=["Avg 30m", "Avg 1h", "Avg 4h", "Avg 24h"])\
-        .map(style_edge, subset=["Edge (1h)"])
-    
-    st.dataframe(styler, use_container_width=True, hide_index=True)
-    
-    st.caption("""
-    **Edge (1h)** = How much better (or worse) this Vibe bucket performed compared to the average coin in the next 1 hour.  
-    Positive Edge = this score range historically beat the market.
-    """)
+        ])
+        win_cols = [c for c in df.columns if c.startswith("Win ")]
+        avg_cols = [c for c in df.columns if c.startswith("Avg ")]
+        if win_cols:
+            styler = styler.map(style_win, subset=win_cols)
+        if avg_cols:
+            styler = styler.map(style_avg, subset=avg_cols)
+        if "Edge (1h)" in df.columns:
+            styler = styler.map(style_edge, subset=["Edge (1h)"])
+        return styler
+
+    # Default view: the five columns most useful for a quick decision.
+    compact_cols = ["Bucket", "n", "Avg 1h", "Win 1h", "Edge (1h)"]
+    st.dataframe(style_table(df_display[compact_cols], compact=True), use_container_width=True, hide_index=True)
+
+    with st.expander("Show all timeframes", expanded=False):
+        st.dataframe(style_table(df_display), use_container_width=True, hide_index=True)
+
+    st.caption("**Edge (1h)** = how much better or worse this Vibe bucket performed than the average tracked coin over the next hour. Positive Edge means that score range historically outperformed the tracked market.")
 else:
     st.info("Collecting performance data…")
 
+# Methodology and disclaimer are available when wanted, but stay out of the primary flow.
+with st.expander("About the Vibe Score & data disclaimer", expanded=False):
+    st.markdown(
+        """
+        **Vibe Score** is Pre Bart Vibes' 0–100 market-strength rating, designed to turn complex real-time market data into a simple snapshot of current market conditions.
+
+        **Historical performance** is based on tracked observations collected by Pre Bart Vibes. It is descriptive, not a prediction, and sample sizes can vary substantially by score bucket and timeframe.
+
+        Crypto markets are volatile. Vibe Scores and historical statistics are informational tools, not financial advice or guarantees of future returns.
+        """
+    )
+
 st.divider()
+
+# Minimal footer: legitimacy and navigation without another large card.
 st.markdown(
     """
     <div style="
-        border: 1px solid #2a2d35;
-        border-radius: 14px;
-        padding: 22px 24px;
-        background: #0e1117;
-        margin-top: 6px;
-        margin-bottom: 18px;
+        display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;
+        padding:2px 2px 18px 2px;color:#818792;font-size:.86rem;
     ">
-        <div style="font-size: 1.35rem; font-weight: 700; color: #fafafa; margin-bottom: 8px;">✉️ Contact Us</div>
-        <div style="color: #a0a0a0; font-size: 1rem; line-height: 1.55;">
-            Questions, feedback, partnerships, or data inquiries?<br>
-            <a href="mailto:contact@prebartvibes.xyz" style="color: #29a3ef; text-decoration: none; font-weight: 600;">contact@prebartvibes.xyz</a>
-        </div>
+      <div>Pre Bart Vibes · Market context, simplified.</div>
+      <div>
+        <a href="mailto:contact@prebartvibes.xyz" style="color:#aeb4bd;text-decoration:none;">Contact</a>
+        <span style="padding:0 8px;color:#4b5059;">·</span>
+        <span>About the Vibe Score · Data disclaimer</span>
+      </div>
     </div>
     """,
     unsafe_allow_html=True
