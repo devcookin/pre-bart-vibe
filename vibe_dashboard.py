@@ -1021,7 +1021,9 @@ def get_bucket_stats(min_n=5):
             if metric == "avg":
                 return round(vals.mean(), 3)
             if metric == "median":
-                return round(vals.median(), 3)
+                # Keep the stored precision here. Rounding before display can turn a
+                # tiny positive/negative median into a misleading 0.00%.
+                return float(vals.median())
             if metric == "avg_win":
                 winners = vals[vals > 0]
                 return round(winners.mean(), 3) if len(winners) else None
@@ -2798,6 +2800,17 @@ st.markdown("""
 """, unsafe_allow_html=True)
 st.caption("Historical forward returns grouped by the Vibe Score shown at the time of each snapshot.")
 
+def _fmt_median_return(val):
+    """Show extra precision near zero so tiny medians are not disguised as 0.00%."""
+    if val is None or pd.isna(val):
+        return "—"
+    val = float(val)
+    if val == 0:
+        return "0.000%"
+    if abs(val) < 0.10:
+        return f"{val:+.3f}%"
+    return f"{val:+.2f}%"
+
 bucket_stats = get_bucket_stats(min_n=5)
 if bucket_stats:
     table_data = []
@@ -2817,7 +2830,7 @@ if bucket_stats:
                 "Avg 30m": f"{s['avg_30m']:+.2f}%" if s['avg_30m'] is not None else "—",
                 "Win 30m": f"{s['win_30m']}%" if s['win_30m'] is not None else "—",
                 "Avg 1h": f"{s['avg_1h']:+.2f}%" if s['avg_1h'] is not None else "—",
-                "Median 1h": f"{s['median_1h']:+.2f}%" if s.get('median_1h') is not None else "—",
+                "Median 1h": _fmt_median_return(s.get("median_1h")),
                 "Avg Winner": f"{s['avg_win_1h']:+.2f}%" if s.get('avg_win_1h') is not None else "—",
                 "Avg Loser": f"{s['avg_loss_1h']:+.2f}%" if s.get('avg_loss_1h') is not None else "—",
                 "Win 1h": f"{s['win_1h']}%" if s['win_1h'] is not None else "—",
