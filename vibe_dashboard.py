@@ -183,6 +183,58 @@ st.markdown("""
     div[data-testid="stVerticalBlock"] > div {
         gap: 0.6rem !important;
     }
+
+    /* Pre Bart Vibes visual system — lightweight, no extra data calls. */
+    .pb-header { padding: 8px 0 4px 0; }
+    .pb-title-row { display:flex;align-items:center;gap:12px;flex-wrap:wrap; }
+    .pb-logo-mark {
+        width:42px;height:42px;border-radius:13px;display:flex;align-items:center;justify-content:center;
+        font-size:.86rem;font-weight:800;letter-spacing:.05em;color:#dffcf4;
+        background:linear-gradient(145deg,rgba(20,184,166,.28),rgba(0,230,118,.10));
+        border:1px solid rgba(94,234,212,.28);box-shadow:0 8px 26px rgba(20,184,166,.09);
+    }
+    .pb-title { font-size:2.05rem;line-height:1.08;font-weight:800;letter-spacing:-.045em;color:#fff; }
+    .pb-subtitle { margin-top:5px;font-size:.98rem;color:#9298a3;line-height:1.45; }
+    .pb-refresh-note { color:#6f7682;font-size:.78rem;margin:1px 0 8px 2px; }
+
+    .pb-vibe-hero {
+        position:relative;overflow:hidden;border:1px solid #292f38;border-radius:18px;padding:22px 24px;
+        background:linear-gradient(135deg,#11161d 0%,#0e1117 64%,color-mix(in srgb,var(--accent) 7%,#0e1117) 100%);
+        margin:5px 0 10px 0;display:flex;justify-content:space-between;align-items:center;gap:22px;flex-wrap:wrap;
+        box-shadow:0 12px 34px rgba(0,0,0,.16);
+    }
+    .pb-vibe-hero:before {
+        content:"";position:absolute;width:250px;height:250px;border-radius:50%;right:-110px;top:-140px;
+        background:var(--accent);opacity:.055;filter:blur(18px);pointer-events:none;
+    }
+    .pb-vibe-main,.pb-price-panel { position:relative;z-index:1; }
+    .pb-eyebrow { font-size:.72rem;color:#858c97;text-transform:uppercase;letter-spacing:.095em;font-weight:650; }
+    .pb-score-line { display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px; }
+    .pb-score-number { font-size:3.1rem;font-weight:850;line-height:.95;letter-spacing:-.055em;color:#fff; }
+    .pb-score-denom { font-size:1rem;color:#7f8793;margin-right:2px; }
+    .pb-status-pill { display:inline-flex;align-items:center;padding:5px 10px;border-radius:999px;border:1px solid;font-size:.72rem;font-weight:850;letter-spacing:.07em;text-transform:uppercase; }
+    .pb-signal-row { display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:11px;font-size:.83rem;color:#aab0ba; }
+    .pb-dot-sep { color:#424851; }.pb-updated { color:#777f8a; }
+    .pb-context-copy { font-size:.93rem;color:#d5d9df;font-weight:600;margin-top:12px; }
+    .pb-meme-line { font-size:.82rem;color:#8f96a1;margin-top:5px; }
+    .pb-price-panel { min-width:185px;text-align:right;padding-left:22px;border-left:1px solid #252a32; }
+    .pb-price-value { margin-top:5px;font-size:1.6rem;font-weight:780;color:#fff;letter-spacing:-.025em; }
+    .pb-price-change { font-size:.84rem;margin-top:4px;font-weight:620; }.pb-price-change span { color:#4f5660;padding:0 4px; }
+    .pb-score-track { background:#252a31;border-radius:999px;overflow:hidden;margin:7px 1px 11px 1px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.025); }
+
+    .pb-metrics-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px;margin:10px 0 14px 0; }
+    .pb-mini-card { border:1px solid #282e37;border-radius:13px;padding:11px 13px;background:linear-gradient(180deg,#141922,#11151b);min-height:62px; }
+    .pb-mini-label { font-size:.71rem;color:#838a95;display:flex;align-items:center;gap:6px; }.pb-mini-label span { color:#69727e;font-size:.8rem; }
+    .pb-mini-value { font-size:1.02rem;font-weight:750;color:#f7f8fa;margin-top:4px;letter-spacing:-.015em; }
+
+    .pb-section-head { margin:22px 0 9px 0;display:flex;justify-content:space-between;align-items:flex-end;gap:12px; }
+    .pb-section-title { font-size:1.18rem;font-weight:780;color:#f4f5f7;letter-spacing:-.025em; }
+    .pb-section-sub { margin-top:3px;font-size:.78rem;color:#737b86; }
+    .pb-global-pill { font-size:.58rem;font-weight:850;letter-spacing:.08em;color:#5eead4;border:1px solid rgba(94,234,212,.25);background:rgba(20,184,166,.09);padding:3px 6px;border-radius:999px;vertical-align:middle;margin-left:5px; }
+
+    /* Keep expanders and dataframes quiet so the hero signal remains primary. */
+    [data-testid="stExpander"] { border-color:#292f37 !important;border-radius:12px !important;overflow:hidden; }
+    [data-testid="stDataFrame"] { border-radius:12px;overflow:hidden; }
     
     @media (max-width: 768px) {
         html,
@@ -200,6 +252,16 @@ st.markdown("""
             padding-left: 0.8rem !important;
             padding-right: 0.8rem !important;
         }
+
+        .pb-title { font-size:1.65rem; }
+        .pb-subtitle { font-size:.88rem; }
+        .pb-logo-mark { width:37px;height:37px;border-radius:11px; }
+        .pb-vibe-hero { padding:17px 17px;border-radius:15px;gap:15px; }
+        .pb-score-number { font-size:2.7rem; }
+        .pb-price-panel { width:100%;min-width:0;text-align:left;padding:13px 0 0 0;border-left:0;border-top:1px solid #252a32; }
+        .pb-metrics-grid { grid-template-columns:repeat(2,minmax(0,1fr));gap:7px; }
+        .pb-mini-card { padding:10px 11px;min-height:58px; }
+        .pb-section-head { margin-top:18px; }
 
         div[data-testid="stVerticalBlockBorderWrapper"] {
             background-color: #16181d !important;
@@ -894,13 +956,13 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
     return score, meme, range_pos, reasons
 
 def colored_progress(score: int, height: int = 10):
-    if score >= 75: color = "linear-gradient(90deg, #00e676, #00c853)"
-    elif score >= 60: color = "linear-gradient(90deg, #69f0ae, #00e676)"
-    elif score >= 45: color = "linear-gradient(90deg, #ffd600, #ffab00)"
-    else: color = "linear-gradient(90deg, #ff5252, #d50000)"
+    if score >= 80: color = "linear-gradient(90deg, #34d399, #00e676)"
+    elif score >= 60: color = "linear-gradient(90deg, #5eead4, #14b8a6)"
+    elif score >= 40: color = "linear-gradient(90deg, #fde047, #f59e0b)"
+    else: color = "linear-gradient(90deg, #fb7185, #ef4444)"
     return f"""
-    <div style="background:#2a2d35;border-radius:10px;height:{height}px;overflow:hidden;margin:6px 0 8px 0;">
-        <div style="width:{score}%;height:100%;background:{color};border-radius:10px;"></div>
+    <div class="pb-score-track" style="height:{height}px;">
+        <div style="width:{score}%;height:100%;background:{color};border-radius:999px;"></div>
     </div>
     """
 
@@ -911,16 +973,16 @@ def make_sparkline(history, height=190):
 
     times = [h[0] for h in history]
     scores = [h[1] for h in history]
-    line_color = "#00c853" if scores[-1] >= 60 else "#ffb300" if scores[-1] >= 40 else "#ff5252"
+    line_color = "#00e676" if scores[-1] >= 80 else "#14b8a6" if scores[-1] >= 60 else "#f59e0b" if scores[-1] >= 40 else "#ef4444"
 
     fig = go.Figure()
 
     # Very subtle score zones: Weak / Neutral / Constructive / Strong.
     bands = [
-        (0, 40, "rgba(255,82,82,0.035)"),
-        (40, 60, "rgba(255,179,0,0.030)"),
-        (60, 80, "rgba(41,163,239,0.028)"),
-        (80, 100, "rgba(0,200,83,0.035)"),
+        (0, 40, "rgba(239,68,68,0.040)"),
+        (40, 60, "rgba(245,158,11,0.035)"),
+        (60, 80, "rgba(20,184,166,0.035)"),
+        (80, 100, "rgba(0,230,118,0.045)"),
     ]
     for y0, y1, color in bands:
         fig.add_hrect(y0=y0, y1=y1, fillcolor=color, line_width=0, layer="below")
@@ -930,14 +992,20 @@ def make_sparkline(history, height=190):
 
     fig.add_trace(go.Scatter(
         x=times, y=scores, mode="lines",
-        line=dict(color=line_color, width=2.4),
+        line=dict(color=line_color, width=2.6),
         fill="tozeroy",
-        fillcolor="rgba(0,200,83,0.10)" if scores[-1] >= 60 else "rgba(255,179,0,0.08)" if scores[-1] >= 40 else "rgba(255,82,82,0.10)",
+        fillcolor="rgba(0,230,118,0.09)" if scores[-1] >= 80 else "rgba(20,184,166,0.08)" if scores[-1] >= 60 else "rgba(245,158,11,0.07)" if scores[-1] >= 40 else "rgba(239,68,68,0.08)",
         hovertemplate="Vibe %{y:.0f}<extra></extra>"
+    ))
+    fig.add_trace(go.Scatter(
+        x=[times[-1]], y=[scores[-1]], mode="markers+text",
+        marker=dict(size=9, color=line_color, line=dict(width=2, color="#0e1117")),
+        text=[f"  {scores[-1]:.0f}"], textposition="middle right",
+        textfont=dict(size=11, color=line_color), hoverinfo="skip"
     ))
     fig.update_layout(
         height=height,
-        margin=dict(l=42, r=8, t=8, b=22),
+        margin=dict(l=42, r=42, t=8, b=22),
         xaxis=dict(showgrid=False, showticklabels=True, tickfont=dict(size=10, color="#8b8f98"), zeroline=False),
         yaxis=dict(
             showgrid=False, showticklabels=True, zeroline=False, range=[0, 100],
@@ -1017,29 +1085,28 @@ col_title, col_refresh = st.columns([6, 1])
 
 with col_title:
     st.markdown("""
-    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 6px;">
-        <h1 style="margin: 0; padding: 0;">🚀 Pre-Bart Vibe Dashboard</h1>
-        <span class="live-badge"><span class="live-dot"></span> LIVE</span>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown("""
-    <div style="font-size: 1.08rem; color: #a0a0a0; margin-bottom: 4px; line-height: 1.5;">
-        Live strength & structure scores for the market’s top coins.<br>
-        Spot momentum early, catch weakness, and stay ahead of the noise.
+    <div class="pb-header">
+        <div class="pb-title-row">
+            <div class="pb-logo-mark">PB</div>
+            <div>
+                <div class="pb-title">Pre Bart Vibes</div>
+                <div class="pb-subtitle">Real-time market vibes for the coins that matter most.</div>
+            </div>
+            <span class="live-badge"><span class="live-dot"></span> LIVE</span>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
 with col_refresh:
     st.write("")
     st.write("")
-    if st.button("🔄 Refresh", use_container_width=True):
+    if st.button("↻ Refresh", use_container_width=True):
         # Rerun the UI without destroying expensive CoinGecko caches.
         # Cached market data refreshes automatically according to each function's TTL.
         st.session_state.last_refresh = datetime.now()
         st.rerun()
 
-st.caption(f"Last refresh: {st.session_state.last_refresh.strftime('%H:%M:%S')}  •  Model: {MODEL_VERSION}")
+st.markdown(f'<div class="pb-refresh-note">Last refreshed {st.session_state.last_refresh.strftime('%H:%M:%S')}</div>', unsafe_allow_html=True)
 
 # ========== MARKET CONTEXT ==========
 fg_value, fg_label = get_fear_greed()
@@ -1409,14 +1476,23 @@ arrow = get_score_arrow(cid, score)
 
 def vibe_band(score):
     if score >= 80:
-        return "Strong", "#00c853"
+        return "Strong", "#00e676"
     if score >= 60:
-        return "Constructive", "#29a3ef"
+        return "Constructive", "#14b8a6"
     if score >= 40:
-        return "Neutral", "#ffb300"
-    return "Weak", "#ff5252"
+        return "Neutral", "#f59e0b"
+    return "Weak", "#ef4444"
 
 band_label, band_color = vibe_band(score)
+
+def vibe_context_copy(score, direction):
+    if score >= 80:
+        return "Strong market conditions are holding." if "Weakening" not in direction else "Strong conditions remain, but momentum is cooling."
+    if score >= 60:
+        return "Market setup is strengthening." if "Improving" in direction else "Constructive conditions with room for confirmation."
+    if score >= 40:
+        return "Mixed conditions — patience may offer a cleaner setup."
+    return "Weak conditions are dominating right now."
 
 def get_one_hour_vibe_context(history, current_score):
     """Return the score change over roughly one hour using already-collected history."""
@@ -1474,65 +1550,48 @@ def format_updated_age(history):
 vibe_1h_delta, vibe_direction, vibe_direction_color = get_one_hour_vibe_context(history, score)
 vibe_delta_text = f"{vibe_1h_delta:+d} over 1h" if vibe_1h_delta is not None else "1h change building"
 updated_text = format_updated_age(history)
+context_copy = vibe_context_copy(score, vibe_direction)
 
 # The Vibe Score is the product's primary signal, so make it the visual anchor.
 st.markdown(
     f"""
-    <div style="
-        border:1px solid #2a2d35; border-radius:16px; padding:20px 22px;
-        background:#0e1117; margin-bottom:12px;
-        display:flex; justify-content:space-between; align-items:center; gap:18px; flex-wrap:wrap;
-    ">
-      <div>
-        <div style="font-size:.82rem;color:#8f949e;text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px;">{name} · {tick}</div>
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-          <span style="font-size:2.55rem;font-weight:800;line-height:1;color:#fafafa;">{score}</span>
-          <span style="font-size:1.05rem;color:#8f949e;">/ 100</span>
-          <span style="
-              display:inline-flex;align-items:center;padding:5px 10px;border-radius:999px;
-              border:1px solid {band_color}55;background:{band_color}18;color:{band_color};
-              font-size:.76rem;font-weight:800;letter-spacing:.055em;text-transform:uppercase;
-          ">{band_label}</span>{arrow}
+    <div class="pb-vibe-hero" style="--accent:{band_color};">
+      <div class="pb-vibe-main">
+        <div class="pb-eyebrow">{name} · {tick}</div>
+        <div class="pb-score-line">
+          <span class="pb-score-number">{score}</span>
+          <span class="pb-score-denom">/ 100</span>
+          <span class="pb-status-pill" style="border-color:{band_color}66;background:{band_color}18;color:{band_color};">{band_label}</span>{arrow}
         </div>
-        <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:9px;font-size:.86rem;">
-          <span style="color:{vibe_direction_color};font-weight:700;">{vibe_direction}</span>
-          <span style="color:#4b5059;">·</span>
-          <span style="color:#aeb4bd;">{vibe_delta_text}</span>
-          <span style="color:#4b5059;">·</span>
-          <span style="color:#777d87;">{updated_text}</span>
+        <div class="pb-signal-row">
+          <span style="color:{vibe_direction_color};font-weight:750;">{vibe_direction}</span>
+          <span class="pb-dot-sep">·</span>
+          <span>{vibe_delta_text}</span>
+          <span class="pb-dot-sep">·</span>
+          <span class="pb-updated">{updated_text}</span>
         </div>
-        <div style="font-size:.98rem;color:#b3b7c0;margin-top:8px;">{meme}</div>
+        <div class="pb-context-copy">{context_copy}</div>
+        <div class="pb-meme-line">{meme}</div>
       </div>
-      <div style="text-align:right;min-width:170px;">
-        <div style="font-size:.78rem;color:#8f949e;text-transform:uppercase;letter-spacing:.08em;">Price</div>
-        <div style="font-size:1.55rem;font-weight:750;color:#fafafa;">{price_text}</div>
-        <div style="font-size:.9rem;color:{'#00c853' if ch24 >= 0 else '#ff5252'};margin-top:3px;">{ch24:+.2f}% 24h &nbsp;·&nbsp; {ch1:+.2f}% 1h</div>
+      <div class="pb-price-panel">
+        <div class="pb-eyebrow">Price</div>
+        <div class="pb-price-value">{price_text}</div>
+        <div class="pb-price-change" style="color:{'#00e676' if ch24 >= 0 else '#ef4444'};">{ch24:+.2f}% 24h <span>·</span> {ch1:+.2f}% 1h</div>
       </div>
     </div>
     """,
     unsafe_allow_html=True
 )
-st.markdown(colored_progress(score, height=10), unsafe_allow_html=True)
+st.markdown(colored_progress(score, height=9), unsafe_allow_html=True)
 
 # Compact supporting metrics instead of five equally heavy cards.
 st.markdown(
     f"""
-    <div style="
-        display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px;
-        margin:10px 0 12px 0;
-    ">
-      <div style="border:1px solid #2a2d35;border-radius:11px;padding:10px 12px;background:#11151b;">
-        <div style="font-size:.72rem;color:#8f949e;">24h Volume</div><div style="font-weight:700;margin-top:2px;">${volume/1_000_000:,.1f}M</div>
-      </div>
-      <div style="border:1px solid #2a2d35;border-radius:11px;padding:10px 12px;background:#11151b;">
-        <div style="font-size:.72rem;color:#8f949e;">Range Position</div><div style="font-weight:700;margin-top:2px;">{range_pos:.0f}%</div>
-      </div>
-      <div style="border:1px solid #2a2d35;border-radius:11px;padding:10px 12px;background:#11151b;">
-        <div style="font-size:.72rem;color:#8f949e;">vs BTC · 24h</div><div style="font-weight:700;margin-top:2px;color:{'#00c853' if vs_btc >= 0 else '#ff5252'};">{vs_btc:+.2f}%</div>
-      </div>
-      <div style="border:1px solid #2a2d35;border-radius:11px;padding:10px 12px;background:#11151b;">
-        <div style="font-size:.72rem;color:#8f949e;">Market Cap</div><div style="font-weight:700;margin-top:2px;">${market_cap/1_000_000_000:,.2f}B</div>
-      </div>
+    <div class="pb-metrics-grid">
+      <div class="pb-mini-card"><div class="pb-mini-label"><span>◫</span> 24h Volume</div><div class="pb-mini-value">${volume/1_000_000:,.1f}M</div></div>
+      <div class="pb-mini-card"><div class="pb-mini-label"><span>↕</span> Range Position</div><div class="pb-mini-value">{range_pos:.0f}%</div></div>
+      <div class="pb-mini-card"><div class="pb-mini-label"><span>↗</span> vs BTC · 24h</div><div class="pb-mini-value" style="color:{'#00e676' if vs_btc >= 0 else '#ef4444'};">{vs_btc:+.2f}%</div></div>
+      <div class="pb-mini-card"><div class="pb-mini-label"><span>◈</span> Market Cap</div><div class="pb-mini-value">${market_cap/1_000_000_000:,.2f}B</div></div>
     </div>
     """,
     unsafe_allow_html=True
@@ -1565,7 +1624,9 @@ with st.expander("🤔 Why this score?", expanded=False):
     else:
         st.caption("No additional score drivers available for this reading.")
 
-st.markdown("##### Vibe Score History")
+st.markdown("""
+<div class="pb-section-head"><div><div class="pb-section-title">Vibe History</div><div class="pb-section-sub">How the signal has moved recently</div></div></div>
+""", unsafe_allow_html=True)
 if history and len(history) >= 2:
     fig = make_sparkline(history, height=190)
     if fig:
@@ -1575,7 +1636,9 @@ else:
     st.info("History will start building after a few more refreshes...")
 
 # ========== SHARE SECTION ==========
-st.markdown("### 📤 Share this vibe")
+st.markdown("""
+<div class="pb-section-head"><div><div class="pb-section-title">Share this vibe</div><div class="pb-section-sub">Copy a clean snapshot of the current reading</div></div></div>
+""", unsafe_allow_html=True)
 
 share_text = (
     f"{tick} Vibe Score: {score}/100 – {meme}\n"
@@ -1635,7 +1698,9 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 st.divider()
-st.subheader(f"{name} • Chart")
+st.markdown(f"""
+<div class="pb-section-head"><div><div class="pb-section-title">{name} · Chart</div><div class="pb-section-sub">Price action and volume context</div></div></div>
+""", unsafe_allow_html=True)
 days = "1" if "1 Day" in timeframe else "7" if "7 Days" in timeframe else "30"
 ohlc_data = top_ohlc_map.get(cid) if days == "1" and cid in top_ohlc_map else get_ohlc(cid, days)
 volume_data = get_market_chart(cid, days)
@@ -1674,8 +1739,10 @@ else:
     st.info("Chart temporarily unavailable.")
 
 st.divider()
-st.subheader("📊 Vibe Performance (Global)")
-st.caption("Historical forward returns across **all tracked coins**. Start with the 1h view; expand for every timeframe.")
+st.markdown("""
+<div class="pb-section-head"><div><div class="pb-section-title">Vibe Performance <span class="pb-global-pill">GLOBAL</span></div><div class="pb-section-sub">How similar scores performed historically across tracked coins</div></div></div>
+""", unsafe_allow_html=True)
+st.caption("Start with the 1h view; expand for every timeframe.")
 
 bucket_stats = get_bucket_stats(min_n=5)
 if bucket_stats:
