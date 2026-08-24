@@ -1636,56 +1636,224 @@ else:
 
 # ========== SHARE SECTION ==========
 st.markdown("""
-<div class="pb-section-head"><div><div class="pb-section-title">Share this vibe</div><div class="pb-section-sub">Copy a clean snapshot of the current reading</div></div></div>
+<div class="pb-section-head"><div><div class="pb-section-title">Share this vibe</div><div class="pb-section-sub">Share the current market read</div></div></div>
 """, unsafe_allow_html=True)
 
+# Keep the original concise, score-dependent language for the clipboard/X share text.
 share_text = (
     f"{tick} Vibe Score: {score}/100 – {meme}\n"
     f"{ch24:+.2f}% 24h | Range {range_pos:.0f}%\n"
     f"https://prebartvibes.xyz"
 )
-
-st.code(share_text, language=None)
+share_text_js = json.dumps(share_text)
+share_change_color = "#34d399" if ch24 >= 0 else "#fb7185"
 
 components.html(f"""
-<div style="margin-top:6px;">
-    <button id="copyBtn" style="
-        background: linear-gradient(90deg, #1da1f2, #0d8ecf);
-        color: white;
-        border: none;
-        padding: 9px 18px;
-        border-radius: 20px;
-        font-weight: 600;
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+    * {{ box-sizing: border-box; }}
+    html, body {{
+        margin: 0;
+        padding: 0;
+        background: transparent;
+        color: #f7f8fa;
+        font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }}
+    .share-card {{
+        position: relative;
+        overflow: hidden;
+        border: 1px solid #2a3039;
+        border-radius: 16px;
+        background: linear-gradient(145deg, #151a22 0%, #11151b 58%, #0f1419 100%);
+        padding: 18px 19px 15px;
+        box-shadow: 0 12px 30px rgba(0,0,0,.18);
+    }}
+    .share-card:before {{
+        content: "";
+        position: absolute;
+        width: 190px;
+        height: 190px;
+        border-radius: 50%;
+        right: -78px;
+        top: -105px;
+        background: {band_color};
+        opacity: .055;
+        filter: blur(10px);
+        pointer-events: none;
+    }}
+    .top {{
+        position: relative;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 18px;
+    }}
+    .coin-kicker {{
+        color: #7f8792;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .09em;
+        text-transform: uppercase;
+    }}
+    .coin {{
+        margin-top: 4px;
+        font-size: 22px;
+        line-height: 1.1;
+        font-weight: 800;
+        letter-spacing: -.03em;
+        color: #ffffff;
+    }}
+    .score-wrap {{ text-align: right; white-space: nowrap; }}
+    .score {{
+        font-size: 27px;
+        font-weight: 850;
+        line-height: 1;
+        letter-spacing: -.045em;
+        color: #ffffff;
+    }}
+    .denom {{ color: #737b86; font-size: 12px; font-weight: 650; }}
+    .pill {{
+        display: inline-flex;
+        margin-top: 7px;
+        padding: 4px 8px;
+        border-radius: 999px;
+        border: 1px solid {band_color}66;
+        background: {band_color}16;
+        color: {band_color};
+        font-size: 9.5px;
+        line-height: 1;
+        font-weight: 850;
+        letter-spacing: .075em;
+        text-transform: uppercase;
+    }}
+    .insight {{
+        position: relative;
+        margin-top: 17px;
+        color: #d9dde3;
+        font-size: 14px;
+        line-height: 1.45;
+        font-weight: 650;
+    }}
+    .metrics {{
+        position: relative;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 9px;
+        margin-top: 15px;
+    }}
+    .metric {{
+        border: 1px solid #282e37;
+        border-radius: 11px;
+        background: rgba(13,17,23,.52);
+        padding: 9px 11px;
+    }}
+    .label {{
+        color: #747c87;
+        font-size: 9.5px;
+        font-weight: 750;
+        letter-spacing: .07em;
+        text-transform: uppercase;
+    }}
+    .value {{ margin-top: 3px; color: #f7f8fa; font-size: 15px; font-weight: 800; }}
+    .footer {{
+        position: relative;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-top: 13px;
+        padding-top: 12px;
+        border-top: 1px solid #252b33;
+    }}
+    .domain {{ color: #737b86; font-size: 11.5px; font-weight: 650; }}
+    button {{
+        appearance: none;
+        border: 1px solid #33404c;
+        border-radius: 10px;
+        background: #18212a;
+        color: #ecf2f5;
+        padding: 8px 13px;
+        font: inherit;
+        font-size: 11.5px;
+        font-weight: 750;
         cursor: pointer;
-        font-size: 13.5px;
-        font-family: Inter, sans-serif;
-    ">
-        📋 Copy to Clipboard
-    </button>
+        transition: background .15s ease, border-color .15s ease, transform .15s ease;
+    }}
+    button:hover {{ background: #202b35; border-color: #42515e; transform: translateY(-1px); }}
+    button:active {{ transform: translateY(0); }}
+    @media (max-width: 520px) {{
+        .share-card {{ padding: 15px 15px 13px; border-radius: 14px; }}
+        .coin {{ font-size: 19px; }}
+        .score {{ font-size: 24px; }}
+        .insight {{ font-size: 13px; margin-top: 14px; }}
+        .metrics {{ gap: 7px; margin-top: 12px; }}
+        .metric {{ padding: 8px 9px; }}
+        .footer {{ margin-top: 11px; padding-top: 10px; }}
+    }}
+</style>
+</head>
+<body>
+<div class="share-card">
+    <div class="top">
+        <div>
+            <div class="coin-kicker">Current Vibe</div>
+            <div class="coin">{tick}</div>
+        </div>
+        <div class="score-wrap">
+            <div><span class="score">{score}</span> <span class="denom">/ 100</span></div>
+            <div class="pill">{band_label}</div>
+        </div>
+    </div>
+
+    <div class="insight">{meme}</div>
+
+    <div class="metrics">
+        <div class="metric">
+            <div class="label">24h change</div>
+            <div class="value" style="color:{share_change_color};">{ch24:+.2f}%</div>
+        </div>
+        <div class="metric">
+            <div class="label">Range position</div>
+            <div class="value">{range_pos:.0f}%</div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <div class="domain">prebartvibes.xyz</div>
+        <button id="copyBtn" type="button">Copy</button>
+    </div>
 </div>
 
 <script>
     const btn = document.getElementById('copyBtn');
-    const textToCopy = `{share_text}`;
+    const textToCopy = {share_text_js};
+    const defaultLabel = 'Copy';
 
-    btn.addEventListener('click', async () => {{
+    async function copyShareText() {{
         try {{
             await navigator.clipboard.writeText(textToCopy);
-            btn.innerText = '✅ Copied!';
-            setTimeout(() => btn.innerText = '📋 Copy to Clipboard', 2000);
         }} catch (err) {{
             const textarea = document.createElement('textarea');
             textarea.value = textToCopy;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
             document.body.appendChild(textarea);
+            textarea.focus();
             textarea.select();
             document.execCommand('copy');
             document.body.removeChild(textarea);
-            btn.innerText = '✅ Copied!';
-            setTimeout(() => btn.innerText = '📋 Copy to Clipboard', 2000);
         }}
-    }});
+        btn.textContent = 'Copied ✓';
+        setTimeout(() => btn.textContent = defaultLabel, 1800);
+    }}
+
+    btn.addEventListener('click', copyShareText);
 </script>
-""", height=55)
+</body>
+</html>
+""", height=250, scrolling=False)
 
 st.markdown(f"""
 <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:10px 0 6px 0;">
