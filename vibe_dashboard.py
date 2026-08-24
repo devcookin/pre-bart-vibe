@@ -843,57 +843,106 @@ def fill_pending_returns():
 
 @st.cache_data(ttl=300)
 def get_bucket_stats(min_n=5):
-    if not supabase: return None
+    """Build bucket stats without letting sparse horizon rows fall out of one shared LIMIT.
+
+    Snapshot counts and each forward-return horizon are loaded independently. This
+    prevents valid 30m/1h/4h/24h observations from disappearing merely because the
+    generic 2,000-row snapshot window changed as new snapshots were inserted.
+    """
+    if not supabase:
+        return None
+
+    bucket_order = ["0-19", "20-39", "40-59", "60-69", "70-79", "80-89", "90-100"]
+
+    def bucket(score):
+        if score < 20: return "0-19"
+        if score < 40: return "20-39"
+        if score < 60: return "40-59"
+        if score < 70: return "60-69"
+        if score < 80: return "70-79"
+        if score < 90: return "80-89"
+        return "90-100"
+
     try:
-        result = supabase.table("vibe_snapshots")\
-            .select("score, return_30m, return_1h, return_4h, return_24h")\
+        # Keep n as a recent-snapshot count, but make the window deterministic.
+        count_result = supabase.table("vibe_snapshots")\
+            .select("score,timestamp")\
             .eq("model_version", MODEL_VERSION)\
-            .limit(2000).execute()
-        rows = result.data or []
-        if not rows: return None
-        df = pd.DataFrame(rows)
-        
-        overall_1h_vals = df["return_1h"].dropna()
-        overall_avg_1h = overall_1h_vals.mean() if len(overall_1h_vals) else 0
-        
-        def bucket(s):
-            if s < 20: return "0-19"
-            if s < 40: return "20-39"
-            if s < 60: return "40-59"
-            if s < 70: return "60-69"
-            if s < 80: return "70-79"
-            if s < 90: return "80-89"
-            return "90-100"
-        df["bucket"] = df["score"].apply(bucket)
-        
+            .order("timestamp", desc=True)\
+            .limit(2000)\
+            .execute()
+
+        count_rows = count_result.data or []
+        if not count_rows:
+            return None
+
+        count_df = pd.DataFrame(count_rows)
+        count_df["bucket"] = count_df["score"].apply(bucket)
+        counts = count_df["bucket"].value_counts().to_dict()
+
+        # Pull matured observations independently for every horizon. A valid 30m
+        # result can therefore never disappear just because newer null-30m rows
+        # displaced it from a shared generic LIMIT window.
+        horizon_frames = {}
+        for col in ["return_30m", "return_1h", "return_4h", "return_24h"]:
+            try:
+                result = supabase.table("vibe_snapshots")\
+                    .select(f"score,{col},timestamp")\
+                    .eq("model_version", MODEL_VERSION)\
+                    .not_.is_(col, "null")\
+                    .order("timestamp", desc=True)\
+                    .limit(2000)\
+                    .execute()
+                rows = result.data or []
+                if rows:
+                    hdf = pd.DataFrame(rows)
+                    hdf["bucket"] = hdf["score"].apply(bucket)
+                    horizon_frames[col] = hdf
+                else:
+                    horizon_frames[col] = pd.DataFrame(columns=["score", col, "timestamp", "bucket"])
+            except Exception:
+                horizon_frames[col] = pd.DataFrame(columns=["score", col, "timestamp", "bucket"])
+
+        one_hour = horizon_frames["return_1h"]
+        overall_avg_1h = one_hour["return_1h"].mean() if not one_hour.empty else 0
+
+        def horizon_metric(bucket_name, col, metric):
+            hdf = horizon_frames[col]
+            if hdf.empty:
+                return None
+            vals = hdf.loc[hdf["bucket"] == bucket_name, col].dropna()
+            if len(vals) == 0:
+                return None
+            if metric == "avg":
+                return round(vals.mean(), 3)
+            return round((vals > 0).mean() * 100, 1)
+
         stats = []
-        for b in ["0-19","20-39","40-59","60-69","70-79","80-89","90-100"]:
-            sub = df[df["bucket"] == b]
-            n = len(sub)
+        for b in bucket_order:
+            n = int(counts.get(b, 0))
             if n < min_n:
                 stats.append({"bucket": b, "n": n, "ready": False})
                 continue
-            
-            def avg(col):
-                vals = sub[col].dropna()
-                return round(vals.mean(), 3) if len(vals) else None
-            def win(col):
-                vals = sub[col].dropna()
-                return round((vals > 0).mean() * 100, 1) if len(vals) else None
-            
-            avg_1h = avg("return_1h")
+
+            avg_1h = horizon_metric(b, "return_1h", "avg")
             edge = round(avg_1h - overall_avg_1h, 2) if avg_1h is not None else None
-            
+
             stats.append({
-                "bucket": b, "n": n, "ready": True,
-                "avg_30m": avg("return_30m"), "win_30m": win("return_30m"),
-                "avg_1h": avg_1h, "win_1h": win("return_1h"),
-                "avg_4h": avg("return_4h"), "win_4h": win("return_4h"),
-                "avg_24h": avg("return_24h"), "win_24h": win("return_24h"),
-                "edge": edge
+                "bucket": b,
+                "n": n,
+                "ready": True,
+                "avg_30m": horizon_metric(b, "return_30m", "avg"),
+                "win_30m": horizon_metric(b, "return_30m", "win"),
+                "avg_1h": avg_1h,
+                "win_1h": horizon_metric(b, "return_1h", "win"),
+                "avg_4h": horizon_metric(b, "return_4h", "avg"),
+                "win_4h": horizon_metric(b, "return_4h", "win"),
+                "avg_24h": horizon_metric(b, "return_24h", "avg"),
+                "win_24h": horizon_metric(b, "return_24h", "win"),
+                "edge": edge,
             })
         return stats
-    except:
+    except Exception:
         return None
 
 @st.cache_data(ttl=180)
