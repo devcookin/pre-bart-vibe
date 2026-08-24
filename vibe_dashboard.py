@@ -1418,6 +1418,63 @@ def vibe_band(score):
 
 band_label, band_color = vibe_band(score)
 
+def get_one_hour_vibe_context(history, current_score):
+    """Return the score change over roughly one hour using already-collected history."""
+    if not history:
+        return None, "→ Stable", "#8f949e"
+
+    now = datetime.now(timezone.utc)
+    target = now - timedelta(hours=1)
+    normalized = []
+    for ts, hist_score in history:
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        normalized.append((ts, hist_score))
+
+    # Use the reading closest to one hour ago, but only when it is reasonably
+    # close to that horizon. This avoids presenting a misleading 1h change.
+    closest_ts, closest_score = min(normalized, key=lambda x: abs((x[0] - target).total_seconds()))
+    if abs((closest_ts - target).total_seconds()) > 20 * 60:
+        delta = None
+    else:
+        delta = int(current_score) - int(closest_score)
+
+    # Direction uses the recent trajectory when a clean 1h comparison exists.
+    if delta is not None:
+        if delta >= 3:
+            return delta, "↑ Improving", "#00c853"
+        if delta <= -3:
+            return delta, "↓ Weakening", "#ff5252"
+        return delta, "→ Stable", "#8f949e"
+
+    # Fall back to the last two readings if one hour of history is unavailable.
+    if len(normalized) >= 2:
+        recent_delta = int(current_score) - int(normalized[-2][1])
+        if recent_delta >= 2:
+            return None, "↑ Improving", "#00c853"
+        if recent_delta <= -2:
+            return None, "↓ Weakening", "#ff5252"
+    return None, "→ Stable", "#8f949e"
+
+def format_updated_age(history):
+    if not history:
+        return "Updated now"
+    ts = history[-1][0]
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    seconds = max(0, int((datetime.now(timezone.utc) - ts).total_seconds()))
+    if seconds < 60:
+        return "Updated just now"
+    minutes = seconds // 60
+    if minutes < 60:
+        return f"Updated {minutes}m ago"
+    hours = minutes // 60
+    return f"Updated {hours}h ago"
+
+vibe_1h_delta, vibe_direction, vibe_direction_color = get_one_hour_vibe_context(history, score)
+vibe_delta_text = f"{vibe_1h_delta:+d} over 1h" if vibe_1h_delta is not None else "1h change building"
+updated_text = format_updated_age(history)
+
 # The Vibe Score is the product's primary signal, so make it the visual anchor.
 st.markdown(
     f"""
@@ -1428,10 +1485,21 @@ st.markdown(
     ">
       <div>
         <div style="font-size:.82rem;color:#8f949e;text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px;">{name} · {tick}</div>
-        <div style="display:flex;align-items:baseline;gap:10px;">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
           <span style="font-size:2.55rem;font-weight:800;line-height:1;color:#fafafa;">{score}</span>
           <span style="font-size:1.05rem;color:#8f949e;">/ 100</span>
-          <span style="font-size:.92rem;font-weight:700;color:{band_color};">{band_label}</span>{arrow}
+          <span style="
+              display:inline-flex;align-items:center;padding:5px 10px;border-radius:999px;
+              border:1px solid {band_color}55;background:{band_color}18;color:{band_color};
+              font-size:.76rem;font-weight:800;letter-spacing:.055em;text-transform:uppercase;
+          ">{band_label}</span>{arrow}
+        </div>
+        <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:9px;font-size:.86rem;">
+          <span style="color:{vibe_direction_color};font-weight:700;">{vibe_direction}</span>
+          <span style="color:#4b5059;">·</span>
+          <span style="color:#aeb4bd;">{vibe_delta_text}</span>
+          <span style="color:#4b5059;">·</span>
+          <span style="color:#777d87;">{updated_text}</span>
         </div>
         <div style="font-size:.98rem;color:#b3b7c0;margin-top:8px;">{meme}</div>
       </div>
@@ -1719,9 +1787,9 @@ st.markdown(
     ">
       <div>Pre Bart Vibes · Market context, simplified.</div>
       <div>
-        <a href="mailto:contact@prebartvibes.xyz" style="color:#aeb4bd;text-decoration:none;">Contact</a>
+        <a href="mailto:contact@prebartvibes.xyz" style="color:#aeb4bd;text-decoration:none;font-weight:650;">Contact</a>
         <span style="padding:0 8px;color:#4b5059;">·</span>
-        <span>About the Vibe Score · Data disclaimer</span>
+        <a href="mailto:contact@prebartvibes.xyz" style="color:#8f949e;text-decoration:none;">contact@prebartvibes.xyz</a>
       </div>
     </div>
     """,
