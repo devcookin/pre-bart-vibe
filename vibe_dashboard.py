@@ -2259,6 +2259,16 @@ setup = build_setup_analytics(setup_rows, score, price) if setup_rows else None
 def _fmt_delta(val, suffix=""):
     return "—" if val is None else f"{val:+.1f}{suffix}"
 
+def _fmt_price_delta(val):
+    """Keep tiny price responses visible instead of rounding them into +0.0/-0.0."""
+    if val is None or pd.isna(val):
+        return "—"
+    val = float(val)
+    # Extra precision near zero is useful for lead/lag research.
+    if abs(val) < 0.10:
+        return f"{val:+.3f}%"
+    return f"{val:+.2f}%"
+
 st.markdown(
     """<div class="pb-section-head"><div><div class="pb-section-title">Setup Intelligence <span class="pb-global-pill">V10</span></div>
     <div class="pb-section-sub">Separates current market strength from early-move context and historical analogs</div></div></div>""",
@@ -2272,7 +2282,7 @@ if setup:
     <div class="pb-intel-grid">
       <div class="pb-intel-card"><div class="pb-intel-kicker">Current Strength</div><div class="pb-intel-value" style="color:{band_color}">{score} · {band_label}</div><div class="pb-intel-sub">Absolute Vibe describes the market state now.</div></div>
       <div class="pb-intel-card"><div class="pb-intel-kicker">Vibe Velocity</div><div class="pb-intel-value" style="color:{dv30_color}">{_fmt_delta(setup['dv30'])} / 30m</div><div class="pb-intel-sub">{_fmt_delta(setup['dv1h'])} over 1h · {setup['velocity']}</div></div>
-      <div class="pb-intel-card"><div class="pb-intel-kicker">Price Response</div><div class="pb-intel-value" style="color:{px30_color}">{_fmt_delta(setup['px30'], '%')} / 30m</div><div class="pb-intel-sub">{_fmt_delta(setup['px1h'], '%')} over 1h · {setup['price_state']}</div></div>
+      <div class="pb-intel-card"><div class="pb-intel-kicker">Price Response</div><div class="pb-intel-value" style="color:{px30_color}">{_fmt_price_delta(setup['px30'])} / 30m</div><div class="pb-intel-sub">{_fmt_price_delta(setup['px1h'])} over 1h · {setup['price_state']}</div></div>
       <div class="pb-intel-card"><div class="pb-intel-kicker">Lead / Divergence</div><div class="pb-intel-value" style="color:{setup['lead_color']};font-size:1.02rem">{setup['lead_label']}</div><div class="pb-intel-sub">Looks for Vibe changing before price meaningfully follows.</div></div>
     </div>
     """, unsafe_allow_html=True)
@@ -2746,15 +2756,15 @@ if isinstance(ohlc_data, list) and len(ohlc_data) > 0:
     axis_font = dict(size=11, color="rgba(203,213,225,0.72)")
     fig.update_xaxes(
         showgrid=False, zeroline=False, showline=False,
-        tickfont=axis_font, ticks="", fixedrange=False
+        tickfont=axis_font, ticks="", fixedrange=True
     )
     fig.update_yaxes(
         showgrid=True, gridcolor=grid, gridwidth=1, zeroline=False,
-        showline=False, tickfont=axis_font, ticks="", side="right", row=1, col=1
+        showline=False, tickfont=axis_font, ticks="", side="right", fixedrange=True, row=1, col=1
     )
     fig.update_yaxes(
         showgrid=False, zeroline=False, showline=False,
-        tickfont=dict(size=10, color="rgba(148,163,184,0.55)"), ticks="", side="right", row=2, col=1
+        tickfont=dict(size=10, color="rgba(148,163,184,0.55)"), ticks="", side="right", fixedrange=True, row=2, col=1
     )
     fig.update_layout(
         height=500,
@@ -2767,14 +2777,15 @@ if isinstance(ohlc_data, list) and len(ohlc_data) > 0:
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         bargap=0.16,
-        dragmode="pan",
+        dragmode=False,
     )
     st.plotly_chart(
         fig,
         use_container_width=True,
         config={
             "displayModeBar": False,
-            "scrollZoom": True,
+            "scrollZoom": False,
+            "doubleClick": False,
             "responsive": True,
         },
     )
