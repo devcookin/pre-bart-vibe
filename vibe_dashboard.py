@@ -2240,15 +2240,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Keep the primary action attached to the primary signal card.
-is_watched = cid in st.session_state.watchlist
-if st.button("★ Remove from Watchlist" if is_watched else "☆ Add to Watchlist", key="detail_watch"):
-    if is_watched:
-        st.session_state.watchlist.remove(cid)
-    else:
-        st.session_state.watchlist.append(cid)
-    st.rerun()
-
 st.markdown(colored_progress(score, height=9), unsafe_allow_html=True)
 
 # Compact supporting metrics instead of five equally heavy cards.
@@ -2263,6 +2254,18 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+
+# Keep the watchlist action directly beneath the supporting metrics row,
+# visually anchored under the left-most 24h Volume card.
+is_watched = cid in st.session_state.watchlist
+_watch_col, _watch_spacer = st.columns([1, 3])
+with _watch_col:
+    if st.button("★ Remove from Watchlist" if is_watched else "☆ Add to Watchlist", key="detail_watch", use_container_width=True):
+        if is_watched:
+            st.session_state.watchlist.remove(cid)
+        else:
+            st.session_state.watchlist.append(cid)
+        st.rerun()
 
 # v10: separate "current strength" from "entry/setup context".
 setup_rows = get_setup_history(cid, limit=1200)
