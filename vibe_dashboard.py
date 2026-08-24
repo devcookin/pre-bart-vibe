@@ -531,6 +531,37 @@ st.markdown("""
             opacity: 1 !important;
         }
     }
+
+    /* v9.15 signal-language + sidebar polish */
+    :root {
+        --pb-strong:#22c55e; --pb-positive:#14b8a6; --pb-neutral:#f59e0b;
+        --pb-negative:#ef5350; --pb-muted:#8b93a1; --pb-card:#12171e; --pb-border:#2a3039;
+    }
+    .pb-side-card { border:1px solid var(--pb-border);border-radius:14px;padding:15px 16px;background:linear-gradient(180deg,#131820,#10141a);margin-bottom:10px; }
+    .pb-side-title { font-size:.78rem;color:#9098a5;text-transform:uppercase;letter-spacing:.075em;font-weight:750;margin-bottom:11px; }
+    .pb-bias-value { font-size:1.15rem;font-weight:780;letter-spacing:-.02em; }
+    .pb-side-sub { color:#8e96a3;font-size:.76rem;margin-top:5px; }
+    .pb-extreme-row { display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0; }
+    .pb-extreme-row + .pb-extreme-row { border-top:1px solid #252b33; }
+    .pb-extreme-name { display:flex;align-items:center;gap:8px;font-weight:720; }
+    .pb-score-chip { min-width:38px;text-align:center;padding:3px 8px;border-radius:999px;font-size:.76rem;font-weight:800;border:1px solid; }
+    .pb-mover-head,.pb-mover-row { display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px; }
+    .pb-mover-head { color:#7f8794;font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;margin:12px 0 4px; }
+    .pb-mover-row { padding:4px 0;font-size:.82rem; }
+    .pb-mover-symbol { font-weight:720;color:#f3f5f7; }
+    .pb-confidence { display:inline-flex;align-items:center;gap:5px;padding:2px 7px;border-radius:999px;font-size:.68rem;font-weight:750;border:1px solid #343b45;color:#aab1bc;background:#171c23; }
+    .pb-definition { color:#8d95a1;font-size:.76rem;line-height:1.5; }
+
+    /* Make the 1h/24h mover radio read like a segmented control. */
+    div[role="radiogroup"] { gap:0 !important;background:#0d1117;border:1px solid #303741;border-radius:10px;padding:3px;width:100%; }
+    div[role="radiogroup"] label { flex:1;justify-content:center;margin:0 !important;padding:5px 8px !important;border-radius:7px; }
+    div[role="radiogroup"] label:has(input:checked) { background:#252c35 !important; }
+
+    @media (max-width: 768px) {
+        .pb-side-card { padding:13px 14px;margin-bottom:8px; }
+        .pb-side-title { margin-bottom:8px; }
+        .pb-mover-row { padding:5px 0; }
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -931,6 +962,10 @@ def get_bucket_stats(min_n=5):
                 "bucket": b,
                 "n": n,
                 "ready": True,
+                "n_30m": int((horizon_frames["return_30m"]["bucket"] == b).sum()),
+                "n_1h": int((horizon_frames["return_1h"]["bucket"] == b).sum()),
+                "n_4h": int((horizon_frames["return_4h"]["bucket"] == b).sum()),
+                "n_24h": int((horizon_frames["return_24h"]["bucket"] == b).sum()),
                 "avg_30m": horizon_metric(b, "return_30m", "avg"),
                 "win_30m": horizon_metric(b, "return_30m", "win"),
                 "avg_1h": avg_1h,
@@ -967,6 +1002,34 @@ def get_coin_performance(coin_id, min_n=15):
         }
     except:
         return None
+
+@st.cache_data(ttl=180)
+def get_vibe_price_history(coin_id, limit=150):
+    """Recent paired Vibe/price snapshots for a simple relationship chart."""
+    if not supabase or not coin_id:
+        return []
+    try:
+        result = supabase.table("vibe_snapshots")\
+            .select("timestamp,price,score")\
+            .eq("coin_id", coin_id)\
+            .eq("model_version", MODEL_VERSION)\
+            .order("timestamp", desc=True)\
+            .limit(limit)\
+            .execute()
+        rows = result.data or []
+        return sorted(rows, key=lambda r: r.get("timestamp", ""))
+    except Exception:
+        return []
+
+def sample_strength(n):
+    """Plain-language sample maturity; descriptive rather than statistical certainty."""
+    if n is None or n < 15:
+        return "Early", "#8b93a1"
+    if n < 50:
+        return "Building", "#f59e0b"
+    if n < 200:
+        return "Moderate", "#14b8a6"
+    return "Strong", "#22c55e"
 
 # ========== HELPERS ==========
 @st.cache_data(ttl=45)
@@ -1453,16 +1516,18 @@ avg_vibe = sum(v["score"] for v in vibe_data) / len(vibe_data) if vibe_data else
 
 # Market Bias now reflects the aggregate Vibe Score only.
 # Funding rates/Open Interest were removed to reduce unnecessary external data calls.
-if avg_vibe >= 65:
-    bias = "🟢 Strongly Bullish"
-elif avg_vibe >= 58:
-    bias = "🟢 Mildly Bullish"
-elif avg_vibe <= 38:
-    bias = "🔴 Strongly Bearish"
-elif avg_vibe <= 42:
-    bias = "🔴 Mildly Bearish"
+# Keep the aggregate label deliberately conservative around the midpoint.
+# A market averaging in the high-50s is mixed/neutral, not a bullish regime.
+if avg_vibe >= 75:
+    bias, bias_color = "Strongly Bullish", "#22c55e"
+elif avg_vibe >= 65:
+    bias, bias_color = "Mildly Bullish", "#14b8a6"
+elif avg_vibe <= 35:
+    bias, bias_color = "Strongly Bearish", "#ef5350"
+elif avg_vibe <= 45:
+    bias, bias_color = "Mildly Bearish", "#fb7185"
 else:
-    bias = "🟡 Neutral"
+    bias, bias_color = "Neutral / Mixed", "#f59e0b"
 
 strongest = vibe_data_sorted[0] if vibe_data_sorted else None
 weakest = vibe_data_sorted[-1] if vibe_data_sorted else None
@@ -1634,46 +1699,39 @@ with main_col:
 
 with side_col:
     st.markdown("### ⚡ Market Pulse")
-    
-    with st.container(border=True):
-        st.markdown("**📊 Market Bias**")
-        st.markdown(f"<div style='font-size:1.15rem;font-weight:600;margin:6px 0;'>{bias}</div>", unsafe_allow_html=True)
-        st.caption(f"Avg Vibe: {avg_vibe:.1f}")
-    
-    with st.container(border=True):
-        st.markdown("**🏆 Strongest / Weakest**")
-        if strongest: st.markdown(f"🔥 **{strongest['tick']}** {strongest['score']}")
-        if weakest: st.markdown(f"💀 **{weakest['tick']}** {weakest['score']}")
-    
-    with st.container(border=True):
-        st.markdown("**🔥 Top Movers**")
-        tf = st.radio("Timeframe", ["1h", "24h"], horizontal=True, key="movers_tf_radio", label_visibility="collapsed")
-        st.session_state.movers_tf = tf
-        key = "ch1" if tf == "1h" else "ch24"
 
+    st.markdown(f"""
+    <div class="pb-side-card">
+      <div class="pb-side-title">Market Bias</div>
+      <div class="pb-bias-value" style="color:{bias_color};">● <span style="color:#f5f7fa">{bias}</span></div>
+      <div class="pb-side-sub">Avg Vibe {avg_vibe:.1f} · bullish bias begins at 65</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if strongest and weakest:
+        strong_color = "#22c55e" if strongest["score"] >= 80 else "#14b8a6" if strongest["score"] >= 60 else "#f59e0b"
+        weak_color = "#ef5350" if weakest["score"] < 40 else "#f59e0b" if weakest["score"] < 60 else "#14b8a6"
+        st.markdown(f"""
+        <div class="pb-side-card">
+          <div class="pb-side-title">Strongest / Weakest</div>
+          <div class="pb-extreme-row"><div class="pb-extreme-name"><span style="color:#22c55e">▲</span>{strongest['tick']}</div><span class="pb-score-chip" style="color:{strong_color};border-color:{strong_color}55;background:{strong_color}12">{strongest['score']}</span></div>
+          <div class="pb-extreme-row"><div class="pb-extreme-name"><span style="color:#ef5350">▼</span>{weakest['tick']}</div><span class="pb-score-chip" style="color:{weak_color};border-color:{weak_color}55;background:{weak_color}12">{weakest['score']}</span></div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with st.container(border=True):
+        st.markdown("**Top Movers**")
+        tf = st.radio("Timeframe", ["1h", "24h"], horizontal=True, key="movers_tf", label_visibility="collapsed")
+        key = "ch1" if tf == "1h" else "ch24"
         gainers = sorted(vibe_data, key=lambda x: x[key], reverse=True)[:3]
         losers = sorted(vibe_data, key=lambda x: x[key])[:3]
-
-        st.caption("Gainers")
+        st.markdown('<div class="pb-mover-head"><span>Gainers</span><span>Move</span></div>', unsafe_allow_html=True)
         for m in gainers:
-            ch = m[key]
-            st.markdown(
-                f"<div style='display:flex;justify-content:space-between;font-size:13px;padding:2px 0;'>"
-                f"<span><b>{m['tick']}</b></span>"
-                f"<span style='color:#00c853;font-weight:600'>{ch:+.2f}%</span></div>",
-                unsafe_allow_html=True
-            )
-
-        st.caption("Losers")
+            st.markdown(f'<div class="pb-mover-row"><span class="pb-mover-symbol">{m["tick"]}</span><span style="color:#22c55e;font-weight:700">{m[key]:+.2f}%</span></div>', unsafe_allow_html=True)
+        st.markdown('<div class="pb-mover-head"><span>Losers</span><span>Move</span></div>', unsafe_allow_html=True)
         for m in losers:
-            ch = m[key]
-            st.markdown(
-                f"<div style='display:flex;justify-content:space-between;font-size:13px;padding:2px 0;'>"
-                f"<span><b>{m['tick']}</b></span>"
-                f"<span style='color:#ff5252;font-weight:600'>{ch:+.2f}%</span></div>",
-                unsafe_allow_html=True
-            )
-    
+            st.markdown(f'<div class="pb-mover-row"><span class="pb-mover-symbol">{m["tick"]}</span><span style="color:#ef5350;font-weight:700">{m[key]:+.2f}%</span></div>', unsafe_allow_html=True)
+
 
 st.divider()
 
@@ -1878,7 +1936,8 @@ with st.expander("Score details", expanded=False):
 
     perf = get_coin_performance(cid)
     if perf and perf.get("ready"):
-        st.caption(f"Historical 1h win rate: **{perf['win_1h']}%** · Avg 1h return: **{perf['avg_1h']:+.2f}%** · n = {perf['n']}")
+        strength_label, _ = sample_strength(perf["n"])
+        st.caption(f"Historical 1h win rate: **{perf['win_1h']}%** · Avg 1h return: **{perf['avg_1h']:+.2f}%** · n = {perf['n']} · Sample: **{strength_label}**")
     else:
         st.caption("Historical performance is still collecting for this coin.")
 
@@ -1899,6 +1958,30 @@ if history and len(history) >= 2:
     st.caption(f"Showing last {len(history)} readings · 0–39 Weak · 40–59 Neutral · 60–79 Constructive · 80–100 Strong")
 else:
     st.info("History will start building after a few more refreshes...")
+
+# Vibe + price relationship: paired snapshots only, so the two lines share the same timestamps.
+vp_rows = get_vibe_price_history(cid, limit=150)
+if len(vp_rows) >= 3:
+    vp = pd.DataFrame(vp_rows)
+    vp["time"] = pd.to_datetime(vp["timestamp"], utc=True, errors="coerce")
+    vp["price"] = pd.to_numeric(vp["price"], errors="coerce")
+    vp["score"] = pd.to_numeric(vp["score"], errors="coerce")
+    vp = vp.dropna(subset=["time", "price", "score"]).sort_values("time")
+    if len(vp) >= 3:
+        st.markdown("""
+        <div class="pb-section-head"><div><div class="pb-section-title">Vibe + Price</div><div class="pb-section-sub">See whether signal strength is moving with, ahead of, or against price</div></div></div>
+        """, unsafe_allow_html=True)
+        rel_fig = make_subplots(specs=[[{"secondary_y": True}]])
+        rel_fig.add_trace(go.Scatter(x=vp["time"], y=vp["price"], name="Price", mode="lines", line=dict(color="#cbd5e1", width=2.0)), secondary_y=False)
+        rel_fig.add_trace(go.Scatter(x=vp["time"], y=vp["score"], name="Vibe", mode="lines", line=dict(color="#14b8a6", width=2.5)), secondary_y=True)
+        rel_fig.add_hrect(y0=65, y1=100, fillcolor="rgba(20,184,166,.035)", line_width=0, secondary_y=True)
+        rel_fig.add_hrect(y0=0, y1=45, fillcolor="rgba(239,83,80,.03)", line_width=0, secondary_y=True)
+        rel_fig.update_yaxes(title_text="Price", showgrid=True, gridcolor="rgba(148,163,184,.08)", tickfont=dict(color="#9aa3af", size=10), secondary_y=False)
+        rel_fig.update_yaxes(title_text="Vibe", range=[0,100], showgrid=False, tickfont=dict(color="#14b8a6", size=10), secondary_y=True)
+        rel_fig.update_xaxes(showgrid=False, tickfont=dict(color="#8b93a1", size=10))
+        rel_fig.update_layout(height=285, template="plotly_dark", margin=dict(l=8,r=8,t=10,b=8), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", hovermode="x unified", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(size=10)))
+        st.plotly_chart(rel_fig, use_container_width=True, config={"displayModeBar": False, "responsive": True})
+        st.caption("Vibe and price are shown together for visual context. Co-movement or apparent lead/lag is not proof of predictive power.")
 
 # ========== SHARE SECTION ==========
 st.markdown("""
@@ -2249,7 +2332,7 @@ if bucket_stats:
     for s in bucket_stats:
         if not s["ready"]:
             table_data.append({
-                "Bucket": s["bucket"], "n": s["n"],
+                "Bucket": s["bucket"], "n": s["n"], "Sample": sample_strength(0)[0],
                 "Avg 30m": "—", "Win 30m": "—", "Avg 1h": "—", "Win 1h": "—",
                 "Edge (1h)": "—", "Avg 4h": "—", "Win 4h": "—", "Avg 24h": "—", "Win 24h": "—"
             })
@@ -2257,6 +2340,7 @@ if bucket_stats:
             table_data.append({
                 "Bucket": s["bucket"],
                 "n": s["n"],
+                "Sample": sample_strength(s.get("n_1h", 0))[0],
                 "Avg 30m": f"{s['avg_30m']:+.2f}%" if s['avg_30m'] is not None else "—",
                 "Win 30m": f"{s['win_30m']}%" if s['win_30m'] is not None else "—",
                 "Avg 1h": f"{s['avg_1h']:+.2f}%" if s['avg_1h'] is not None else "—",
@@ -2274,9 +2358,9 @@ if bucket_stats:
         if val == "—": return ""
         try:
             num = float(str(val).replace("%", ""))
-            if num >= 85: return "background-color: #1b5e20; color: white; font-weight: 600"
-            elif num >= 70: return "background-color: #2e7d32; color: white"
-            elif num >= 55: return "background-color: #f9a825; color: black"
+            if num >= 70: return "background-color: #1b5e20; color: white; font-weight: 600"
+            elif num >= 55: return "background-color: #0f766e; color: white"
+            elif num >= 45: return "background-color: #f9a825; color: black"
             else: return "background-color: #c62828; color: white"
         except: return ""
 
@@ -2295,10 +2379,10 @@ if bucket_stats:
         if val == "—": return ""
         try:
             num = float(str(val).replace("%", "").replace("+", ""))
-            if num >= 5: return "background-color: #1b5e20; color: white; font-weight: 700"
-            elif num >= 2: return "background-color: #2e7d32; color: white; font-weight: 600"
-            elif num >= 0: return "background-color: #f9a825; color: black"
-            elif num > -2: return "background-color: #ef6c00; color: white"
+            if num >= 1.0: return "background-color: #1b5e20; color: white; font-weight: 700"
+            elif num >= 0.25: return "background-color: #0f766e; color: white; font-weight: 600"
+            elif num > -0.25: return "background-color: #f9a825; color: black"
+            elif num > -1.0: return "background-color: #ef6c00; color: white"
             else: return "background-color: #c62828; color: white"
         except: return ""
 
@@ -2320,13 +2404,13 @@ if bucket_stats:
         return styler
 
     # Default view: the five columns most useful for a quick decision.
-    compact_cols = ["Bucket", "n", "Avg 1h", "Win 1h", "Edge (1h)"]
+    compact_cols = ["Bucket", "n", "Sample", "Avg 1h", "Win 1h", "Edge (1h)"]
     st.dataframe(style_table(df_display[compact_cols], compact=True), use_container_width=True, hide_index=True)
 
     with st.expander("Show all timeframes", expanded=False):
         st.dataframe(style_table(df_display), use_container_width=True, hide_index=True)
 
-    st.caption("**Edge (1h)** = how much better or worse this Vibe bucket performed than the average tracked coin over the next hour. Positive Edge means that score range historically outperformed the tracked market.")
+    st.caption("**Edge (1h)** = bucket average 1h return minus the tracked-market average 1h return. **Win 1h** = share of matured 1h observations with a positive return. **n** = recent score snapshots; Sample strength is based on matured 1h observations, so it can be lower than n.")
 else:
     st.info("Collecting performance data…")
 
