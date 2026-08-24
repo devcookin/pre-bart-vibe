@@ -27,7 +27,7 @@ if SUPABASE_URL and SUPABASE_KEY:
     except:
         pass
 
-MODEL_VERSION = "v2.5-breakout"
+MODEL_VERSION = "v2.6-returnfix"
 MIN_SNAPSHOT_INTERVAL = 300
 FILL_INTERVAL_SECONDS = 60
 
@@ -568,9 +568,17 @@ def queue_vibe_snapshot(snapshot_rows, coin_id, symbol, price, score, label, cha
     snapshot_rows.append({"coin_id": coin_id, "timestamp": now, "data": data})
 
 def fill_pending_returns():
-    """Improved version: only fills the next pending horizon (shortest first)
-    so that 30m / 1h / 4h / 24h get different values."""
-    if not supabase: return
+    """Fill forward returns only near their actual maturity time.
+
+    IMPORTANT: Older app versions used one "current" price for snapshots that could
+    already be much older than the target horizon. That contaminated 30m/1h/4h/24h
+    with matching or near-matching returns. v2.6 only records a horizon when the
+    snapshot is close enough to that horizon, and performance stats are filtered to
+    this model version so legacy contaminated rows do not affect the table.
+    """
+    if not supabase:
+        return
+
     now = datetime.now(timezone.utc)
     last_fill = st.session_state.last_fill_time
     if last_fill and (now - last_fill).total_seconds() < FILL_INTERVAL_SECONDS:
@@ -579,58 +587,66 @@ def fill_pending_returns():
     try:
         result = supabase.table("vibe_snapshots")\
             .select("id, timestamp, coin_id, price, return_30m, return_1h, return_4h, return_24h")\
+            .eq("model_version", MODEL_VERSION)\
             .is_("return_24h", "null")\
             .order("timestamp", desc=False)\
-            .limit(80)\
+            .limit(120)\
             .execute()
-        
+
         rows = result.data or []
         if not rows:
             st.session_state.last_fill_time = now
             return
 
-        coin_ids = list(set(r["coin_id"] for r in rows))
+        coin_ids = list({r["coin_id"] for r in rows})
         try:
             r = requests.get(
                 "https://pro-api.coingecko.com/api/v3/simple/price",
                 headers=HEADERS,
                 params={"ids": ",".join(coin_ids), "vs_currencies": "usd"},
-                timeout=8
+                timeout=8,
             )
             prices = r.json() if r.status_code == 200 else {}
-        except:
+        except Exception:
             prices = {}
 
+        # Maximum lateness we will tolerate when measuring each horizon.
+        # If the app was offline too long, leave that return NULL rather than
+        # silently substituting a 2h return for a 30m return, etc.
+        horizons = [
+            ("return_30m", 30 * 60, 12 * 60),
+            ("return_1h", 60 * 60, 15 * 60),
+            ("return_4h", 4 * 60 * 60, 30 * 60),
+            ("return_24h", 24 * 60 * 60, 90 * 60),
+        ]
+
         for row in rows:
-            ts = datetime.fromisoformat(row["timestamp"].replace("Z", "+00:00"))
-            age = (now - ts).total_seconds()
-            original = row["price"]
-            current = prices.get(row["coin_id"], {}).get("usd")
-            if not current or original <= 0:
+            try:
+                ts = datetime.fromisoformat(row["timestamp"].replace("Z", "+00:00"))
+                age = (now - ts).total_seconds()
+                original = float(row["price"])
+                current = prices.get(row["coin_id"], {}).get("usd")
+                if current is None or original <= 0:
+                    continue
+
+                ret = ((float(current) - original) / original) * 100
+                updates = {}
+
+                for col, target_age, max_late in horizons:
+                    if row.get(col) is None and target_age <= age <= target_age + max_late:
+                        updates[col] = round(ret, 4)
+
+                if updates:
+                    updates["filled_at"] = now.isoformat()
+                    try:
+                        supabase.table("vibe_snapshots").update(updates).eq("id", row["id"]).execute()
+                    except Exception:
+                        pass
+            except Exception:
                 continue
 
-            ret = ((current - original) / original) * 100
-            updates = {}
-
-            # Only fill the *next* missing horizon (shortest first)
-            if age >= 1800 and row.get("return_30m") is None:
-                updates["return_30m"] = round(ret, 4)
-            elif age >= 3600 and row.get("return_1h") is None:
-                updates["return_1h"] = round(ret, 4)
-            elif age >= 14400 and row.get("return_4h") is None:
-                updates["return_4h"] = round(ret, 4)
-            elif age >= 86400 and row.get("return_24h") is None:
-                updates["return_24h"] = round(ret, 4)
-
-            if updates:
-                updates["filled_at"] = now.isoformat()
-                try:
-                    supabase.table("vibe_snapshots").update(updates).eq("id", row["id"]).execute()
-                except:
-                    pass
-
         st.session_state.last_fill_time = now
-    except:
+    except Exception:
         pass
 
 @st.cache_data(ttl=300)
@@ -639,6 +655,7 @@ def get_bucket_stats(min_n=5):
     try:
         result = supabase.table("vibe_snapshots")\
             .select("score, return_30m, return_1h, return_4h, return_24h")\
+            .eq("model_version", MODEL_VERSION)\
             .not_.is_("return_1h", "null").limit(2000).execute()
         rows = result.data or []
         if not rows: return None
@@ -692,7 +709,9 @@ def get_coin_performance(coin_id, min_n=15):
     try:
         result = supabase.table("vibe_snapshots")\
             .select("score, return_1h, return_4h")\
-            .eq("coin_id", coin_id).not_.is_("return_1h", "null").limit(500).execute()
+            .eq("coin_id", coin_id)\
+            .eq("model_version", MODEL_VERSION)\
+            .not_.is_("return_1h", "null").limit(500).execute()
         rows = result.data or []
         if len(rows) < min_n:
             return {"n": len(rows), "ready": False}
