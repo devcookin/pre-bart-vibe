@@ -2239,6 +2239,16 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+
+# Keep the primary action attached to the primary signal card.
+is_watched = cid in st.session_state.watchlist
+if st.button("★ Remove from Watchlist" if is_watched else "☆ Add to Watchlist", key="detail_watch"):
+    if is_watched:
+        st.session_state.watchlist.remove(cid)
+    else:
+        st.session_state.watchlist.append(cid)
+    st.rerun()
+
 st.markdown(colored_progress(score, height=9), unsafe_allow_html=True)
 
 # Compact supporting metrics instead of five equally heavy cards.
@@ -2314,14 +2324,6 @@ if setup:
     """, unsafe_allow_html=True)
 else:
     st.caption("Setup Intelligence will populate as this coin builds persisted Vibe + price history.")
-
-is_watched = cid in st.session_state.watchlist
-if st.button("★ Remove from Watchlist" if is_watched else "☆ Add to Watchlist", key="detail_watch"):
-    if is_watched:
-        st.session_state.watchlist.remove(cid)
-    else:
-        st.session_state.watchlist.append(cid)
-    st.rerun()
 
 # Keep secondary analytics available without competing with the core score.
 with st.expander("Score details", expanded=False):
@@ -2801,14 +2803,13 @@ st.markdown("""
 st.caption("Historical forward returns grouped by the Vibe Score shown at the time of each snapshot.")
 
 def _fmt_median_return(val):
-    """Show extra precision near zero so tiny medians are not disguised as 0.00%."""
+    """Keep the distribution table visually clean at two decimals."""
     if val is None or pd.isna(val):
         return "—"
     val = float(val)
-    if val == 0:
-        return "0.000%"
-    if abs(val) < 0.10:
-        return f"{val:+.3f}%"
+    # Anything that rounds to zero at the displayed precision should simply read 0.00%.
+    if abs(val) < 0.005:
+        return "0.00%"
     return f"{val:+.2f}%"
 
 bucket_stats = get_bucket_stats(min_n=5)
