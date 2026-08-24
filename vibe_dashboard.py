@@ -1756,35 +1756,36 @@ with side_col:
             f'<span style="color:#ef5350;font-weight:700">{m[metric_key]:+.2f}%</span></div>'
             for m in losers
         )
-        return f"""
-        <div class="pb-movers-panel {panel_class}">
-          <div class="pb-mover-section">
-            <div class="pb-mover-head"><span>Gainers</span><span>Move</span></div>
-            {gain_rows}
-          </div>
-          <div class="pb-mover-section">
-            <div class="pb-mover-head"><span>Losers</span><span>Move</span></div>
-            {loss_rows}
-          </div>
-        </div>
-        """
+        return (
+            f'<div class="pb-movers-panel {panel_class}">'
+            '<div class="pb-mover-section">'
+            '<div class="pb-mover-head"><span>Gainers</span><span>Move</span></div>'
+            + gain_rows +
+            '</div>'
+            '<div class="pb-mover-section">'
+            '<div class="pb-mover-head"><span>Losers</span><span>Move</span></div>'
+            + loss_rows +
+            '</div>'
+            '</div>'
+        )
 
     movers_1h = _mover_panel("ch1", "pb-movers-panel-1h")
     movers_24h = _mover_panel("ch24", "pb-movers-panel-24h")
 
-    st.markdown(f"""
-    <div class="pb-side-card pb-movers-card">
-      <div class="pb-side-title">Top Movers</div>
-      <div class="pb-mover-tabs">
-        <input type="radio" name="pb-movers-tf" id="pb-movers-1h" checked>
-        <label for="pb-movers-1h">1h</label>
-        <input type="radio" name="pb-movers-tf" id="pb-movers-24h">
-        <label for="pb-movers-24h">24h</label>
-      </div>
-      {movers_1h}
-      {movers_24h}
-    </div>
-    """, unsafe_allow_html=True)
+    movers_html = (
+        '<div class="pb-side-card pb-movers-card">'
+        '<div class="pb-side-title">Top Movers</div>'
+        '<div class="pb-mover-tabs">'
+        '<input type="radio" name="pb-movers-tf" id="pb-movers-1h" checked>'
+        '<label for="pb-movers-1h">1h</label>'
+        '<input type="radio" name="pb-movers-tf" id="pb-movers-24h">'
+        '<label for="pb-movers-24h">24h</label>'
+        '</div>'
+        + movers_1h
+        + movers_24h
+        + '</div>'
+    )
+    st.markdown(movers_html, unsafe_allow_html=True)
 
 
 st.divider()
