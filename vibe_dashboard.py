@@ -1697,10 +1697,6 @@ if search_query and len(search_query.strip()) >= 2:
 else:
     st.caption("Type at least 2 characters to search")
 
-col_time, _ = st.columns([1, 3])
-with col_time:
-    timeframe = st.selectbox("Timeframe", ["Last 1 Day (30 min)", "Last 7 Days", "Last 30 Days"])
-
 if st.session_state.search_coin:
     single = get_single_coin_market(st.session_state.search_coin)
     if single:
@@ -2145,6 +2141,16 @@ st.divider()
 st.markdown(f"""
 <div class="pb-section-head"><div><div class="pb-section-title">{name} · Chart</div><div class="pb-section-sub">Price action and volume context</div></div></div>
 """, unsafe_allow_html=True)
+
+# Keep the chart control with the chart it actually controls.
+col_time, _ = st.columns([1.15, 2.85])
+with col_time:
+    timeframe = st.selectbox(
+        "Timeframe",
+        ["Last 1 Day (30 min)", "Last 7 Days", "Last 30 Days"],
+        key="detail_chart_timeframe",
+    )
+
 days = "1" if "1 Day" in timeframe else "7" if "7 Days" in timeframe else "30"
 ohlc_data = top_ohlc_map.get(cid) if days == "1" and cid in top_ohlc_map else get_ohlc(cid, days)
 volume_data = get_market_chart(cid, days)
@@ -2157,28 +2163,77 @@ if isinstance(ohlc_data, list) and len(ohlc_data) > 0:
         vol_df["time"] = pd.to_datetime(vol_df["timestamp"], unit="ms")
         df = pd.merge_asof(df.sort_values("time"), vol_df.sort_values("time"), on="time", direction="nearest")
         has_volume = True
-    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=[0.72,0.28])
+
+    # Cleaner terminal-style proportions: price stays primary, volume becomes context.
+    fig = make_subplots(
+        rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.015,
+        row_heights=[0.82, 0.18]
+    )
     fig.add_trace(go.Candlestick(
         x=df["time"], open=df["open"], high=df["high"], low=df["low"], close=df["close"],
-        increasing_line_color="#00c853", decreasing_line_color="#ff5252",
-        increasing_fillcolor="#00c853", decreasing_fillcolor="#ff5252", name="Price"
+        increasing_line_color="#22c55e", decreasing_line_color="#ef5350",
+        increasing_fillcolor="#22c55e", decreasing_fillcolor="#ef5350",
+        whiskerwidth=0.35, name="Price"
     ), row=1, col=1)
-    fig.add_hline(y=high, line_dash="dot", line_color="rgba(0,200,83,0.6)", annotation_text="24h High", row=1, col=1)
-    fig.add_hline(y=low, line_dash="dot", line_color="rgba(255,82,82,0.6)", annotation_text="24h Low", row=1, col=1)
-    if has_volume:
-        colors = ["#00c853" if r["close"] >= r["open"] else "#ff5252" for _, r in df.iterrows()]
-        fig.add_trace(go.Bar(x=df["time"], y=df["volume"], marker_color=colors, opacity=0.65, name="Volume"), row=2, col=1)
-    fig.update_layout(
-        height=480, 
-        template="plotly_dark",
-        margin=dict(l=0,r=0,t=15,b=0),
-        xaxis_rangeslider_visible=False, 
-        showlegend=False, 
-        hovermode="x unified",
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)"
+
+    # High/low guides remain useful, but are intentionally quieter than price.
+    fig.add_hline(
+        y=high, line_dash="dot", line_width=1, line_color="rgba(34,197,94,0.48)",
+        annotation_text="24h High", annotation_position="top right",
+        annotation_font=dict(size=11, color="rgba(210,220,214,0.82)"), row=1, col=1
     )
-    st.plotly_chart(fig, use_container_width=True)
+    fig.add_hline(
+        y=low, line_dash="dot", line_width=1, line_color="rgba(239,83,80,0.48)",
+        annotation_text="24h Low", annotation_position="bottom right",
+        annotation_font=dict(size=11, color="rgba(220,210,210,0.82)"), row=1, col=1
+    )
+
+    if has_volume:
+        colors = [
+            "rgba(34,197,94,0.52)" if r["close"] >= r["open"] else "rgba(239,83,80,0.52)"
+            for _, r in df.iterrows()
+        ]
+        fig.add_trace(
+            go.Bar(x=df["time"], y=df["volume"], marker_color=colors, name="Volume", hoverinfo="skip"),
+            row=2, col=1
+        )
+
+    grid = "rgba(148,163,184,0.10)"
+    axis_font = dict(size=11, color="rgba(203,213,225,0.72)")
+    fig.update_xaxes(
+        showgrid=False, zeroline=False, showline=False,
+        tickfont=axis_font, ticks="", fixedrange=False
+    )
+    fig.update_yaxes(
+        showgrid=True, gridcolor=grid, gridwidth=1, zeroline=False,
+        showline=False, tickfont=axis_font, ticks="", side="right", row=1, col=1
+    )
+    fig.update_yaxes(
+        showgrid=False, zeroline=False, showline=False,
+        tickfont=dict(size=10, color="rgba(148,163,184,0.55)"), ticks="", side="right", row=2, col=1
+    )
+    fig.update_layout(
+        height=500,
+        template="plotly_dark",
+        margin=dict(l=6, r=8, t=8, b=4),
+        xaxis_rangeslider_visible=False,
+        showlegend=False,
+        hovermode="x unified",
+        hoverlabel=dict(bgcolor="#171b22", bordercolor="#303641", font_size=12),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        bargap=0.16,
+        dragmode="pan",
+    )
+    st.plotly_chart(
+        fig,
+        use_container_width=True,
+        config={
+            "displayModeBar": False,
+            "scrollZoom": True,
+            "responsive": True,
+        },
+    )
 else:
     st.info("Chart temporarily unavailable.")
 
