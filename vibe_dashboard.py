@@ -813,45 +813,6 @@ def search_coins(query):
     except:
         return []
 
-@st.cache_data(ttl=60)
-def get_funding_rates():
-    rates = {}
-    try:
-        r = requests.get("https://xoomar.com/api/markets/funding-rates", timeout=10, headers={"User-Agent": "Mozilla/5.0"})
-        if r.status_code == 200:
-            data = r.json().get("data", [])
-            for item in data:
-                base = item.get("baseAsset", "").upper()
-                exchange = item.get("exchange", "").lower()
-                if base in ["BTC", "ETH", "SOL", "BNB", "XRP"] and base not in rates:
-                    if exchange in ["bybit", "binance"]:
-                        rate = float(item.get("fundingRate", 0)) * 100
-                        rates[base] = rate
-    except:
-        pass
-    return rates
-
-@st.cache_data(ttl=60)
-def get_open_interest_delta():
-    results = {}
-    try:
-        r = requests.get("https://xoomar.com/api/markets/funding-rates", timeout=10, headers={"User-Agent": "Mozilla/5.0"})
-        if r.status_code == 200:
-            data = r.json().get("data", [])
-            for item in data:
-                base = item.get("baseAsset", "").upper()
-                exchange = item.get("exchange", "").lower()
-                if base in ["BTC", "ETH", "SOL", "BNB"] and exchange == "bybit":
-                    oi_val = item.get("openInterestValue") or item.get("openInterest")
-                    if oi_val is not None:
-                        results[base] = {"oi_usd": float(oi_val), "change_usd": 0.0, "change_pct": 0.0}
-    except:
-        pass
-    for sym in ["BTC", "ETH", "SOL", "BNB"]:
-        if sym not in results:
-            results[sym] = {"oi_usd": 0.0, "change_usd": 0.0, "change_pct": 0.0}
-    return results
-
 def analyze_candles(ohlc_data):
     if not isinstance(ohlc_data, list) or len(ohlc_data) < 4: return 0.0
     df = pd.DataFrame(ohlc_data[-8:], columns=["timestamp","open","high","low","close"])
@@ -1132,17 +1093,17 @@ save_vibe_snapshots_batch(pending_snapshot_rows)
 vibe_data_sorted = sorted(vibe_data, key=lambda x: x["score"], reverse=True)
 
 avg_vibe = sum(v["score"] for v in vibe_data) / len(vibe_data) if vibe_data else 50
-funding = get_funding_rates()
-avg_funding = sum(funding.values()) / len(funding) if funding else 0
 
-if avg_vibe >= 65 and avg_funding >= 0.01:
+# Market Bias now reflects the aggregate Vibe Score only.
+# Funding rates/Open Interest were removed to reduce unnecessary external data calls.
+if avg_vibe >= 65:
     bias = "🟢 Strongly Bullish"
-elif avg_vibe >= 58 or avg_funding > 0.005:
+elif avg_vibe >= 58:
     bias = "🟢 Mildly Bullish"
-elif avg_vibe <= 42 and avg_funding < -0.005:
-    bias = "🔴 Mildly Bearish"
 elif avg_vibe <= 38:
     bias = "🔴 Strongly Bearish"
+elif avg_vibe <= 42:
+    bias = "🔴 Mildly Bearish"
 else:
     bias = "🟡 Neutral"
 
@@ -1320,7 +1281,7 @@ with side_col:
     with st.container(border=True):
         st.markdown("**📊 Market Bias**")
         st.markdown(f"<div style='font-size:1.15rem;font-weight:600;margin:6px 0;'>{bias}</div>", unsafe_allow_html=True)
-        st.caption(f"Avg Vibe: {avg_vibe:.1f} • Avg Funding: {avg_funding:+.4f}%")
+        st.caption(f"Avg Vibe: {avg_vibe:.1f}")
     
     with st.container(border=True):
         st.markdown("**🏆 Strongest / Weakest**")
@@ -1356,41 +1317,6 @@ with side_col:
                 unsafe_allow_html=True
             )
     
-    with st.container(border=True):
-        st.markdown("**💰 Funding Rates**")
-        st.caption("Xoomar • Bybit/Binance")
-        if funding:
-            for sym in ["BTC", "ETH", "SOL", "BNB", "XRP"]:
-                if sym in funding:
-                    rate = funding[sym]
-                    color = "#00c853" if rate >= 0 else "#ff5252"
-                    st.markdown(
-                        f"<div style='display:flex;justify-content:space-between;font-size:13px;padding:2px 0;'>"
-                        f"<span>{sym}</span>"
-                        f"<span style='color:{color};font-weight:600'>{rate:+.4f}%</span></div>",
-                        unsafe_allow_html=True
-                    )
-        else:
-            st.caption("Loading…")
-    
-    with st.container(border=True):
-        st.markdown("**📊 Open Interest**")
-        st.caption("Xoomar • current value")
-        oi_data = get_open_interest_delta()
-        if oi_data:
-            for sym in ["BTC", "ETH", "SOL", "BNB"]:
-                if sym in oi_data:
-                    d = oi_data[sym]
-                    oi_usd = d["oi_usd"]
-                    oi_str = f"${oi_usd/1e9:.2f}B" if oi_usd >= 1e9 else f"${oi_usd/1e6:.0f}M" if oi_usd >= 1e6 else f"${oi_usd/1e3:.0f}K"
-                    st.markdown(
-                        f"<div style='display:flex;justify-content:space-between;font-size:13px;padding:2px 0;'>"
-                        f"<span>{sym}</span>"
-                        f"<span style='font-weight:600'>{oi_str}</span></div>",
-                        unsafe_allow_html=True
-                    )
-        else:
-            st.caption("Loading…")
 
 st.divider()
 
