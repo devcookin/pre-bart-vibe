@@ -1661,6 +1661,9 @@ components.html(f"""
         color: #f7f8fa;
         font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }}
+    .share-shell {{
+        width: min(100%, 720px);
+    }}
     .share-card {{
         position: relative;
         overflow: hidden;
@@ -1783,6 +1786,9 @@ components.html(f"""
     }}
     button:hover {{ background: #202b35; border-color: #42515e; transform: translateY(-1px); }}
     button:active {{ transform: translateY(0); }}
+    @media (max-width: 760px) {{
+        .share-shell {{ width: 100%; }}
+    }}
     @media (max-width: 520px) {{
         .share-card {{ padding: 15px 15px 13px; border-radius: 14px; }}
         .coin {{ font-size: 19px; }}
@@ -1795,6 +1801,7 @@ components.html(f"""
 </style>
 </head>
 <body>
+<div class="share-shell">
 <div class="share-card">
     <div class="top">
         <div>
@@ -1824,6 +1831,7 @@ components.html(f"""
         <div class="domain">prebartvibes.xyz</div>
         <button id="copyBtn" type="button">Copy</button>
     </div>
+</div>
 </div>
 
 <script>
