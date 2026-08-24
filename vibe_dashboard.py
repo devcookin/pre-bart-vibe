@@ -293,7 +293,66 @@ st.markdown("""
         opacity: 1 !important;
         color-scheme: dark !important;
     }
-    
+
+    /* Windows/Chrome hardening: Streamlit can inherit a light foreground palette
+       for native widget/card labels even while the app surface is dark. Keep
+       secondary labels readable without making them compete with primary values. */
+    [data-testid="stWidgetLabel"],
+    [data-testid="stWidgetLabel"] p,
+    [data-testid="stWidgetLabel"] span,
+    .stTextInput label,
+    .stSelectbox label {
+        color: #c3c9d2 !important;
+        -webkit-text-fill-color: #c3c9d2 !important;
+        opacity: 1 !important;
+    }
+
+    div[data-testid="stMetricLabel"],
+    div[data-testid="stMetricLabel"] p,
+    div[data-testid="stMetricLabel"] span {
+        color: #b8c0cb !important;
+        -webkit-text-fill-color: #b8c0cb !important;
+        opacity: 1 !important;
+    }
+
+    div[data-testid="stMetricValue"],
+    div[data-testid="stMetricValue"] * {
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+        opacity: 1 !important;
+    }
+
+    [data-testid="stCaptionContainer"],
+    [data-testid="stCaptionContainer"] p,
+    .stCaption,
+    .stCaption p {
+        color: #a7aeb8 !important;
+        -webkit-text-fill-color: #a7aeb8 !important;
+        opacity: 1 !important;
+    }
+
+    /* Force Glide Data Grid (st.dataframe) onto the same dark palette on desktop.
+       The table is canvas-based, so these theme variables are more reliable than
+       styling th/td selectors alone. */
+    [data-testid="stDataFrame"],
+    [data-testid="stDataFrame"] > div {
+        background-color: #0e1117 !important;
+        color: #fafafa !important;
+        color-scheme: dark !important;
+        --gdg-bg-cell: #0e1117;
+        --gdg-bg-cell-medium: #141922;
+        --gdg-bg-header: #1a1d24;
+        --gdg-bg-header-has-focus: #1f242d;
+        --gdg-bg-header-hovered: #232933;
+        --gdg-text-dark: #fafafa;
+        --gdg-text-medium: #c2c8d0;
+        --gdg-text-light: #969eaa;
+        --gdg-border-color: #2a2d35;
+        --gdg-horizontal-border-color: #2a2d35;
+        --gdg-accent-color: #14b8a6;
+        --gdg-accent-light: rgba(20,184,166,.15);
+    }
+
     @media (max-width: 768px) {
         html,
         body,
