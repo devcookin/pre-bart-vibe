@@ -235,6 +235,64 @@ st.markdown("""
     /* Keep expanders and dataframes quiet so the hero signal remains primary. */
     [data-testid="stExpander"] { border-color:#292f37 !important;border-radius:12px !important;overflow:hidden; }
     [data-testid="stDataFrame"] { border-radius:12px;overflow:hidden; }
+
+    /* Desktop compatibility: BaseWeb select dropdowns/popovers are rendered
+       outside the selectbox container, so force them to the app's dark palette
+       on all viewport sizes. This fixes Windows/Chrome light-theme fallbacks. */
+    [data-baseweb="popover"],
+    [data-baseweb="menu"],
+    [role="listbox"],
+    [data-baseweb="popover"] > div,
+    [data-baseweb="menu"] > div {
+        background: #1a1d24 !important;
+        color: #fafafa !important;
+        border-color: #3a3b45 !important;
+        color-scheme: dark !important;
+    }
+
+    [role="option"],
+    [role="option"] *,
+    [data-baseweb="menu"] li,
+    [data-baseweb="menu"] li * {
+        color: #fafafa !important;
+        -webkit-text-fill-color: #fafafa !important;
+        background-color: transparent !important;
+        opacity: 1 !important;
+    }
+
+    [role="option"]:hover,
+    [data-baseweb="menu"] li:hover {
+        background: #222731 !important;
+    }
+
+    [role="option"][aria-selected="true"] {
+        background: #262a33 !important;
+        color: #ffffff !important;
+    }
+
+    .stSelectbox [data-baseweb="select"],
+    .stSelectbox [data-baseweb="select"] > div,
+    .stSelectbox [data-baseweb="select"] span,
+    .stSelectbox [data-baseweb="select"] svg,
+    [data-baseweb="select"] [data-testid="stMarkdownContainer"],
+    [data-baseweb="select"] div,
+    [data-baseweb="select"] span {
+        color: #fafafa !important;
+        -webkit-text-fill-color: #fafafa !important;
+        fill: #fafafa !important;
+        opacity: 1 !important;
+        color-scheme: dark !important;
+    }
+
+    .stTextInput input,
+    .stTextInput input::placeholder,
+    [data-baseweb="input"] input {
+        color: #fafafa !important;
+        -webkit-text-fill-color: #fafafa !important;
+        caret-color: #fafafa !important;
+        opacity: 1 !important;
+        color-scheme: dark !important;
+    }
     
     @media (max-width: 768px) {
         html,
