@@ -28,7 +28,7 @@ if SUPABASE_URL and SUPABASE_KEY:
         pass
 
 MODEL_VERSION = "v2.10-balanced-predictive"
-APP_VERSION = "v10.9-balanced-predictive"
+APP_VERSION = "v10.10-reset-history-hover-fix"
 MIN_SNAPSHOT_INTERVAL = 300
 FILL_INTERVAL_SECONDS = 60
 
@@ -2355,8 +2355,16 @@ if len(vp_rows) >= 3:
         <div class="pb-section-head"><div><div class="pb-section-title">Vibe + Price History</div><div class="pb-section-sub">See when Vibe leads, confirms, or diverges from price</div></div></div>
         """, unsafe_allow_html=True)
         rel_fig = make_subplots(specs=[[{"secondary_y": True}]])
-        rel_fig.add_trace(go.Scatter(x=vp["time"], y=vp["price"], name="Price", mode="lines", line=dict(color="#cbd5e1", width=2.0)), secondary_y=False)
-        rel_fig.add_trace(go.Scatter(x=vp["time"], y=vp["score"], name="Vibe", mode="lines", line=dict(color="#14b8a6", width=2.6)), secondary_y=True)
+        rel_fig.add_trace(go.Scatter(
+            x=vp["time"], y=vp["price"], name="Price", mode="lines",
+            line=dict(color="#cbd5e1", width=2.0),
+            hovertemplate="Price $%{y:,.4f}<extra></extra>"
+        ), secondary_y=False)
+        rel_fig.add_trace(go.Scatter(
+            x=vp["time"], y=vp["score"], name="Vibe", mode="lines",
+            line=dict(color="#14b8a6", width=2.6),
+            hovertemplate="Vibe %{y:.0f}/100<extra></extra>"
+        ), secondary_y=True)
 
         # Mark recent positive lead candidates from the richer setup history.
         if setup and isinstance(setup.get("frame"), pd.DataFrame):
