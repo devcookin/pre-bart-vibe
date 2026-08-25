@@ -27,8 +27,8 @@ if SUPABASE_URL and SUPABASE_KEY:
     except:
         pass
 
-MODEL_VERSION = "v2.9-recovery-balanced"
-APP_VERSION = "v10.6-simplified-detail"
+MODEL_VERSION = "v2.10-balanced-predictive"
+APP_VERSION = "v10.9-balanced-predictive"
 MIN_SNAPSHOT_INTERVAL = 300
 FILL_INTERVAL_SECONDS = 60
 
@@ -1498,9 +1498,9 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
     # Non-linear range positioning: the middle 40-60% is mostly neutral, while
     # genuine upper/lower-range positioning matters progressively more.
     if range_pos >= 100:
-        # A genuine break above the measured range should keep earning strength
-        # instead of being treated almost the same as simply sitting near the high.
-        range_effect = 5.0 + min(range_pos - 100, 40) * 0.16
+        # Keep rewarding genuine breaks above the measured range, but ramp the
+        # contribution gradually so a single threshold crossing cannot make Vibe jump.
+        range_effect = 5.0 + min(range_pos - 100, 30) * 0.12
     elif range_pos >= 80:
         range_effect = 3.0 + (range_pos - 80) * 0.10       # +3.0 to +5.0
     elif range_pos >= 60:
@@ -1549,21 +1549,24 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
         if fg_value < 25: base -= 1.25
         elif fg_value > 75: base += 1.0
 
-    # Confirmed breakouts deserve meaningful credit when positioning, momentum,
-    # and candle structure agree. This keeps Vibe focused on market strength while
-    # Setup Intelligence can still show whether the move is early, cooling, or extended.
-    if range_pos >= 110 and change_1h >= 0.7 and candle_quality > 0.15:
-        base += 5.5
-        reasons.append("Strong confirmed breakout")
-    elif range_pos >= 95 and change_1h >= 0.5 and candle_quality > 0.15:
-        base += 4.0
-        reasons.append("Clear breakout in progress")
-    elif range_pos >= 88 and change_1h >= 0.9 and candle_quality > 0.0:
-        base += 2.5
-        reasons.append("Breaking higher with momentum")
-    elif range_pos >= 80 and change_1h >= 0.4 and candle_quality > 0.25:
-        base += 1.25
-        reasons.append("Pushing into breakout territory")
+    # Predictive breakout credit is continuous rather than threshold-driven.
+    # This preserves early-move sensitivity while avoiding abrupt 5-10 point jumps
+    # when price barely crosses a hard range-position level.
+    if range_pos >= 80 and change_1h >= 0.35 and candle_quality > 0.0:
+        pos_factor = min(max((range_pos - 80) / 30.0, 0.0), 1.0)
+        mom_factor = min(max((change_1h - 0.35) / 1.15, 0.0), 1.0)
+        structure_factor = min(max(candle_quality / 0.75, 0.0), 1.0)
+        breakout_bonus = 1.0 + (1.5 * pos_factor) + (1.5 * mom_factor) + (0.75 * structure_factor)
+        base += breakout_bonus
+
+        if breakout_bonus >= 4.0:
+            reasons.append("Strong confirmed breakout")
+        elif breakout_bonus >= 2.5:
+            reasons.append("Clear breakout in progress")
+        elif breakout_bonus >= 1.6:
+            reasons.append("Breaking higher with momentum")
+        else:
+            reasons.append("Pushing into breakout territory")
 
     # Small rejection penalty only when price is high in the range AND structure
     # is clearly deteriorating. This avoids making the model overly bearish.
