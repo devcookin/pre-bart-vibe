@@ -28,7 +28,7 @@ if SUPABASE_URL and SUPABASE_KEY:
         pass
 
 MODEL_VERSION = "v2.11-recency-weighted-recovery"
-APP_VERSION = "v10.10-recency-weighted-recovery"
+APP_VERSION = "v10.10.1-cache-reset-fix"
 MIN_SNAPSHOT_INTERVAL = 300
 FILL_INTERVAL_SECONDS = 60
 
@@ -934,7 +934,7 @@ def fill_pending_returns():
         pass
 
 @st.cache_data(ttl=300)
-def get_bucket_stats(min_n=5):
+def get_bucket_stats(min_n=5, model_version=MODEL_VERSION):
     """Cumulative bucket stats for the current model version.
 
     Uses paginated Supabase reads so historical observations never fall out of a
@@ -967,7 +967,7 @@ def get_bucket_stats(min_n=5):
             q = (
                 supabase.table("vibe_snapshots")
                 .select(columns)
-                .eq("model_version", MODEL_VERSION)
+                .eq("model_version", model_version)
                 .order("timestamp", desc=False)
                 .range(offset, offset + page_size - 1)
             )
@@ -1077,13 +1077,13 @@ def get_bucket_stats(min_n=5):
         return None
 
 @st.cache_data(ttl=180)
-def get_coin_performance(coin_id, min_n=15):
+def get_coin_performance(coin_id, min_n=15, model_version=MODEL_VERSION):
     if not supabase: return None
     try:
         result = supabase.table("vibe_snapshots")\
             .select("score, return_1h, return_4h")\
             .eq("coin_id", coin_id)\
-            .eq("model_version", MODEL_VERSION)\
+            .eq("model_version", model_version)\
             .not_.is_("return_1h", "null").limit(500).execute()
         rows = result.data or []
         if len(rows) < min_n:
@@ -1100,7 +1100,7 @@ def get_coin_performance(coin_id, min_n=15):
         return None
 
 @st.cache_data(ttl=180)
-def get_vibe_price_history(coin_id, limit=150):
+def get_vibe_price_history(coin_id, limit=150, model_version=MODEL_VERSION):
     """Recent paired Vibe/price snapshots for a simple relationship chart."""
     if not supabase or not coin_id:
         return []
@@ -1108,7 +1108,7 @@ def get_vibe_price_history(coin_id, limit=150):
         result = supabase.table("vibe_snapshots")\
             .select("timestamp,price,score")\
             .eq("coin_id", coin_id)\
-            .eq("model_version", MODEL_VERSION)\
+            .eq("model_version", model_version)\
             .order("timestamp", desc=True)\
             .limit(limit)\
             .execute()
@@ -1118,7 +1118,7 @@ def get_vibe_price_history(coin_id, limit=150):
         return []
 
 @st.cache_data(ttl=300)
-def get_setup_history(coin_id, limit=1200):
+def get_setup_history(coin_id, limit=1200, model_version=MODEL_VERSION):
     """Load a bounded recent snapshot history for setup/transition analytics.
 
     This is intentionally per-coin and cached so v10 can study Vibe transitions
@@ -1130,7 +1130,7 @@ def get_setup_history(coin_id, limit=1200):
         result = supabase.table("vibe_snapshots")\
             .select("timestamp,price,score,prev_score,return_30m,return_1h,return_4h")\
             .eq("coin_id", coin_id)\
-            .eq("model_version", MODEL_VERSION)\
+            .eq("model_version", model_version)\
             .order("timestamp", desc=True)\
             .limit(limit)\
             .execute()
@@ -2296,7 +2296,7 @@ with _watch_col:
         st.rerun()
 
 # v10: separate "current strength" from "entry/setup context".
-setup_rows = get_setup_history(cid, limit=1200)
+setup_rows = get_setup_history(cid, limit=1200, model_version=MODEL_VERSION)
 setup = build_setup_analytics(setup_rows, score, price) if setup_rows else None
 
 def _fmt_delta(val, suffix=""):
@@ -2339,7 +2339,7 @@ with st.expander("Score details", expanded=False):
     d1.metric("Candle Quality", f"{cq:+.1f}")
     d2.metric("24h High / Low", f"${high:,.4f}" if high < 10 else f"${high:,.2f}", f"Low ${low:,.4f}" if low < 10 else f"Low ${low:,.2f}")
 
-    perf = get_coin_performance(cid)
+    perf = get_coin_performance(cid, model_version=MODEL_VERSION)
     if perf and perf.get("ready"):
         strength_label, _ = sample_strength(perf["n"])
         st.caption(f"Historical 1h win rate: **{perf['win_1h']}%** · Avg 1h return: **{perf['avg_1h']:+.2f}%** · n = {perf['n']} · Sample: **{strength_label}**")
@@ -2354,7 +2354,7 @@ with st.expander("🤔 Why this score?", expanded=False):
         st.caption("No additional score drivers available for this reading.")
 
 # Vibe + price relationship — v10 adds lead-candidate markers without changing the score.
-vp_rows = get_vibe_price_history(cid, limit=150)
+vp_rows = get_vibe_price_history(cid, limit=150, model_version=MODEL_VERSION)
 if len(vp_rows) >= 3:
     vp = pd.DataFrame(vp_rows)
     vp["time"] = pd.to_datetime(vp["timestamp"], utc=True, errors="coerce")
@@ -2776,7 +2776,7 @@ def _fmt_median_return(val):
         return "0.00%"
     return f"{val:+.2f}%"
 
-bucket_stats = get_bucket_stats(min_n=5)
+bucket_stats = get_bucket_stats(min_n=5, model_version=MODEL_VERSION)
 if bucket_stats:
     table_data = []
     for s in bucket_stats:
