@@ -28,7 +28,7 @@ if SUPABASE_URL and SUPABASE_KEY:
         pass
 
 MODEL_VERSION = "v2.10-balanced-predictive"
-APP_VERSION = "v10.10-reset-history-hover-fix"
+APP_VERSION = "v10.9.1-hover-axis-patch"
 MIN_SNAPSHOT_INTERVAL = 300
 FILL_INTERVAL_SECONDS = 60
 
@@ -2380,9 +2380,33 @@ if len(vp_rows) >= 3:
         rel_fig.add_hrect(y0=65, y1=100, fillcolor="rgba(20,184,166,.032)", line_width=0, secondary_y=True)
         rel_fig.add_hrect(y0=0, y1=45, fillcolor="rgba(239,83,80,.026)", line_width=0, secondary_y=True)
         rel_fig.update_yaxes(title_text="Price", showgrid=True, gridcolor="rgba(148,163,184,.08)", tickfont=dict(color="#9aa3af", size=10), secondary_y=False)
-        rel_fig.update_yaxes(title_text="Vibe", range=[0,100], showgrid=False, tickfont=dict(color="#14b8a6", size=10), secondary_y=True)
+
+        # Keep the Vibe axis focused on the range actually visible in this chart so
+        # small but meaningful changes (for example 59 -> 63) are easy to see.
+        # Preserve a minimum visual span so a nearly-flat score does not look exaggerated.
+        vibe_min = float(vp["score"].min())
+        vibe_max = float(vp["score"].max())
+        vibe_mid = (vibe_min + vibe_max) / 2.0
+        vibe_span = max(vibe_max - vibe_min, 10.0)
+        vibe_pad = max(2.0, vibe_span * 0.20)
+        vibe_low = max(0.0, vibe_mid - vibe_span / 2.0 - vibe_pad)
+        vibe_high = min(100.0, vibe_mid + vibe_span / 2.0 + vibe_pad)
+        if vibe_high - vibe_low < 12.0:
+            extra = (12.0 - (vibe_high - vibe_low)) / 2.0
+            vibe_low = max(0.0, vibe_low - extra)
+            vibe_high = min(100.0, vibe_high + extra)
+
+        rel_fig.update_yaxes(
+            title_text="Vibe", range=[vibe_low, vibe_high], showgrid=False,
+            tickfont=dict(color="#14b8a6", size=10), dtick=5, secondary_y=True
+        )
         rel_fig.update_xaxes(showgrid=False, tickfont=dict(color="#8b93a1", size=10))
-        rel_fig.update_layout(height=300, template="plotly_dark", margin=dict(l=8,r=8,t=10,b=8), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", hovermode="x unified", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(size=10)))
+        rel_fig.update_layout(
+            height=300, template="plotly_dark", margin=dict(l=8,r=8,t=10,b=8),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            hovermode="x unified", hoverdistance=-1, spikedistance=-1,
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(size=10))
+        )
         st.plotly_chart(rel_fig, use_container_width=True, config={"displayModeBar": False, "responsive": True})
         st.caption("Green diamonds flag moments when Vibe strengthens before price catches up — potential early-move signals.")
 
