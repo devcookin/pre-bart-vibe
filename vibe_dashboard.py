@@ -28,7 +28,7 @@ if SUPABASE_URL and SUPABASE_KEY:
         pass
 
 MODEL_VERSION = "v2.9-recovery-balanced"
-APP_VERSION = "v10.0-setup-intelligence"
+APP_VERSION = "v10.6-simplified-detail"
 MIN_SNAPSHOT_INTERVAL = 300
 FILL_INTERVAL_SECONDS = 60
 
@@ -2302,29 +2302,6 @@ if setup:
     </div>
     """, unsafe_allow_html=True)
 
-    a1 = setup["analog_1h"]
-    conf_label, conf_color = sample_strength(a1["n"])
-    avg1 = "—" if a1["avg"] is None else f"{a1['avg']:+.2f}%"
-    med1 = "—" if a1["median"] is None else f"{a1['median']:+.2f}%"
-    win1 = "—" if a1["win"] is None else f"{a1['win']:.1f}%"
-    awin = "—" if a1["avg_win"] is None else f"{a1['avg_win']:+.2f}%"
-    aloss = "—" if a1["avg_loss"] is None else f"{a1['avg_loss']:+.2f}%"
-    st.markdown(f"""
-    <div class="pb-setup-shell">
-      <div class="pb-setup-top">
-        <div><div class="pb-setup-title">Setup Read</div><div class="pb-setup-state" style="color:{setup['setup_color']}">{setup['setup_state']}</div></div>
-        <span class="pb-setup-pill" style="color:{conf_color};border-color:{conf_color}66;background:{conf_color}14">{conf_label} sample · n={a1['n']}</span>
-      </div>
-      <div class="pb-analog-grid">
-        <div class="pb-analog-stat"><div class="pb-analog-label">Avg next 1h</div><div class="pb-analog-value">{avg1}</div></div>
-        <div class="pb-analog-stat"><div class="pb-analog-label">Median 1h</div><div class="pb-analog-value">{med1}</div></div>
-        <div class="pb-analog-stat"><div class="pb-analog-label">Win rate</div><div class="pb-analog-value">{win1}</div></div>
-        <div class="pb-analog-stat"><div class="pb-analog-label">Avg winner</div><div class="pb-analog-value" style="color:#22c55e">{awin}</div></div>
-        <div class="pb-analog-stat"><div class="pb-analog-label">Avg loser</div><div class="pb-analog-value" style="color:#ef5350">{aloss}</div></div>
-      </div>
-      <div class="pb-lead-note"><span class="pb-lead-dot" style="background:{setup['setup_color']}"></span>Comparable setups use {setup['match_basis']}. This is descriptive evidence, not a forecast.</div>
-    </div>
-    """, unsafe_allow_html=True)
 else:
     st.caption("Setup Intelligence will populate as this coin builds persisted Vibe + price history.")
 
@@ -2347,17 +2324,6 @@ with st.expander("🤔 Why this score?", expanded=False):
             st.write(f"• {r}")
     else:
         st.caption("No additional score drivers available for this reading.")
-
-st.markdown("""
-<div class="pb-section-head"><div><div class="pb-section-title">Vibe History</div><div class="pb-section-sub">How the signal has moved recently</div></div></div>
-""", unsafe_allow_html=True)
-if history and len(history) >= 2:
-    fig = make_sparkline(history, height=190)
-    if fig:
-        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-    st.caption(f"Showing last {len(history)} readings · 0–39 Weak · 40–59 Neutral · 60–79 Constructive · 80–100 Strong")
-else:
-    st.info("History will start building after a few more refreshes...")
 
 # Vibe + price relationship — v10 adds lead-candidate markers without changing the score.
 vp_rows = get_vibe_price_history(cid, limit=150)
