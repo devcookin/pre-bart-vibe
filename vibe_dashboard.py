@@ -1463,7 +1463,7 @@ def analyze_candles(ohlc_data):
 
     return max(min(quality, 1.8), -1.5)
 
-def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change=None, candle_quality=0):
+def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change=None, candle_quality=0, coin_id=None):
     """Balanced Vibe calibration.
 
     v2.9 keeps the restrained breakout logic while making negative candle structure
@@ -1497,7 +1497,11 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
 
     # Non-linear range positioning: the middle 40-60% is mostly neutral, while
     # genuine upper/lower-range positioning matters progressively more.
-    if range_pos >= 80:
+    if range_pos >= 100:
+        # A genuine break above the measured range should keep earning strength
+        # instead of being treated almost the same as simply sitting near the high.
+        range_effect = 5.0 + min(range_pos - 100, 40) * 0.16
+    elif range_pos >= 80:
         range_effect = 3.0 + (range_pos - 80) * 0.10       # +3.0 to +5.0
     elif range_pos >= 60:
         range_effect = 0.6 + (range_pos - 60) * 0.12      # +0.6 to +3.0
@@ -1526,8 +1530,14 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
     # 24h performance remains useful context without overpowering current setup.
     base += change_24h * 0.38
 
-    # Relative strength remains meaningful for alts, just slightly less dominant.
-    if btc_change is not None:
+    # Relative strength remains meaningful for alts. BTC cannot outperform itself,
+    # so give Bitcoin a small absolute-momentum contribution instead of forcing this
+    # component to zero during broad-market breakouts.
+    if coin_id == "bitcoin":
+        btc_abs_effect = max(min(change_24h * 0.25, 2.5), -2.0)
+        base += btc_abs_effect
+        if change_24h > 4.0: reasons.append("Strong BTC market momentum")
+    elif btc_change is not None:
         vs_btc = change_24h - btc_change
         base += vs_btc * 0.62
         if vs_btc > 3.5: reasons.append("Clearly outperforming BTC")
@@ -1539,16 +1549,20 @@ def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change
         if fg_value < 25: base -= 1.25
         elif fg_value > 75: base += 1.0
 
-    # Breakout bonuses are intentionally smaller. High scores should be earned by
-    # structure + momentum + positioning together rather than by one impulse candle.
-    if range_pos >= 95 and change_1h >= 0.5 and candle_quality > 0.15:
-        base += 3.0
+    # Confirmed breakouts deserve meaningful credit when positioning, momentum,
+    # and candle structure agree. This keeps Vibe focused on market strength while
+    # Setup Intelligence can still show whether the move is early, cooling, or extended.
+    if range_pos >= 110 and change_1h >= 0.7 and candle_quality > 0.15:
+        base += 5.5
+        reasons.append("Strong confirmed breakout")
+    elif range_pos >= 95 and change_1h >= 0.5 and candle_quality > 0.15:
+        base += 4.0
         reasons.append("Clear breakout in progress")
     elif range_pos >= 88 and change_1h >= 0.9 and candle_quality > 0.0:
-        base += 2.0
+        base += 2.5
         reasons.append("Breaking higher with momentum")
     elif range_pos >= 80 and change_1h >= 0.4 and candle_quality > 0.25:
-        base += 1.0
+        base += 1.25
         reasons.append("Pushing into breakout territory")
 
     # Small rejection penalty only when price is high in the range AND structure
@@ -1680,7 +1694,7 @@ def fetch_single_coin_vibe(cid, btc_change, fg_value):
         ch24 = c.get("price_change_percentage_24h") or 0
         ohlc = top_ohlc_map.get(cid) if cid in top_ohlc_map else get_ohlc(cid, "1")
         cq = analyze_candles(ohlc)
-        score, meme, range_pos, reasons = calc_vibe(price, high, low, ch1, ch24, fg_value, btc_change, cq)
+        score, meme, range_pos, reasons = calc_vibe(price, high, low, ch1, ch24, fg_value, btc_change, cq, cid)
         st.session_state.score_history = update_history(cid, score, st.session_state.score_history)
         return {
             "name": c["name"], "cid": cid, "tick": c["symbol"].upper(),
@@ -1773,7 +1787,7 @@ for name, cid, tick in COIN_ORDER:
     image_url = c.get("image", "")
     ohlc = top_ohlc_map.get(cid) or get_ohlc(cid, "1")
     cq = analyze_candles(ohlc)
-    score, meme, range_pos, reasons = calc_vibe(price, high, low, ch1, ch24, fg_value, btc_change, cq)
+    score, meme, range_pos, reasons = calc_vibe(price, high, low, ch1, ch24, fg_value, btc_change, cq, cid)
     st.session_state.score_history = update_history(cid, score, st.session_state.score_history)
     hist = st.session_state.score_history.get(cid, [])
     prev_score = hist[-2][1] if len(hist) >= 2 else None
@@ -2091,7 +2105,7 @@ if st.session_state.search_coin:
         ch24 = c.get("price_change_percentage_24h") or 0
         ohlc = top_ohlc_map.get(cid) if cid in top_ohlc_map else get_ohlc(cid, "1")
         cq = analyze_candles(ohlc)
-        score, meme, range_pos, reasons = calc_vibe(price, high, low, ch1, ch24, fg_value, btc_change, cq)
+        score, meme, range_pos, reasons = calc_vibe(price, high, low, ch1, ch24, fg_value, btc_change, cq, cid)
         volume, market_cap = c["total_volume"], c["market_cap"]
         image_url = c.get("image", "")
         st.session_state.score_history = ensure_coin_history_loaded(cid, st.session_state.score_history)
@@ -2335,7 +2349,7 @@ if len(vp_rows) >= 3:
     vp = vp.dropna(subset=["time", "price", "score"]).sort_values("time")
     if len(vp) >= 3:
         st.markdown("""
-        <div class="pb-section-head"><div><div class="pb-section-title">Vibe + Price</div><div class="pb-section-sub">Visualize whether Vibe is confirming price or moving ahead of it</div></div></div>
+        <div class="pb-section-head"><div><div class="pb-section-title">Vibe + Price History</div><div class="pb-section-sub">See when Vibe leads, confirms, or diverges from price</div></div></div>
         """, unsafe_allow_html=True)
         rel_fig = make_subplots(specs=[[{"secondary_y": True}]])
         rel_fig.add_trace(go.Scatter(x=vp["time"], y=vp["price"], name="Price", mode="lines", line=dict(color="#cbd5e1", width=2.0)), secondary_y=False)
@@ -2359,7 +2373,7 @@ if len(vp_rows) >= 3:
         rel_fig.update_xaxes(showgrid=False, tickfont=dict(color="#8b93a1", size=10))
         rel_fig.update_layout(height=300, template="plotly_dark", margin=dict(l=8,r=8,t=10,b=8), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", hovermode="x unified", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(size=10)))
         st.plotly_chart(rel_fig, use_container_width=True, config={"displayModeBar": False, "responsive": True})
-        st.caption("Green diamonds mark potential Vibe-lead moments (Vibe +5 or more over ~30m while price is still flat/lagging). They are research markers, not trade signals.")
+        st.caption("Green diamonds flag moments when Vibe strengthens before price catches up — potential early-move signals.")
 
 
 # ========== SHARE SECTION ==========
