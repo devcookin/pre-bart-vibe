@@ -27,8 +27,8 @@ if SUPABASE_URL and SUPABASE_KEY:
     except:
         pass
 
-MODEL_VERSION = "v2.10-balanced-predictive"
-APP_VERSION = "v10.9.1-hover-axis-patch"
+MODEL_VERSION = "v2.11-recency-weighted-recovery"
+APP_VERSION = "v10.10-recency-weighted-recovery"
 MIN_SNAPSHOT_INTERVAL = 300
 FILL_INTERVAL_SECONDS = 60
 
@@ -1428,17 +1428,28 @@ def analyze_candles(ohlc_data):
     if not isinstance(ohlc_data, list) or len(ohlc_data) < 4: return 0.0
     df = pd.DataFrame(ohlc_data[-8:], columns=["timestamp","open","high","low","close"])
     quality = 0.0
-    for _, row in df.iterrows():
+
+    # Recency weighting: the newest candles should describe the current structure
+    # more than stale candles from earlier in the 1-day OHLC window. This preserves
+    # fast recovery detection without adding smoothing or changing the Vibe formula.
+    full_weights = [0.45, 0.55, 0.65, 0.72, 0.80, 0.88, 0.95, 1.00]
+    weights = full_weights[-len(df):]
+
+    for (_, row), weight in zip(df.iterrows(), weights):
         body = abs(row["close"] - row["open"])
         upper_wick = row["high"] - max(row["open"], row["close"])
         lower_wick = min(row["open"], row["close"]) - row["low"]
         full_range = row["high"] - row["low"]
         if full_range == 0: continue
         close_pos = (row["close"] - row["low"]) / full_range
-        if close_pos > 0.70 and row["close"] > row["open"]: quality += 0.35
-        elif close_pos < 0.30: quality -= 0.25
-        if upper_wick > body * 1.5 and upper_wick / full_range > 0.40: quality -= 0.40
-        if lower_wick > body * 1.2 and lower_wick / full_range > 0.30: quality += 0.25
+
+        candle_effect = 0.0
+        if close_pos > 0.70 and row["close"] > row["open"]: candle_effect += 0.35
+        elif close_pos < 0.30: candle_effect -= 0.25
+        if upper_wick > body * 1.5 and upper_wick / full_range > 0.40: candle_effect -= 0.40
+        if lower_wick > body * 1.2 and lower_wick / full_range > 0.30: candle_effect += 0.25
+        quality += candle_effect * weight
+
     lows, highs, closes = df["low"].values, df["high"].values, df["close"].values
     if len(lows) >= 4:
         if lows[-1] > lows[-2] > lows[-3]: quality += 0.70
