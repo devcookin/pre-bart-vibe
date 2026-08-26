@@ -28,7 +28,7 @@ if SUPABASE_URL and SUPABASE_KEY:
         pass
 
 MODEL_VERSION = "v3.0-forward-looking-v11"
-APP_VERSION = "v11.0.1-chart-visibility-fix"
+APP_VERSION = "v11.1.0-performance-patch"
 MIN_SNAPSHOT_INTERVAL = 300
 FILL_INTERVAL_SECONDS = 60
 
@@ -1421,8 +1421,9 @@ def get_ohlc_batch(coin_ids, days="1"):
             return cid, []
 
     results = {}
-    # A modest worker count speeds cold loads without creating an excessive API burst.
-    with ThreadPoolExecutor(max_workers=min(4, len(ids))) as executor:
+    # A modest parallel pool keeps cold loads responsive without changing request count.
+    # Cached reruns make no new OHLC calls.
+    with ThreadPoolExecutor(max_workers=min(8, len(ids))) as executor:
         futures = [executor.submit(_fetch, cid) for cid in ids]
         for future in as_completed(futures):
             cid, data = future.result()
@@ -1838,8 +1839,15 @@ with col_refresh:
 st.markdown(f'<div class="pb-refresh-note">Last refreshed {st.session_state.last_refresh.strftime('%H:%M:%S')}</div>', unsafe_allow_html=True)
 
 # ========== MARKET CONTEXT ==========
-fg_value, fg_label = get_fear_greed()
-global_data = get_global()
+# Independent cached bootstrap requests can run together on a cold load.
+# This lowers wall-clock time without changing the data sources or request count.
+with ThreadPoolExecutor(max_workers=3) as _bootstrap_pool:
+    _fg_future = _bootstrap_pool.submit(get_fear_greed)
+    _global_future = _bootstrap_pool.submit(get_global)
+    _top_future = _bootstrap_pool.submit(get_top_coins, 40)
+    fg_value, fg_label = _fg_future.result()
+    global_data = _global_future.result()
+    _prefetched_top_market_coins = _top_future.result()
 
 ctx1, ctx2, ctx3, ctx4 = st.columns(4)
 with ctx1:
@@ -1852,13 +1860,12 @@ with ctx4:
     st.metric("Market 24h", f"{global_data.get('market_cap_change_percentage_24h_usd', 0):+.2f}%" if global_data else "—")
 
 st.divider()
-fill_pending_returns()
 
 # ========== TOP COINS ==========
 # Fetch a slightly wider market-cap list in the same single CoinGecko request,
 # remove stablecoins, then keep the first 30 non-stablecoins. OHLC/Vibe work is
 # still performed for only 30 coins, so stablecoins do not create extra OHLC calls.
-top_market_coins = get_top_coins(40)
+top_market_coins = _prefetched_top_market_coins
 top_coins = [c for c in top_market_coins if not is_stablecoin(c)][:30]
 if not top_coins:
     st.error("Could not load top coins.")
@@ -2859,6 +2866,11 @@ if isinstance(ohlc_data, list) and len(ohlc_data) > 0:
     )
 else:
     st.info("Chart temporarily unavailable.")
+
+# Deferred research maintenance: do this after the primary dashboard and charts render.
+# It preserves the exact same fill logic, but no longer blocks the user from seeing
+# the market overview, detailed view, Setup Intelligence, or Vibe + Price History.
+fill_pending_returns()
 
 st.divider()
 st.markdown("""
