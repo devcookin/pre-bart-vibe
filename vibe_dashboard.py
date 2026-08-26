@@ -27,8 +27,8 @@ if SUPABASE_URL and SUPABASE_KEY:
     except:
         pass
 
-MODEL_VERSION = "v2.11-recency-weighted-recovery"
-APP_VERSION = "v10.10.2-setup-intelligence-history-fix"
+MODEL_VERSION = "v3.0-forward-looking-v11"
+APP_VERSION = "v11.0.0-forward-looking"
 MIN_SNAPSHOT_INTERVAL = 300
 FILL_INTERVAL_SECONDS = 60
 
@@ -1498,130 +1498,195 @@ def analyze_candles(ohlc_data):
     return max(min(quality, 1.8), -1.5)
 
 def calc_vibe(price, high, low, change_1h, change_24h, fg_value=None, btc_change=None, candle_quality=0, coin_id=None):
-    """Balanced Vibe calibration.
+    """V11 forward-looking Vibe calibration.
 
-    v2.9 keeps the restrained breakout logic while making negative candle structure
-    asymmetric and recognizing genuine short-term recovery. No new API inputs are
-    required; this is purely a weighting/calibration change.
+    V11 deliberately reduces rewards for conditions that are already obvious in price
+    (high range position, large recent momentum and already-confirmed breakouts). It
+    keeps Vibe centered closer to 50, treats bullish/bearish candle structure more
+    symmetrically, rewards early recovery before price becomes extended, and applies
+    an exhaustion penalty when strength arrives late in an already-large move.
+
+    No new API inputs are required. Setup Intelligence remains a separate research
+    layer so Vibe velocity/divergence can collect clean data before being promoted
+    into the production score itself.
     """
     if high != low:
         range_pos = ((price - low) / (high - low)) * 100
     else:
         range_pos = 50.0
 
+    def clamp(value, lo, hi):
+        return max(lo, min(hi, value))
+
     reasons = []
-    base = 56.0
+    base = 50.0
 
-    # Positive structure can earn its full reward, while negative candle quality is
-    # intentionally less powerful. Crypto naturally wicks/chops, so rejection alone
-    # should not drag an otherwise neutral setup deeply bearish.
-    structure_boost = candle_quality * (8.0 if candle_quality >= 0 else 4.5)
-    base += structure_boost
-    if candle_quality > 1.0: reasons.append("Excellent bullish structure")
-    elif candle_quality > 0.5: reasons.append("Solid constructive structure")
-    elif candle_quality > 0.15: reasons.append("Mildly positive structure")
+    # 1) PRICE STRUCTURE — symmetric in V11. Strong candles still matter, but they no
+    # longer dominate the score and bearish structure is allowed to count fully.
+    structure_effect = clamp(candle_quality * 7.5, -10.0, 11.0)
+    base += structure_effect
+    if candle_quality > 1.0:
+        reasons.append("Excellent bullish structure")
+    elif candle_quality > 0.5:
+        reasons.append("Solid constructive structure")
+    elif candle_quality > 0.15:
+        reasons.append("Mildly positive structure")
     elif candle_quality < -0.7:
-        # Only call structure outright weak when another live signal confirms it.
-        vs_btc_now = (change_24h - btc_change) if btc_change is not None else 0.0
-        if change_1h < -0.4 or range_pos < 25 or vs_btc_now < -1.5:
-            reasons.append("Weak structure / rejection")
-        else:
-            reasons.append("Mixed structure / attempted recovery")
-    elif candle_quality < -0.25: reasons.append("Mixed structure")
+        reasons.append("Weak structure / rejection")
+    elif candle_quality < -0.25:
+        reasons.append("Mixed-to-weak structure")
 
-    # Non-linear range positioning: the middle 40-60% is mostly neutral, while
-    # genuine upper/lower-range positioning matters progressively more.
+    # 2) RANGE POSITION — much smaller than V10. Being near the high is context, not
+    # a prediction. Lower/middle-range setups are not punished heavily when structure
+    # is starting to improve.
     if range_pos >= 100:
-        # Keep rewarding genuine breaks above the measured range, but ramp the
-        # contribution gradually so a single threshold crossing cannot make Vibe jump.
-        range_effect = 5.0 + min(range_pos - 100, 30) * 0.12
+        range_effect = 2.0 + min(range_pos - 100, 25) * 0.04   # +2.0 to +3.0
     elif range_pos >= 80:
-        range_effect = 3.0 + (range_pos - 80) * 0.10       # +3.0 to +5.0
+        range_effect = 1.0 + (range_pos - 80) * 0.05          # +1.0 to +2.0
     elif range_pos >= 60:
-        range_effect = 0.6 + (range_pos - 60) * 0.12      # +0.6 to +3.0
+        range_effect = 0.2 + (range_pos - 60) * 0.04          # +0.2 to +1.0
     elif range_pos >= 40:
-        range_effect = (range_pos - 50) * 0.04            # -0.4 to +0.4
+        range_effect = (range_pos - 50) * 0.02                # -0.2 to +0.2
     elif range_pos >= 20:
-        range_effect = -0.4 - (40 - range_pos) * 0.09     # -0.4 to -2.2
+        range_effect = -0.2 - (40 - range_pos) * 0.035        # -0.2 to -0.9
     else:
-        range_effect = -2.2 - (20 - range_pos) * 0.09     # -2.2 to -4.0
+        range_effect = -0.9 - (20 - range_pos) * 0.055        # -0.9 to -2.0
     base += range_effect
 
-    if range_pos > 88: reasons.append("Near top of daily range")
-    elif range_pos > 72: reasons.append("Upper half of range")
-    elif range_pos < 18: reasons.append("Building from lows" if candle_quality > 0.15 else "Near bottom of range")
-    elif range_pos < 32: reasons.append("Lower half of range")
+    if range_pos > 90:
+        reasons.append("Near top of daily range")
+    elif range_pos > 72:
+        reasons.append("Upper half of range")
+    elif range_pos < 20:
+        reasons.append("Near bottom of range")
+    elif range_pos < 35:
+        reasons.append("Lower half of range")
 
-    # Keep short-term momentum important, but reduce the chance that one fast
-    # candle alone pushes a merely decent setup into the mid/high 70s.
-    base += change_1h * 2.9
-    if change_1h > 2.0: reasons.append("Very strong 1h momentum")
-    elif change_1h > 0.7: reasons.append("Strong 1h momentum")
-    elif change_1h > 0.2: reasons.append("Positive 1h")
-    elif change_1h < -1.5: reasons.append("Strong negative 1h")
-    elif change_1h < -0.4: reasons.append("Mild negative 1h")
+    # 3) SHORT-TERM MOMENTUM — cut from V10's 2.9x to 1.4x and capped. A single
+    # fast candle can no longer manufacture a 70-90 Vibe by itself.
+    momentum_effect = clamp(change_1h * 1.4, -6.0, 6.0)
+    base += momentum_effect
+    if change_1h > 2.0:
+        reasons.append("Very strong 1h momentum")
+    elif change_1h > 0.7:
+        reasons.append("Strong 1h momentum")
+    elif change_1h > 0.2:
+        reasons.append("Positive 1h")
+    elif change_1h < -1.5:
+        reasons.append("Strong negative 1h")
+    elif change_1h < -0.4:
+        reasons.append("Mild negative 1h")
 
-    # 24h performance remains useful context without overpowering current setup.
-    base += change_24h * 0.38
+    # 4) 24H MOMENTUM — context only. This was one of the most backward-looking
+    # inputs in V10, so its influence is now intentionally small and capped.
+    day_effect = clamp(change_24h * 0.12, -3.0, 3.0)
+    base += day_effect
 
-    # Relative strength remains meaningful for alts. BTC cannot outperform itself,
-    # so give Bitcoin a small absolute-momentum contribution instead of forcing this
-    # component to zero during broad-market breakouts.
+    # 5) RELATIVE STRENGTH — still useful for alts, but capped so an already-pumped
+    # outlier cannot earn an extreme Vibe solely by outperforming BTC over 24h.
     if coin_id == "bitcoin":
-        btc_abs_effect = max(min(change_24h * 0.25, 2.5), -2.0)
+        btc_abs_effect = clamp(change_24h * 0.10, -1.5, 1.5)
         base += btc_abs_effect
-        if change_24h > 4.0: reasons.append("Strong BTC market momentum")
+        if change_24h > 4.0:
+            reasons.append("Strong BTC market momentum")
     elif btc_change is not None:
         vs_btc = change_24h - btc_change
-        base += vs_btc * 0.62
-        if vs_btc > 3.5: reasons.append("Clearly outperforming BTC")
-        elif vs_btc > 1.2: reasons.append("Outperforming BTC")
-        elif vs_btc < -3.5: reasons.append("Lagging BTC")
+        relative_effect = clamp(vs_btc * 0.35, -4.0, 4.0)
+        base += relative_effect
+        if vs_btc > 3.5:
+            reasons.append("Clearly outperforming BTC")
+        elif vs_btc > 1.2:
+            reasons.append("Outperforming BTC")
+        elif vs_btc < -3.5:
+            reasons.append("Lagging BTC")
 
-    # Keep market context small so Vibe remains primarily coin-specific.
+    # 6) BROAD MARKET CONTEXT — small by design so coin-specific setup remains primary.
     if fg_value is not None:
-        if fg_value < 25: base -= 1.25
-        elif fg_value > 75: base += 1.0
+        if fg_value < 25:
+            base -= 0.75
+        elif fg_value > 75:
+            base += 0.75
 
-    # Predictive breakout credit is continuous rather than threshold-driven.
-    # This preserves early-move sensitivity while avoiding abrupt 5-10 point jumps
-    # when price barely crosses a hard range-position level.
-    if range_pos >= 80 and change_1h >= 0.35 and candle_quality > 0.0:
-        pos_factor = min(max((range_pos - 80) / 30.0, 0.0), 1.0)
-        mom_factor = min(max((change_1h - 0.35) / 1.15, 0.0), 1.0)
-        structure_factor = min(max(candle_quality / 0.75, 0.0), 1.0)
-        breakout_bonus = 1.0 + (1.5 * pos_factor) + (1.5 * mom_factor) + (0.75 * structure_factor)
-        base += breakout_bonus
-
-        if breakout_bonus >= 4.0:
-            reasons.append("Strong confirmed breakout")
-        elif breakout_bonus >= 2.5:
-            reasons.append("Clear breakout in progress")
-        elif breakout_bonus >= 1.6:
-            reasons.append("Breaking higher with momentum")
+    # 7) EARLY-RECOVERY CREDIT — reward improving structure BEFORE price has already
+    # reached the top of its range. This is the core V11 shift from reaction to setup.
+    early_recovery_bonus = 0.0
+    if range_pos <= 60 and candle_quality > 0.15 and change_1h > 0:
+        structure_factor = clamp((candle_quality - 0.15) / 0.85, 0.0, 1.0)
+        momentum_factor = clamp(change_1h / 1.25, 0.0, 1.0)
+        room_factor = clamp((65 - range_pos) / 45.0, 0.0, 1.0)
+        early_recovery_bonus = 1.5 + 3.0 * structure_factor + 2.0 * momentum_factor + 1.5 * room_factor
+        base += early_recovery_bonus
+        if early_recovery_bonus >= 4.0:
+            reasons.append("Early recovery with room to run")
+        elif early_recovery_bonus >= 2.5:
+            reasons.append("Improving before price is extended")
         else:
-            reasons.append("Pushing into breakout territory")
+            reasons.append("Early recovery attempt")
 
-    # Small rejection penalty only when price is high in the range AND structure
-    # is clearly deteriorating. This avoids making the model overly bearish.
-    if range_pos >= 80 and candle_quality < -0.25:
-        base -= 0.75
+    # 8) QUALITY BREAKOUT CREDIT — V11 still rewards breakouts, but only modestly and
+    # only when momentum is not already extreme. Confirmation should help, not dominate.
+    breakout_bonus = 0.0
+    if 75 <= range_pos <= 105 and 0.20 <= change_1h <= 1.50 and candle_quality > 0.20:
+        structure_factor = clamp(candle_quality / 1.0, 0.0, 1.0)
+        momentum_factor = clamp((change_1h - 0.20) / 1.30, 0.0, 1.0)
+        breakout_bonus = 1.0 + 2.25 * structure_factor + 1.25 * momentum_factor
+        base += breakout_bonus
+        reasons.append("Controlled breakout pressure")
+
+    # 9) BEARISH CONFIRMATION — V11 no longer cushions clearly weak structure. When
+    # deteriorating candles and negative short-term momentum agree, let the score
+    # actually move below neutral instead of hovering in the 40s/50s.
+    if candle_quality < -0.50 and change_1h < -0.40:
+        bearish_penalty = 1.5 + clamp(abs(candle_quality) * 1.5, 0.0, 2.5)
+        if range_pos < 30:
+            bearish_penalty += 1.0
+        base -= bearish_penalty
+        reasons.append("Bearish structure confirmed by momentum")
+
+    # 10) EXTENSION / EXHAUSTION PENALTY — the missing counterweight in V10. The same
+    # combination that previously stacked range + momentum + structure bonuses now
+    # loses points when price has already moved too far too fast.
+    extension_penalty = 0.0
+    if range_pos >= 80 and change_1h > 1.0:
+        range_factor = clamp((range_pos - 80) / 20.0, 0.0, 1.25)
+        momentum_factor = clamp((change_1h - 1.0) / 2.5, 0.0, 1.5)
+        extension_penalty += 2.0 + 3.0 * range_factor + 3.0 * momentum_factor
+    if range_pos >= 90 and change_24h > 8.0:
+        extension_penalty += clamp((change_24h - 8.0) * 0.18, 0.0, 3.0)
+    if extension_penalty > 0:
+        base -= extension_penalty
+        if extension_penalty >= 6.0:
+            reasons.append("Extended move / exhaustion risk")
+        else:
+            reasons.append("Late-move extension penalty")
+
+    # 11) REJECTION PENALTY — stronger than V10 because bearish structure should be
+    # allowed to invalidate an upper-range setup instead of being treated as noise.
+    if range_pos >= 75 and candle_quality < -0.25:
+        rejection_penalty = 1.5 + clamp(abs(candle_quality) * 1.5, 0.0, 2.5)
+        base -= rejection_penalty
         reasons.append("Upper-range rejection risk")
 
+    # V11 is intentionally centered lower. 65+ now means genuinely constructive,
+    # 80+ should be uncommon, and 90+ requires unusually broad confirmation.
     score = max(min(int(round(base)), 98), 16)
-    if score >= 90: meme = "🔥 Explosive strength + clear breakout"
-    elif score >= 80: meme = "🚀 Strong structure + solid momentum"
-    elif score >= 70: meme = "📈 Constructive structure, building strength"
-    elif score >= 60: meme = "👍 Decent structure, mild positive bias"
-    elif score >= 50: meme = "😐 Mixed signals, no clear direction"
-    elif score >= 40: meme = "⚠️ Weakening structure, caution"
-    elif score >= 30: meme = "📉 Short-term weakness dominating"
-    else: meme = "💀 Heavy selling pressure / poor structure"
+    if score >= 90:
+        meme = "🔥 Exceptional setup + broad confirmation"
+    elif score >= 80:
+        meme = "🚀 Strong setup, momentum not yet exhausted"
+    elif score >= 65:
+        meme = "📈 Constructive setup, building strength"
+    elif score >= 40:
+        meme = "😐 Mixed signals, no clear direction"
+    elif score >= 30:
+        meme = "📉 Short-term weakness dominating"
+    else:
+        meme = "💀 Heavy selling pressure / poor structure"
     return score, meme, range_pos, reasons
 
 def colored_progress(score: int, height: int = 10):
     if score >= 80: color = "linear-gradient(90deg, #34d399, #00e676)"
-    elif score >= 60: color = "linear-gradient(90deg, #5eead4, #14b8a6)"
+    elif score >= 65: color = "linear-gradient(90deg, #5eead4, #14b8a6)"
     elif score >= 40: color = "linear-gradient(90deg, #fde047, #f59e0b)"
     else: color = "linear-gradient(90deg, #fb7185, #ef4444)"
     return f"""
@@ -1637,28 +1702,28 @@ def make_sparkline(history, height=190):
 
     times = [h[0] for h in history]
     scores = [h[1] for h in history]
-    line_color = "#00e676" if scores[-1] >= 80 else "#14b8a6" if scores[-1] >= 60 else "#f59e0b" if scores[-1] >= 40 else "#ef4444"
+    line_color = "#00e676" if scores[-1] >= 80 else "#14b8a6" if scores[-1] >= 65 else "#f59e0b" if scores[-1] >= 40 else "#ef4444"
 
     fig = go.Figure()
 
     # Very subtle score zones: Weak / Neutral / Constructive / Strong.
     bands = [
         (0, 40, "rgba(239,68,68,0.040)"),
-        (40, 60, "rgba(245,158,11,0.035)"),
-        (60, 80, "rgba(20,184,166,0.035)"),
+        (40, 65, "rgba(245,158,11,0.035)"),
+        (65, 80, "rgba(20,184,166,0.035)"),
         (80, 100, "rgba(0,230,118,0.045)"),
     ]
     for y0, y1, color in bands:
         fig.add_hrect(y0=y0, y1=y1, fillcolor=color, line_width=0, layer="below")
 
-    for y in (40, 60, 80):
+    for y in (40, 65, 80):
         fig.add_hline(y=y, line_width=1, line_dash="dot", line_color="rgba(160,160,160,0.18)")
 
     fig.add_trace(go.Scatter(
         x=times, y=scores, mode="lines",
         line=dict(color=line_color, width=2.6),
         fill="tozeroy",
-        fillcolor="rgba(0,230,118,0.09)" if scores[-1] >= 80 else "rgba(20,184,166,0.08)" if scores[-1] >= 60 else "rgba(245,158,11,0.07)" if scores[-1] >= 40 else "rgba(239,68,68,0.08)",
+        fillcolor="rgba(0,230,118,0.09)" if scores[-1] >= 80 else "rgba(20,184,166,0.08)" if scores[-1] >= 65 else "rgba(245,158,11,0.07)" if scores[-1] >= 40 else "rgba(239,68,68,0.08)",
         hovertemplate="Vibe %{y:.0f}<extra></extra>"
     ))
     fig.add_trace(go.Scatter(
@@ -2186,7 +2251,7 @@ arrow = get_score_arrow(cid, score)
 def vibe_band(score):
     if score >= 80:
         return "Strong", "#00e676"
-    if score >= 60:
+    if score >= 65:
         return "Constructive", "#14b8a6"
     if score >= 40:
         return "Neutral", "#f59e0b"
@@ -2197,7 +2262,7 @@ band_label, band_color = vibe_band(score)
 def vibe_context_copy(score, direction):
     if score >= 80:
         return "Strong market conditions are holding." if "Weakening" not in direction else "Strong conditions remain, but momentum is cooling."
-    if score >= 60:
+    if score >= 65:
         return "Market setup is strengthening." if "Improving" in direction else "Constructive conditions with room for confirmation."
     if score >= 40:
         return "Mixed conditions — patience may offer a cleaner setup."
@@ -2318,7 +2383,7 @@ with _watch_col:
             st.session_state.watchlist.append(cid)
         st.rerun()
 
-# v10: separate "current strength" from "entry/setup context".
+# v11: keep current strength separate from entry/setup context; velocity remains research-only.
 setup_rows = get_setup_history(cid, limit=1200, model_version=MODEL_VERSION)
 setup = build_setup_analytics(setup_rows, score, price) if setup_rows else None
 
@@ -2336,7 +2401,7 @@ def _fmt_price_delta(val):
     return f"{val:+.2f}%"
 
 st.markdown(
-    """<div class="pb-section-head"><div><div class="pb-section-title">Setup Intelligence <span class="pb-global-pill">V10</span></div>
+    """<div class="pb-section-head"><div><div class="pb-section-title">Setup Intelligence <span class="pb-global-pill">V11</span></div>
     <div class="pb-section-sub">Separates current market strength from early-move context and historical analogs</div></div></div>""",
     unsafe_allow_html=True
 )
@@ -2904,7 +2969,7 @@ else:
 with st.expander("About the Vibe Score & data disclaimer", expanded=False):
     st.markdown(
         """
-        **Vibe Score** is Pre Bart Vibes' 0–100 market-strength rating. In v10, Vibe remains a description of current market conditions rather than being presented as a direct entry probability.
+        **Vibe Score** is Pre Bart Vibes' 0–100 market-strength rating. In v11, Vibe is recalibrated to reduce late-move/reaction bias while remaining a market-strength and setup-quality signal rather than a direct entry probability.
 
         **Setup Intelligence** studies Vibe velocity, price response, bucket transitions, and historically similar observations to separate current strength from early-move context. Comparable-set statistics are descriptive and can change as the dataset grows.
 
