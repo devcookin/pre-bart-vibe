@@ -28,7 +28,7 @@ if SUPABASE_URL and SUPABASE_KEY:
         pass
 
 MODEL_VERSION = "v2.11-recency-weighted-recovery"
-APP_VERSION = "v10.10.1-cache-reset-fix"
+APP_VERSION = "v10.10.2-setup-intelligence-history-fix"
 MIN_SNAPSHOT_INTERVAL = 300
 FILL_INTERVAL_SECONDS = 60
 
@@ -1166,23 +1166,39 @@ def _price_state(delta):
     return "Price extended"
 
 def _prior_series(df, minutes, tolerance_minutes):
+    """Find the most recent reading at or before each lookback target.
+
+    Search the full preceding timestamp history rather than only the prior 30 rows.
+    Multiple Streamlit sessions can persist several snapshots close together, so a
+    fixed row window can cover only a few minutes and incorrectly leave the 30m/1h
+    Setup Intelligence fields blank even when older history exists.
+    """
     scores, prices = [], []
-    times = list(df["time"])
+    times = pd.DatetimeIndex(df["time"])
     score_vals = list(df["score"])
     price_vals = list(df["price"])
+    tolerance_seconds = tolerance_minutes * 60
+
     for i, t in enumerate(times):
-        target = t - pd.Timedelta(minutes=minutes)
-        # nearest historical reading to the target, never using a future row
-        candidates = []
-        for j in range(max(0, i-30), i):
-            diff = abs((times[j] - target).total_seconds())
-            if diff <= tolerance_minutes * 60:
-                candidates.append((diff, j))
-        if candidates:
-            _, j = min(candidates, key=lambda x: x[0])
-            scores.append(score_vals[j]); prices.append(price_vals[j])
-        else:
+        if i == 0 or pd.isna(t):
             scores.append(None); prices.append(None)
+            continue
+
+        target = t - pd.Timedelta(minutes=minutes)
+
+        # df is time-sorted. searchsorted finds the last observation at or before
+        # the target without being affected by how many duplicate/dense rows exist.
+        prior_times = times[:i]
+        j = prior_times.searchsorted(target, side="right") - 1
+
+        if j >= 0:
+            age_from_target = (target - prior_times[j]).total_seconds()
+            if 0 <= age_from_target <= tolerance_seconds:
+                scores.append(score_vals[j]); prices.append(price_vals[j])
+                continue
+
+        scores.append(None); prices.append(None)
+
     return scores, prices
 
 def build_setup_analytics(rows, current_score, current_price):
