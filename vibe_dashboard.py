@@ -1166,12 +1166,13 @@ def _price_state(delta):
     return "Price extended"
 
 def _prior_series(df, minutes, tolerance_minutes):
-    """Find the most recent reading at or before each lookback target.
+    """Find the nearest persisted reading to each lookback target.
 
-    Search the full preceding timestamp history rather than only the prior 30 rows.
-    Multiple Streamlit sessions can persist several snapshots close together, so a
-    fixed row window can cover only a few minutes and incorrectly leave the 30m/1h
-    Setup Intelligence fields blank even when older history exists.
+    Setup Intelligence is estimating the state about 30m/1h ago, not requiring a
+    snapshot at the exact target second. Snapshot cadence can drift, so restricting
+    the match to only rows *before* the target can miss a perfectly valid reading a
+    minute or two after it. Search the full preceding history and choose the nearest
+    row on either side of the target, while still never using the current/future row.
     """
     scores, prices = [], []
     times = pd.DatetimeIndex(df["time"])
@@ -1185,15 +1186,21 @@ def _prior_series(df, minutes, tolerance_minutes):
             continue
 
         target = t - pd.Timedelta(minutes=minutes)
-
-        # df is time-sorted. searchsorted finds the last observation at or before
-        # the target without being affected by how many duplicate/dense rows exist.
         prior_times = times[:i]
-        j = prior_times.searchsorted(target, side="right") - 1
+        pos = prior_times.searchsorted(target, side="left")
 
-        if j >= 0:
-            age_from_target = (target - prior_times[j]).total_seconds()
-            if 0 <= age_from_target <= tolerance_seconds:
+        # Check the closest point immediately before and immediately after the
+        # target. Both are historical relative to row i; pick the smaller gap.
+        candidate_idx = []
+        if pos - 1 >= 0:
+            candidate_idx.append(pos - 1)
+        if pos < len(prior_times):
+            candidate_idx.append(pos)
+
+        if candidate_idx:
+            j = min(candidate_idx, key=lambda k: abs((prior_times[k] - target).total_seconds()))
+            gap = abs((prior_times[j] - target).total_seconds())
+            if gap <= tolerance_seconds:
                 scores.append(score_vals[j]); prices.append(price_vals[j])
                 continue
 
