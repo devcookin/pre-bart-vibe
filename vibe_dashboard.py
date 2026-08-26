@@ -28,7 +28,7 @@ if SUPABASE_URL and SUPABASE_KEY:
         pass
 
 MODEL_VERSION = "v3.0-forward-looking-v11"
-APP_VERSION = "v11.0.0-forward-looking"
+APP_VERSION = "v11.0.1-chart-visibility-fix"
 MIN_SNAPSHOT_INTERVAL = 300
 FILL_INTERVAL_SECONDS = 60
 
@@ -2441,26 +2441,28 @@ with st.expander("🤔 Why this score?", expanded=False):
     else:
         st.caption("No additional score drivers available for this reading.")
 
-# Vibe + price relationship — v10 adds lead-candidate markers without changing the score.
+# Vibe + price relationship — keep the section visible from the first V11 snapshot.
+# MODEL_VERSION stays unchanged so this UI fix does not reset or contaminate V11 research history.
 vp_rows = get_vibe_price_history(cid, limit=150, model_version=MODEL_VERSION)
-if len(vp_rows) >= 3:
+if len(vp_rows) >= 1:
     vp = pd.DataFrame(vp_rows)
     vp["time"] = pd.to_datetime(vp["timestamp"], utc=True, errors="coerce")
     vp["price"] = pd.to_numeric(vp["price"], errors="coerce")
     vp["score"] = pd.to_numeric(vp["score"], errors="coerce")
     vp = vp.dropna(subset=["time", "price", "score"]).sort_values("time")
-    if len(vp) >= 3:
+    if len(vp) >= 1:
         st.markdown("""
         <div class="pb-section-head"><div><div class="pb-section-title">Vibe + Price History</div><div class="pb-section-sub">See when Vibe leads, confirms, or diverges from price</div></div></div>
         """, unsafe_allow_html=True)
         rel_fig = make_subplots(specs=[[{"secondary_y": True}]])
+        trace_mode = "lines" if len(vp) >= 2 else "markers"
         rel_fig.add_trace(go.Scatter(
-            x=vp["time"], y=vp["price"], name="Price", mode="lines",
+            x=vp["time"], y=vp["price"], name="Price", mode=trace_mode,
             line=dict(color="#cbd5e1", width=2.0),
             hovertemplate="Price $%{y:,.4f}<extra></extra>"
         ), secondary_y=False)
         rel_fig.add_trace(go.Scatter(
-            x=vp["time"], y=vp["score"], name="Vibe", mode="lines",
+            x=vp["time"], y=vp["score"], name="Vibe", mode=trace_mode,
             line=dict(color="#14b8a6", width=2.6),
             hovertemplate="Vibe %{y:.0f}/100<extra></extra>"
         ), secondary_y=True)
@@ -2507,7 +2509,17 @@ if len(vp_rows) >= 3:
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(size=10))
         )
         st.plotly_chart(rel_fig, use_container_width=True, config={"displayModeBar": False, "responsive": True})
-        st.caption("Green diamonds flag moments when Vibe strengthens before price catches up — potential early-move signals.")
+        if len(vp) < 2:
+            st.caption("V11 history has just started. The chart will become a line as the next persisted snapshot arrives.")
+        else:
+            st.caption("Green diamonds flag moments when Vibe strengthens before price catches up — potential early-move signals.")
+else:
+    # The V11 model version intentionally starts with clean history. Keep the section
+    # present instead of making it look like the feature disappeared.
+    st.markdown("""
+    <div class="pb-section-head"><div><div class="pb-section-title">Vibe + Price History</div><div class="pb-section-sub">See when Vibe leads, confirms, or diverges from price</div></div></div>
+    """, unsafe_allow_html=True)
+    st.caption("Collecting the first V11 Vibe + price snapshot…")
 
 
 # ========== SHARE SECTION ==========
