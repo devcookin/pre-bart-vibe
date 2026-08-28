@@ -658,11 +658,12 @@ st.markdown("""
     .pb-study-dot { width:8px;height:8px;border-radius:50%;box-shadow:0 0 0 4px color-mix(in srgb,var(--sig) 13%,transparent);background:var(--sig);flex:0 0 auto; }
     .pb-study-name { color:#f4f6f8;font-weight:760; }
     .pb-study-n { color:#919aa7;font-variant-numeric:tabular-nums; }
-    .pb-study-good { color:#34d399;font-weight:780; }
-    .pb-study-mixed { color:#fbbf24;font-weight:740; }
-    .pb-study-bad { color:#fb7185;font-weight:780; }
-    .pb-study-empty { color:#69727e; }
-    .pb-study-neutral { color:#f4f6f8;font-weight:740; }
+    /* Signed-value colors must outrank the base table-cell color rule. */
+    .pb-study-table td.pb-study-good { color:#34d399 !important;font-weight:780; }
+    .pb-study-table td.pb-study-bad { color:#fb7185 !important;font-weight:780; }
+    .pb-study-table td.pb-study-empty { color:#69727e !important; }
+    .pb-study-table td.pb-study-neutral { color:#f4f6f8 !important;font-weight:740; }
+    .pb-study-table td.pb-study-mixed { color:#f4f6f8 !important;font-weight:740; }
     .pb-study-foot { padding:11px 18px 13px;color:#737d89;font-size:.70rem;line-height:1.5;border-top:1px solid #232a33; }
     .pb-score-study-card { margin:3px 0 2px 0;box-shadow:none; }
     .pb-score-study-table { min-width:1180px; }
