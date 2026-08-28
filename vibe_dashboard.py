@@ -28,7 +28,7 @@ if SUPABASE_URL and SUPABASE_KEY:
         pass
 
 MODEL_VERSION = "v4.0-confluence-v12"
-APP_VERSION = "v12.0.0-confluence-recalibration"
+APP_VERSION = "v12.1.0-lead-performance-card"
 MIN_SNAPSHOT_INTERVAL = 300
 FILL_INTERVAL_SECONDS = 60
 
@@ -621,6 +621,52 @@ st.markdown("""
         .pb-intel-value { font-size:1.02rem; }
         .pb-setup-shell { padding:13px; }
         .pb-analog-grid { grid-template-columns:1fr 1fr;gap:7px; }
+    }
+
+    /* v12.1 — Lead Signal Performance card */
+    .pb-study-card {
+        border:1px solid #29313b;border-radius:17px;overflow:hidden;
+        background:linear-gradient(145deg,#131922,#0f141a);
+        box-shadow:0 14px 36px rgba(0,0,0,.14);margin:10px 0 14px 0;
+    }
+    .pb-study-head {
+        display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;
+        padding:17px 18px 14px;border-bottom:1px solid #252c35;
+        background:linear-gradient(90deg,rgba(20,184,166,.055),transparent 52%);
+    }
+    .pb-study-kicker { font-size:.66rem;color:#5eead4;text-transform:uppercase;letter-spacing:.09em;font-weight:850; }
+    .pb-study-title { font-size:1.14rem;color:#f6f8fa;font-weight:820;letter-spacing:-.025em;margin-top:4px; }
+    .pb-study-sub { color:#8f98a5;font-size:.76rem;line-height:1.45;margin-top:4px;max-width:760px; }
+    .pb-study-chip {
+        display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;
+        color:#a7f3d0;border:1px solid rgba(94,234,212,.24);background:rgba(20,184,166,.09);
+        font-size:.66rem;font-weight:820;letter-spacing:.055em;text-transform:uppercase;white-space:nowrap;
+    }
+    .pb-study-scroll { overflow-x:auto;-webkit-overflow-scrolling:touch; }
+    .pb-study-table { width:100%;border-collapse:collapse;min-width:780px; }
+    .pb-study-table th {
+        padding:10px 12px;text-align:right;color:#737d8a;font-size:.64rem;text-transform:uppercase;
+        letter-spacing:.065em;font-weight:800;background:#10151b;border-bottom:1px solid #252c35;
+    }
+    .pb-study-table th:first-child,.pb-study-table td:first-child { text-align:left;padding-left:18px; }
+    .pb-study-table td {
+        padding:12px;text-align:right;border-bottom:1px solid #232a33;color:#e8ebef;font-size:.79rem;font-weight:650;
+    }
+    .pb-study-table tr:last-child td { border-bottom:0; }
+    .pb-study-table tbody tr:hover { background:rgba(255,255,255,.018); }
+    .pb-study-signal { display:flex;align-items:center;gap:9px;white-space:nowrap; }
+    .pb-study-dot { width:8px;height:8px;border-radius:50%;box-shadow:0 0 0 4px color-mix(in srgb,var(--sig) 13%,transparent);background:var(--sig);flex:0 0 auto; }
+    .pb-study-name { color:#f4f6f8;font-weight:760; }
+    .pb-study-n { color:#919aa7;font-variant-numeric:tabular-nums; }
+    .pb-study-good { color:#34d399;font-weight:780; }
+    .pb-study-mixed { color:#fbbf24;font-weight:740; }
+    .pb-study-bad { color:#fb7185;font-weight:780; }
+    .pb-study-empty { color:#69727e; }
+    .pb-study-foot { padding:11px 18px 13px;color:#737d89;font-size:.70rem;line-height:1.5;border-top:1px solid #232a33; }
+    @media (max-width: 768px) {
+        .pb-study-head { padding:15px 14px 12px; }
+        .pb-study-table th:first-child,.pb-study-table td:first-child { padding-left:14px; }
+        .pb-study-foot { padding:10px 14px 12px; }
     }
 
 </style>
@@ -1327,6 +1373,57 @@ def build_setup_analytics(rows, current_score, current_price):
         "analog_4h": stats_for("return_4h"), "match_basis": match_basis,
         "transitions": trans_rows,
     }
+
+def build_lead_performance(frame):
+    """Evaluate unique Vibe/price relationship events rather than every snapshot.
+
+    Returns are direction-adjusted so a positive number always means price moved in
+    the signal's expected direction. Consecutive snapshots in the same state count
+    as one event, preventing a long-lived setup from inflating the sample size.
+    """
+    if not isinstance(frame, pd.DataFrame) or frame.empty:
+        return []
+
+    hist = frame.iloc[:-1].copy() if len(frame) > 1 else frame.copy()
+    needed = {"time", "dv_30m", "px_30m", "return_30m", "return_1h", "return_4h"}
+    if hist.empty or not needed.issubset(hist.columns):
+        return []
+
+    hist = hist.sort_values("time").reset_index(drop=True)
+    hist["signal_event"] = ""
+
+    valid = hist["dv_30m"].notna() & hist["px_30m"].notna()
+    dv = pd.to_numeric(hist["dv_30m"], errors="coerce")
+    px = pd.to_numeric(hist["px_30m"], errors="coerce")
+
+    hist.loc[valid & (dv >= 5) & (px <= 0.35), "signal_event"] = "bull_lead"
+    hist.loc[valid & (dv <= -5) & (px >= -0.35), "signal_event"] = "bear_lead"
+    hist.loc[valid & (dv >= 3) & (px > 0.35), "signal_event"] = "bull_confirm"
+    hist.loc[valid & (dv <= -3) & (px < -0.35), "signal_event"] = "bear_confirm"
+
+    # Only count the moment a setup state begins. Repeated 5-minute snapshots of the
+    # same condition are one market event, not independent predictions.
+    prior_state = hist["signal_event"].shift(1).fillna("")
+    events = hist[(hist["signal_event"] != "") & (hist["signal_event"] != prior_state)].copy()
+
+    definitions = [
+        ("bull_lead", "Bullish lead", "#22c55e", 1),
+        ("bull_confirm", "Bullish confirmation", "#14b8a6", 1),
+        ("bear_lead", "Bearish lead", "#fb7185", -1),
+        ("bear_confirm", "Bearish confirmation", "#ef5350", -1),
+    ]
+
+    rows = []
+    for key, label, color, direction in definitions:
+        grp = events[events["signal_event"] == key].copy()
+        row = {"key": key, "label": label, "color": color, "n": int(len(grp))}
+        for suffix, col in [("30m", "return_30m"), ("1h", "return_1h"), ("4h", "return_4h")]:
+            vals = pd.to_numeric(grp[col], errors="coerce").dropna() * direction
+            row[f"n_{suffix}"] = int(len(vals))
+            row[f"avg_{suffix}"] = float(vals.mean()) if len(vals) else None
+            row[f"hit_{suffix}"] = float((vals > 0).mean() * 100) if len(vals) else None
+        rows.append(row)
+    return rows
 
 def sample_strength(n):
     """Plain-language sample maturity; descriptive rather than statistical certainty."""
@@ -2910,10 +3007,68 @@ else:
 fill_pending_returns()
 
 st.divider()
-st.markdown("""
-<div class="pb-section-head"><div><div class="pb-section-title">Vibe Performance <span class="pb-global-pill">GLOBAL</span></div><div class="pb-section-sub">How similar scores performed historically across tracked coins</div></div></div>
+
+# Primary research surface: test the relationship users actually see on Vibe + Price.
+# This uses the already-loaded Setup Intelligence frame, so it adds no market-data API calls.
+lead_perf = build_lead_performance(setup.get("frame")) if setup else []
+
+def _lead_metric_class(value, is_hit=False):
+    if value is None:
+        return "pb-study-empty"
+    if is_hit:
+        if value >= 60: return "pb-study-good"
+        if value >= 45: return "pb-study-mixed"
+        return "pb-study-bad"
+    if value > 0.05: return "pb-study-good"
+    if value >= -0.05: return "pb-study-mixed"
+    return "pb-study-bad"
+
+def _lead_fmt(value, is_hit=False):
+    if value is None:
+        return "—"
+    return f"{value:.1f}%" if is_hit else f"{value:+.2f}%"
+
+lead_rows_html = ""
+for r in lead_perf:
+    lead_rows_html += f"""
+    <tr>
+      <td><div class="pb-study-signal" style="--sig:{r['color']}"><span class="pb-study-dot"></span><span class="pb-study-name">{r['label']}</span></div></td>
+      <td class="pb-study-n">{r['n']}</td>
+      <td class="{_lead_metric_class(r.get('avg_30m'))}">{_lead_fmt(r.get('avg_30m'))}</td>
+      <td class="{_lead_metric_class(r.get('hit_30m'), True)}">{_lead_fmt(r.get('hit_30m'), True)}</td>
+      <td class="{_lead_metric_class(r.get('avg_1h'))}">{_lead_fmt(r.get('avg_1h'))}</td>
+      <td class="{_lead_metric_class(r.get('hit_1h'), True)}">{_lead_fmt(r.get('hit_1h'), True)}</td>
+      <td class="{_lead_metric_class(r.get('avg_4h'))}">{_lead_fmt(r.get('avg_4h'))}</td>
+      <td class="{_lead_metric_class(r.get('hit_4h'), True)}">{_lead_fmt(r.get('hit_4h'), True)}</td>
+    </tr>
+    """
+
+if not lead_rows_html:
+    lead_rows_html = '<tr><td colspan="8" style="text-align:left;color:#737d89;padding:18px;">Building event history… lead statistics will populate as unique setups mature.</td></tr>'
+
+st.markdown(f"""
+<div class="pb-study-card">
+  <div class="pb-study-head">
+    <div>
+      <div class="pb-study-kicker">Signal research · {tick}</div>
+      <div class="pb-study-title">Lead Signal Performance</div>
+      <div class="pb-study-sub">Does Vibe move before price? Measures unique lead and confirmation events instead of treating every score snapshot as a new prediction.</div>
+    </div>
+    <div class="pb-study-chip">V12 · Event based</div>
+  </div>
+  <div class="pb-study-scroll">
+    <table class="pb-study-table">
+      <thead><tr><th>Signal</th><th>n</th><th>Avg 30m</th><th>Hit 30m</th><th>Avg 1h</th><th>Hit 1h</th><th>Avg 4h</th><th>Hit 4h</th></tr></thead>
+      <tbody>{lead_rows_html}</tbody>
+    </table>
+  </div>
+  <div class="pb-study-foot">Avg is direction-adjusted: positive means price moved the way the signal expected. Hit is the % of completed events that moved in the expected direction. Consecutive snapshots in the same state count once.</div>
+</div>
 """, unsafe_allow_html=True)
-st.caption("Historical forward returns grouped by the Vibe Score shown at the time of each snapshot.")
+
+st.markdown("""
+<div class="pb-section-head"><div><div class="pb-section-title">Performance by Vibe Score <span class="pb-global-pill">SECONDARY</span></div><div class="pb-section-sub">Absolute score regimes remain useful context, but are not treated as standalone entry signals</div></div></div>
+""", unsafe_allow_html=True)
 
 def _fmt_median_return(val):
     """Keep the distribution table visually clean at two decimals."""
@@ -3009,11 +3164,11 @@ if bucket_stats:
             styler = styler.map(style_edge, subset=["Edge (1h)"])
         return styler
 
-    with st.expander("Show all timeframes", expanded=False):
+    with st.expander("Performance by Vibe Score", expanded=False):
         st.markdown(
-            '<div class="pb-definition"><b>What this tells you:</b> this is the main Vibe Performance study. '
-            'Pick a score band and see what price historically did 30 minutes, 1 hour, 4 hours, and 24 hours later. '
-            'Higher Vibe does <i>not</i> automatically mean better future returns — that is exactly what this table is testing.</div>',
+            '<div class="pb-definition"><b>What this tells you:</b> this secondary study groups outcomes by the absolute Vibe Score shown at each snapshot. '
+            'It describes market regimes, while the Lead Signal Performance card above tests whether changes in Vibe preceded or confirmed price. '
+            'Higher Vibe does <i>not</i> automatically mean better future returns.</div>',
             unsafe_allow_html=True
         )
         st.caption("Quick read: Avg = average forward return · Win = % of outcomes above 0% · Edge = how that bucket did versus the tracked market.")
