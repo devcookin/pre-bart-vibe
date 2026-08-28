@@ -28,7 +28,7 @@ if SUPABASE_URL and SUPABASE_KEY:
         pass
 
 MODEL_VERSION = "v4.0-confluence-v12"
-APP_VERSION = "v12.1.0-lead-performance-card"
+APP_VERSION = "v12.2.0-memory-stability"
 MIN_SNAPSHOT_INTERVAL = 300
 FILL_INTERVAL_SECONDS = 60
 
@@ -989,13 +989,13 @@ def fill_pending_returns():
     except Exception:
         pass
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, max_entries=2)
 def get_bucket_stats(min_n=5, model_version=MODEL_VERSION):
-    """Cumulative bucket stats for the current model version.
+    """Cumulative bucket stats with bounded memory use.
 
-    Uses paginated Supabase reads so historical observations never fall out of a
-    rolling LIMIT window. Each horizon is still queried independently so sparse
-    30m/1h/4h/24h maturity does not interfere with the others.
+    Pages are aggregated as they arrive instead of retaining the full V12 table in
+    Python. This keeps the displayed cumulative statistics exact while preventing
+    RAM use from growing with the snapshot table.
     """
     if not supabase:
         return None
@@ -1011,128 +1011,96 @@ def get_bucket_stats(min_n=5, model_version=MODEL_VERSION):
         if score < 90: return "80-89"
         return "90-100"
 
-    def paged_rows(columns, extra_filter=None, page_size=1000):
-        """Read all matching rows in bounded pages.
-
-        This avoids a single huge response while keeping cumulative statistics
-        exact for the current model version.
-        """
-        rows = []
+    def iter_pages(columns, extra_filter=None, page_size=500):
         offset = 0
         while True:
-            q = (
-                supabase.table("vibe_snapshots")
-                .select(columns)
-                .eq("model_version", model_version)
-                .order("timestamp", desc=False)
-                .range(offset, offset + page_size - 1)
-            )
+            q = (supabase.table("vibe_snapshots").select(columns)
+                 .eq("model_version", model_version)
+                 .order("timestamp", desc=False)
+                 .range(offset, offset + page_size - 1))
             if extra_filter is not None:
                 q = extra_filter(q)
             result = q.execute()
             batch = result.data or []
-            rows.extend(batch)
+            if not batch:
+                break
+            yield batch
             if len(batch) < page_size:
                 break
             offset += page_size
-        return rows
 
     try:
-        # All-time count for the CURRENT model version.
-        count_rows = paged_rows("score,timestamp")
-        if not count_rows:
+        counts = {b: 0 for b in bucket_order}
+        for batch in iter_pages("score,timestamp"):
+            for row in batch:
+                score = row.get("score")
+                if score is not None:
+                    counts[bucket(float(score))] += 1
+            del batch
+
+        if not any(counts.values()):
             return None
 
-        count_df = pd.DataFrame(count_rows)
-        count_df["bucket"] = count_df["score"].apply(bucket)
-        counts = count_df["bucket"].value_counts().to_dict()
-
-        # All completed observations for each forward horizon, independently paged.
-        horizon_frames = {}
+        horizons = {}
         for col in ["return_30m", "return_1h", "return_4h", "return_24h"]:
-            try:
-                rows = paged_rows(
-                    f"score,{col},timestamp",
-                    extra_filter=lambda q, c=col: q.not_.is_(c, "null"),
-                )
-                if rows:
-                    hdf = pd.DataFrame(rows)
-                    hdf["bucket"] = hdf["score"].apply(bucket)
-                    horizon_frames[col] = hdf
-                else:
-                    horizon_frames[col] = pd.DataFrame(columns=["score", col, "timestamp", "bucket"])
-            except Exception:
-                horizon_frames[col] = pd.DataFrame(columns=["score", col, "timestamp", "bucket"])
+            agg = {b: {"n": 0, "sum": 0.0, "wins": 0} for b in bucket_order}
+            for batch in iter_pages(
+                f"score,{col},timestamp",
+                extra_filter=lambda q, c=col: q.not_.is_(c, "null"),
+            ):
+                for row in batch:
+                    score, value = row.get("score"), row.get(col)
+                    if score is None or value is None:
+                        continue
+                    b = bucket(float(score)); v = float(value)
+                    agg[b]["n"] += 1
+                    agg[b]["sum"] += v
+                    if v > 0:
+                        agg[b]["wins"] += 1
+                del batch
+            horizons[col] = agg
 
-        one_hour = horizon_frames["return_1h"]
-        overall_avg_1h = one_hour["return_1h"].mean() if not one_hour.empty else 0
+        one_hour_total_n = sum(v["n"] for v in horizons["return_1h"].values())
+        one_hour_total_sum = sum(v["sum"] for v in horizons["return_1h"].values())
+        overall_avg_1h = one_hour_total_sum / one_hour_total_n if one_hour_total_n else 0.0
 
-        def horizon_metric(bucket_name, col, metric):
-            hdf = horizon_frames[col]
-            if hdf.empty:
+        def metric(b, col, kind):
+            a = horizons[col][b]
+            if not a["n"]:
                 return None
-            vals = hdf.loc[hdf["bucket"] == bucket_name, col].dropna()
-            if len(vals) == 0:
-                return None
-            if metric == "avg":
-                return round(vals.mean(), 3)
-            if metric == "median":
-                # Keep the stored precision here. Rounding before display can turn a
-                # tiny positive/negative median into a misleading 0.00%.
-                return float(vals.median())
-            if metric == "avg_win":
-                winners = vals[vals > 0]
-                return round(winners.mean(), 3) if len(winners) else None
-            if metric == "avg_loss":
-                losers = vals[vals < 0]
-                return round(losers.mean(), 3) if len(losers) else None
-            return round((vals > 0).mean() * 100, 1)
+            if kind == "avg":
+                return round(a["sum"] / a["n"], 3)
+            return round(a["wins"] / a["n"] * 100, 1)
 
         stats = []
         for b in bucket_order:
-            n = int(counts.get(b, 0))
-            if n < min_n:
-                stats.append({
-                    "bucket": b,
-                    "n": n,
-                    "ready": False,
-                    "n_30m": int((horizon_frames["return_30m"]["bucket"] == b).sum()),
-                    "n_1h": int((horizon_frames["return_1h"]["bucket"] == b).sum()),
-                    "n_4h": int((horizon_frames["return_4h"]["bucket"] == b).sum()),
-                    "n_24h": int((horizon_frames["return_24h"]["bucket"] == b).sum()),
+            n = int(counts[b])
+            base = {
+                "bucket": b, "n": n, "ready": n >= min_n,
+                "n_30m": horizons["return_30m"][b]["n"],
+                "n_1h": horizons["return_1h"][b]["n"],
+                "n_4h": horizons["return_4h"][b]["n"],
+                "n_24h": horizons["return_24h"][b]["n"],
+            }
+            if n >= min_n:
+                avg_1h = metric(b, "return_1h", "avg")
+                base.update({
+                    "avg_30m": metric(b, "return_30m", "avg"),
+                    "win_30m": metric(b, "return_30m", "win"),
+                    "avg_1h": avg_1h,
+                    "win_1h": metric(b, "return_1h", "win"),
+                    "avg_4h": metric(b, "return_4h", "avg"),
+                    "win_4h": metric(b, "return_4h", "win"),
+                    "avg_24h": metric(b, "return_24h", "avg"),
+                    "win_24h": metric(b, "return_24h", "win"),
+                    "edge": round(avg_1h - overall_avg_1h, 2) if avg_1h is not None else None,
                 })
-                continue
-
-            avg_1h = horizon_metric(b, "return_1h", "avg")
-            edge = round(avg_1h - overall_avg_1h, 2) if avg_1h is not None else None
-
-            stats.append({
-                "bucket": b,
-                "n": n,
-                "ready": True,
-                "n_30m": int((horizon_frames["return_30m"]["bucket"] == b).sum()),
-                "n_1h": int((horizon_frames["return_1h"]["bucket"] == b).sum()),
-                "n_4h": int((horizon_frames["return_4h"]["bucket"] == b).sum()),
-                "n_24h": int((horizon_frames["return_24h"]["bucket"] == b).sum()),
-                "avg_30m": horizon_metric(b, "return_30m", "avg"),
-                "win_30m": horizon_metric(b, "return_30m", "win"),
-                "avg_1h": avg_1h,
-                "median_1h": horizon_metric(b, "return_1h", "median"),
-                "avg_win_1h": horizon_metric(b, "return_1h", "avg_win"),
-                "avg_loss_1h": horizon_metric(b, "return_1h", "avg_loss"),
-                "win_1h": horizon_metric(b, "return_1h", "win"),
-                "avg_4h": horizon_metric(b, "return_4h", "avg"),
-                "win_4h": horizon_metric(b, "return_4h", "win"),
-                "avg_24h": horizon_metric(b, "return_24h", "avg"),
-                "win_24h": horizon_metric(b, "return_24h", "win"),
-                "edge": edge,
-            })
-
+            stats.append(base)
         return stats
     except Exception:
         return None
 
-@st.cache_data(ttl=180)
+@st.cache_data(ttl=180, max_entries=40)
 def get_coin_performance(coin_id, min_n=15, model_version=MODEL_VERSION):
     if not supabase: return None
     try:
@@ -1155,7 +1123,7 @@ def get_coin_performance(coin_id, min_n=15, model_version=MODEL_VERSION):
     except:
         return None
 
-@st.cache_data(ttl=180)
+@st.cache_data(ttl=180, max_entries=40)
 def get_vibe_price_history(coin_id, limit=150, model_version=MODEL_VERSION):
     """Recent paired Vibe/price snapshots for a simple relationship chart."""
     if not supabase or not coin_id:
@@ -1173,7 +1141,7 @@ def get_vibe_price_history(coin_id, limit=150, model_version=MODEL_VERSION):
     except Exception:
         return []
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, max_entries=40)
 def get_setup_history(coin_id, limit=1200, model_version=MODEL_VERSION):
     """Load a bounded recent snapshot history for setup/transition analytics.
 
@@ -1446,7 +1414,7 @@ def sample_strength(n):
     return "Strong", "#22c55e"
 
 # ========== HELPERS ==========
-@st.cache_data(ttl=45)
+@st.cache_data(ttl=45, max_entries=2)
 def get_fear_greed():
     try:
         r = requests.get("https://api.alternative.me/fng/?limit=1", timeout=8)
