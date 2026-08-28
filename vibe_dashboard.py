@@ -662,6 +662,7 @@ st.markdown("""
     .pb-study-mixed { color:#fbbf24;font-weight:740; }
     .pb-study-bad { color:#fb7185;font-weight:780; }
     .pb-study-empty { color:#69727e; }
+    .pb-study-neutral { color:#f4f6f8;font-weight:740; }
     .pb-study-foot { padding:11px 18px 13px;color:#737d89;font-size:.70rem;line-height:1.5;border-top:1px solid #232a33; }
     .pb-score-study-card { margin:3px 0 2px 0;box-shadow:none; }
     .pb-score-study-table { min-width:1180px; }
@@ -3023,13 +3024,13 @@ lead_perf = build_lead_performance(setup.get("frame")) if setup else []
 def _lead_metric_class(value, is_hit=False):
     if value is None:
         return "pb-study-empty"
+    # Hit rates are unsigned percentages, so keep them neutral.
     if is_hit:
-        if value >= 60: return "pb-study-good"
-        if value >= 45: return "pb-study-mixed"
-        return "pb-study-bad"
-    if value > 0.05: return "pb-study-good"
-    if value >= -0.05: return "pb-study-mixed"
-    return "pb-study-bad"
+        return "pb-study-neutral"
+    value = float(value)
+    if value > 0: return "pb-study-good"
+    if value < 0: return "pb-study-bad"
+    return "pb-study-neutral"
 
 def _lead_fmt(value, is_hit=False):
     if value is None:
@@ -3091,27 +3092,25 @@ def _score_avg_class(value):
     if value is None or pd.isna(value):
         return "pb-study-empty"
     value = float(value)
-    if value >= 1.5: return "pb-study-good"
-    if value >= 0: return "pb-study-mixed"
-    return "pb-study-bad"
+    if value > 0: return "pb-study-good"
+    if value < 0: return "pb-study-bad"
+    return "pb-study-neutral"
 
 
 def _score_win_class(value):
     if value is None or pd.isna(value):
         return "pb-study-empty"
-    value = float(value)
-    if value >= 55: return "pb-study-good"
-    if value >= 45: return "pb-study-mixed"
-    return "pb-study-bad"
+    # Win rates are unsigned percentages, so keep them neutral.
+    return "pb-study-neutral"
 
 
 def _score_edge_class(value):
     if value is None or pd.isna(value):
         return "pb-study-empty"
     value = float(value)
-    if value >= 0.25: return "pb-study-good"
-    if value > -0.25: return "pb-study-mixed"
-    return "pb-study-bad"
+    if value > 0: return "pb-study-good"
+    if value < 0: return "pb-study-bad"
+    return "pb-study-neutral"
 
 
 def _score_fmt(value, kind="avg"):
@@ -3177,7 +3176,7 @@ if bucket_stats:
         """
         st.markdown("".join(line.strip() for line in score_card_html.splitlines()), unsafe_allow_html=True)
 
-    st.caption("Performance colors: green/teal = stronger historical outcome · yellow = mixed/near neutral · red = weaker historical outcome. Historical results are descriptive, not guarantees.")
+    st.caption("Number colors: green = positive signed return/edge · red = negative signed return/edge · zero and unsigned hit/win rates stay neutral. Historical results are descriptive, not guarantees.")
 else:
     st.info("Collecting performance data…")
 
