@@ -3046,7 +3046,9 @@ for r in lead_perf:
 if not lead_rows_html:
     lead_rows_html = '<tr><td colspan="8" style="text-align:left;color:#737d89;padding:18px;">Building event history… lead statistics will populate as unique setups mature.</td></tr>'
 
-st.markdown(f"""
+# Keep the entire card as compact HTML. Markdown interprets indented injected <tr>
+# fragments as fenced/code text, which can expose the raw table markup in the UI.
+study_html = f"""
 <div class="pb-study-card">
   <div class="pb-study-head">
     <div>
@@ -3064,7 +3066,8 @@ st.markdown(f"""
   </div>
   <div class="pb-study-foot">Avg is direction-adjusted: positive means price moved the way the signal expected. Hit is the % of completed events that moved in the expected direction. Consecutive snapshots in the same state count once.</div>
 </div>
-""", unsafe_allow_html=True)
+"""
+st.markdown("".join(line.strip() for line in study_html.splitlines()), unsafe_allow_html=True)
 
 st.markdown("""
 <div class="pb-section-head"><div><div class="pb-section-title">Performance by Vibe Score <span class="pb-global-pill">SECONDARY</span></div><div class="pb-section-sub">Absolute score regimes remain useful context, but are not treated as standalone entry signals</div></div></div>
