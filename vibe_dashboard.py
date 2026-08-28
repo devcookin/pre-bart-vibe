@@ -663,6 +663,14 @@ st.markdown("""
     .pb-study-bad { color:#fb7185;font-weight:780; }
     .pb-study-empty { color:#69727e; }
     .pb-study-foot { padding:11px 18px 13px;color:#737d89;font-size:.70rem;line-height:1.5;border-top:1px solid #232a33; }
+    .pb-score-study-card { margin:3px 0 2px 0;box-shadow:none; }
+    .pb-score-study-table { min-width:1180px; }
+    .pb-score-band { display:flex;align-items:center; }
+    .pb-score-band-chip {
+        display:inline-flex;align-items:center;justify-content:center;min-width:48px;padding:4px 8px;border-radius:9px;
+        color:#e9eef4;background:#171d25;border:1px solid #303844;font-size:.75rem;font-weight:800;letter-spacing:.01em;
+    }
+    .pb-score-sample { color:#aab2bd !important;font-size:.75rem !important;font-weight:720 !important; }
     @media (max-width: 768px) {
         .pb-study-head { padding:15px 14px 12px; }
         .pb-study-table th:first-child,.pb-study-table td:first-child { padding-left:14px; }
@@ -3069,118 +3077,107 @@ study_html = f"""
 """
 st.markdown("".join(line.strip() for line in study_html.splitlines()), unsafe_allow_html=True)
 
-st.markdown("""
-<div class="pb-section-head"><div><div class="pb-section-title">Performance by Vibe Score <span class="pb-global-pill">SECONDARY</span></div><div class="pb-section-sub">Absolute score regimes remain useful context, but are not treated as standalone entry signals</div></div></div>
-""", unsafe_allow_html=True)
-
 def _fmt_median_return(val):
     """Keep the distribution table visually clean at two decimals."""
     if val is None or pd.isna(val):
         return "—"
     val = float(val)
-    # Anything that rounds to zero at the displayed precision should simply read 0.00%.
     if abs(val) < 0.005:
         return "0.00%"
     return f"{val:+.2f}%"
 
+
+def _score_avg_class(value):
+    if value is None or pd.isna(value):
+        return "pb-study-empty"
+    value = float(value)
+    if value >= 1.5: return "pb-study-good"
+    if value >= 0: return "pb-study-mixed"
+    return "pb-study-bad"
+
+
+def _score_win_class(value):
+    if value is None or pd.isna(value):
+        return "pb-study-empty"
+    value = float(value)
+    if value >= 55: return "pb-study-good"
+    if value >= 45: return "pb-study-mixed"
+    return "pb-study-bad"
+
+
+def _score_edge_class(value):
+    if value is None or pd.isna(value):
+        return "pb-study-empty"
+    value = float(value)
+    if value >= 0.25: return "pb-study-good"
+    if value > -0.25: return "pb-study-mixed"
+    return "pb-study-bad"
+
+
+def _score_fmt(value, kind="avg"):
+    if value is None or pd.isna(value):
+        return "—"
+    if kind == "win":
+        return f"{float(value):.1f}%"
+    return f"{float(value):+.2f}%"
+
+
 bucket_stats = get_bucket_stats(min_n=5, model_version=MODEL_VERSION)
 if bucket_stats:
-    table_data = []
-    for s in bucket_stats:
-        if not s["ready"]:
-            table_data.append({
-                "Bucket": s["bucket"], "n": s["n"], "Sample": sample_strength(0)[0],
-                "Avg 30m": "—", "Win 30m": "—", "Avg 1h": "—", "Median 1h": "—",
-                "Avg Winner": "—", "Avg Loser": "—", "Win 1h": "—", "Edge (1h)": "—",
-                "Avg 4h": "—", "Win 4h": "—", "Avg 24h": "—", "Win 24h": "—"
-            })
-        else:
-            table_data.append({
-                "Bucket": s["bucket"],
-                "n": s["n"],
-                "Sample": sample_strength(s.get("n_1h", 0))[0],
-                "Avg 30m": f"{s['avg_30m']:+.2f}%" if s['avg_30m'] is not None else "—",
-                "Win 30m": f"{s['win_30m']}%" if s['win_30m'] is not None else "—",
-                "Avg 1h": f"{s['avg_1h']:+.2f}%" if s['avg_1h'] is not None else "—",
-                "Median 1h": _fmt_median_return(s.get("median_1h")),
-                "Avg Winner": f"{s['avg_win_1h']:+.2f}%" if s.get('avg_win_1h') is not None else "—",
-                "Avg Loser": f"{s['avg_loss_1h']:+.2f}%" if s.get('avg_loss_1h') is not None else "—",
-                "Win 1h": f"{s['win_1h']}%" if s['win_1h'] is not None else "—",
-                "Edge (1h)": f"{s['edge']:+.2f}%" if s.get('edge') is not None else "—",
-                "Avg 4h": f"{s['avg_4h']:+.2f}%" if s['avg_4h'] is not None else "—",
-                "Win 4h": f"{s['win_4h']}%" if s['win_4h'] is not None else "—",
-                "Avg 24h": f"{s['avg_24h']:+.2f}%" if s['avg_24h'] is not None else "—",
-                "Win 24h": f"{s['win_24h']}%" if s['win_24h'] is not None else "—",
-            })
+    with st.expander("Performance by Vibe Score · Secondary", expanded=False):
+        score_rows_html = ""
+        for s in bucket_stats:
+            ready = bool(s.get("ready"))
+            avg30 = s.get("avg_30m") if ready else None
+            win30 = s.get("win_30m") if ready else None
+            avg1h = s.get("avg_1h") if ready else None
+            win1h = s.get("win_1h") if ready else None
+            edge1h = s.get("edge") if ready else None
+            avg4h = s.get("avg_4h") if ready else None
+            win4h = s.get("win_4h") if ready else None
+            avg24h = s.get("avg_24h") if ready else None
+            win24h = s.get("win_24h") if ready else None
+            sample = sample_strength(s.get("n_1h", 0) if ready else 0)[0]
 
-    df_display = pd.DataFrame(table_data)
+            score_rows_html += f"""
+            <tr>
+              <td><div class="pb-score-band"><span class="pb-score-band-chip">{s['bucket']}</span></div></td>
+              <td class="pb-study-n">{s['n']}</td>
+              <td class="pb-score-sample">{sample}</td>
+              <td class="{_score_avg_class(avg30)}">{_score_fmt(avg30)}</td>
+              <td class="{_score_win_class(win30)}">{_score_fmt(win30, 'win')}</td>
+              <td class="{_score_avg_class(avg1h)}">{_score_fmt(avg1h)}</td>
+              <td class="{_score_win_class(win1h)}">{_score_fmt(win1h, 'win')}</td>
+              <td class="{_score_edge_class(edge1h)}">{_score_fmt(edge1h)}</td>
+              <td class="{_score_avg_class(avg4h)}">{_score_fmt(avg4h)}</td>
+              <td class="{_score_win_class(win4h)}">{_score_fmt(win4h, 'win')}</td>
+              <td class="{_score_avg_class(avg24h)}">{_score_fmt(avg24h)}</td>
+              <td class="{_score_win_class(win24h)}">{_score_fmt(win24h, 'win')}</td>
+            </tr>
+            """
 
-    def style_win(val):
-        if val == "—": return ""
-        try:
-            num = float(str(val).replace("%", ""))
-            if num >= 70: return "background-color: #1b5e20; color: white; font-weight: 600"
-            elif num >= 55: return "background-color: #0f766e; color: white"
-            elif num >= 45: return "background-color: #f9a825; color: black"
-            else: return "background-color: #c62828; color: white"
-        except: return ""
+        score_card_html = f"""
+        <div class="pb-study-card pb-score-study-card">
+          <div class="pb-study-head">
+            <div>
+              <div class="pb-study-kicker">Market-state research · Global</div>
+              <div class="pb-study-title">Performance by Vibe Score</div>
+              <div class="pb-study-sub">Secondary study of absolute score regimes. Useful context for how markets behaved after each Vibe band, but not treated as a standalone entry signal.</div>
+            </div>
+            <div class="pb-study-chip">V12 · Snapshot based</div>
+          </div>
+          <div class="pb-study-scroll">
+            <table class="pb-study-table pb-score-study-table">
+              <thead><tr><th>Vibe band</th><th>n</th><th>Sample</th><th>Avg 30m</th><th>Win 30m</th><th>Avg 1h</th><th>Win 1h</th><th>Edge 1h</th><th>Avg 4h</th><th>Win 4h</th><th>Avg 24h</th><th>Win 24h</th></tr></thead>
+              <tbody>{score_rows_html}</tbody>
+            </table>
+          </div>
+          <div class="pb-study-foot"><b>Quick read:</b> Avg = average forward return · Win = % of outcomes above 0% · Edge = performance versus the tracked market. n counts cumulative V12 snapshots, so this table describes regimes rather than unique signal events.</div>
+        </div>
+        """
+        st.markdown("".join(line.strip() for line in score_card_html.splitlines()), unsafe_allow_html=True)
 
-    def style_avg(val):
-        if val == "—": return ""
-        try:
-            num = float(str(val).replace("%", "").replace("+", ""))
-            if num >= 4: return "background-color: #1b5e20; color: white; font-weight: 600"
-            elif num >= 1.5: return "background-color: #2e7d32; color: white"
-            elif num >= 0: return "background-color: #f9a825; color: black"
-            elif num > -1.5: return "background-color: #ef6c00; color: white"
-            else: return "background-color: #c62828; color: white"
-        except: return ""
-
-    def style_edge(val):
-        if val == "—": return ""
-        try:
-            num = float(str(val).replace("%", "").replace("+", ""))
-            if num >= 1.0: return "background-color: #1b5e20; color: white; font-weight: 700"
-            elif num >= 0.25: return "background-color: #0f766e; color: white; font-weight: 600"
-            elif num > -0.25: return "background-color: #f9a825; color: black"
-            elif num > -1.0: return "background-color: #ef6c00; color: white"
-            else: return "background-color: #c62828; color: white"
-        except: return ""
-
-    def style_table(df, compact=False):
-        styler = df.style.set_properties(**{
-            "background-color": "#0e1117", "color": "#fafafa", "border-color": "#2a2d35"
-        }).set_table_styles([
-            {"selector": "th", "props": [("background-color", "#1a1d24"), ("color", "#b8b8b8"), ("border-color", "#2a2d35")]},
-            {"selector": "td", "props": [("border-color", "#2a2d35")]},
-        ])
-        win_cols = [c for c in df.columns if c.startswith("Win ")]
-        avg_cols = [c for c in df.columns if c.startswith("Avg ")]
-        median_cols = [c for c in df.columns if c.startswith("Median ")]
-        if win_cols:
-            styler = styler.map(style_win, subset=win_cols)
-        if avg_cols:
-            styler = styler.map(style_avg, subset=avg_cols)
-        if median_cols:
-            styler = styler.map(style_avg, subset=median_cols)
-        if "Edge (1h)" in df.columns:
-            styler = styler.map(style_edge, subset=["Edge (1h)"])
-        return styler
-
-    with st.expander("Performance by Vibe Score", expanded=False):
-        st.markdown(
-            '<div class="pb-definition"><b>What this tells you:</b> this secondary study groups outcomes by the absolute Vibe Score shown at each snapshot. '
-            'It describes market regimes, while the Lead Signal Performance card above tests whether changes in Vibe preceded or confirmed price. '
-            'Higher Vibe does <i>not</i> automatically mean better future returns.</div>',
-            unsafe_allow_html=True
-        )
-        st.caption("Quick read: Avg = average forward return · Win = % of outcomes above 0% · Edge = how that bucket did versus the tracked market.")
-        full_cols = ["Bucket","n","Sample","Avg 30m","Win 30m","Avg 1h","Win 1h","Edge (1h)","Avg 4h","Win 4h","Avg 24h","Win 24h"]
-        st.dataframe(style_table(df_display[full_cols]), use_container_width=True, hide_index=True)
-        st.caption("n counts cumulative Vibe snapshots for the current model version. Sample describes how mature the completed 1h outcome set is.")
-
-
-    st.caption("Performance colors: green/teal = stronger historical outcome · yellow = mixed/near neutral · orange/red = weaker historical outcome. Historical results are descriptive, not guarantees.")
+    st.caption("Performance colors: green/teal = stronger historical outcome · yellow = mixed/near neutral · red = weaker historical outcome. Historical results are descriptive, not guarantees.")
 else:
     st.info("Collecting performance data…")
 
