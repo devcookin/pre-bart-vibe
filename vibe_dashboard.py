@@ -28,7 +28,7 @@ if SUPABASE_URL and SUPABASE_KEY:
         pass
 
 MODEL_VERSION = "v4.0-confluence-v12"
-APP_VERSION = "v12.2.0-memory-stability"
+APP_VERSION = "v12.3.0-memory-hardening"
 MIN_SNAPSHOT_INTERVAL = 300
 FILL_INTERVAL_SECONDS = 60
 
@@ -1100,7 +1100,9 @@ def get_bucket_stats(min_n=5, model_version=MODEL_VERSION):
     except Exception:
         return None
 
-@st.cache_data(ttl=180, max_entries=40)
+# v12.3 memory policy: keep only a small number of selected-coin research views in RAM.
+# Supabase remains the source of truth; cache eviction does not delete collected data.
+@st.cache_data(ttl=180, max_entries=8)
 def get_coin_performance(coin_id, min_n=15, model_version=MODEL_VERSION):
     if not supabase: return None
     try:
@@ -1123,7 +1125,7 @@ def get_coin_performance(coin_id, min_n=15, model_version=MODEL_VERSION):
     except:
         return None
 
-@st.cache_data(ttl=180, max_entries=40)
+@st.cache_data(ttl=180, max_entries=8)
 def get_vibe_price_history(coin_id, limit=150, model_version=MODEL_VERSION):
     """Recent paired Vibe/price snapshots for a simple relationship chart."""
     if not supabase or not coin_id:
@@ -1141,7 +1143,7 @@ def get_vibe_price_history(coin_id, limit=150, model_version=MODEL_VERSION):
     except Exception:
         return []
 
-@st.cache_data(ttl=300, max_entries=40)
+@st.cache_data(ttl=300, max_entries=4)
 def get_setup_history(coin_id, limit=1200, model_version=MODEL_VERSION):
     """Load a bounded recent snapshot history for setup/transition analytics.
 
@@ -1423,7 +1425,7 @@ def get_fear_greed():
     except:
         return None, None
 
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=120, max_entries=2)
 def get_global():
     try:
         r = requests.get("https://pro-api.coingecko.com/api/v3/global", headers=HEADERS, timeout=10)
@@ -1453,7 +1455,7 @@ def is_stablecoin(coin):
     symbol = str(coin.get("symbol", "")).upper()
     return cid in STABLECOIN_IDS or symbol in STABLECOIN_SYMBOLS
 
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=120, max_entries=2)
 def get_top_coins(limit=30):
     try:
         r = requests.get("https://pro-api.coingecko.com/api/v3/coins/markets", headers=HEADERS,
@@ -1463,7 +1465,7 @@ def get_top_coins(limit=30):
     except:
         return []
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, max_entries=40)
 def get_ohlc(coin_id, days="1"):
     try:
         r = requests.get(f"https://pro-api.coingecko.com/api/v3/coins/{coin_id}/ohlc", headers=HEADERS,
@@ -1472,7 +1474,7 @@ def get_ohlc(coin_id, days="1"):
     except:
         return []
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, max_entries=2)
 def get_ohlc_batch(coin_ids, days="1"):
     """Fetch OHLC for many coins concurrently.
 
@@ -1505,7 +1507,7 @@ def get_ohlc_batch(coin_ids, days="1"):
             results[cid] = data
     return results
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, max_entries=8)
 def get_market_chart(coin_id, days="1"):
     try:
         r = requests.get(f"https://pro-api.coingecko.com/api/v3/coins/{coin_id}/market_chart", headers=HEADERS,
@@ -1514,7 +1516,7 @@ def get_market_chart(coin_id, days="1"):
     except:
         return {}
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, max_entries=12)
 def search_coins(query):
     if not query or len(query) < 2: return []
     try:
@@ -1883,7 +1885,7 @@ def get_direction(cid, current_score):
         return "↓ Falling"
     return "→ Flat"
 
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=120, max_entries=8)
 def get_single_coin_market(cid):
     try:
         r = requests.get(
